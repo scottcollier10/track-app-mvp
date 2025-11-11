@@ -39,10 +39,10 @@ struct LiveSessionView: View {
                 controlButtons
 
                 // Dev Mode Toggle Area
-                Color.clear
+                Color.red.opacity(0.2)
                     .frame(height: 44)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: Config.devModeActivationTaps) {
+                    .onTapGesture(count: 3) {
                         viewModel.toggleDevMode()
                     }
             }

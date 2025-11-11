@@ -165,3 +165,4 @@ xcuserdata/
 *.ipa
 *.xcarchive
 
+.DS_Store
