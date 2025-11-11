@@ -137,3 +137,31 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+### Xcode / Swift (Track App iOS)
+
+# Xcode build artifacts
+build/
+DerivedData/
+
+# Xcode user-specific data
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad
+*.moved-aside
+
+# Xcode project user settings
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.pbxuser
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# iOS app archives
+*.ipa
+*.xcarchive
+
