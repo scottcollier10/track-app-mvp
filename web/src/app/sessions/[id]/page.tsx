@@ -1,0 +1,207 @@
+import { createServerClient } from '@/lib/supabase/client';
+import {
+  formatDate,
+  formatLapTime,
+  formatDuration,
+  formatDelta,
+  calculateDelta,
+} from '@/lib/utils/formatters';
+import { notFound } from 'next/navigation';
+import LapTimeChart from '@/components/charts/LapTimeChart';
+import AddNoteForm from '@/components/ui/AddNoteForm';
+
+export const dynamic = 'force-dynamic';
+
+interface PageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default async function SessionDetailPage({ params }: PageProps) {
+  const supabase = createServerClient();
+
+  // Fetch session with all relations
+  const { data: session, error } = await supabase
+    .from('sessions')
+    .select(`
+      *,
+      driver:drivers(*),
+      track:tracks(*),
+      laps(*),
+      coaching_notes(*)
+    `)
+    .eq('id', params.id)
+    .single();
+
+  if (error || !session) {
+    notFound();
+  }
+
+  // Sort laps by lap number
+  const laps = (session.laps || []).sort(
+    (a: any, b: any) => a.lap_number - b.lap_number
+  );
+
+  // Sort notes by date (newest first)
+  const notes = (session.coaching_notes || []).sort(
+    (a: any, b: any) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold">
+          {session.track?.name || 'Session Detail'}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">
+          {session.driver?.name || 'Unknown Driver'} • {formatDate(session.date)}
+        </p>
+        {session.track?.location && (
+          <p className="text-gray-500 dark:text-gray-500 mt-1">
+            📍 {session.track.location}
+          </p>
+        )}
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard
+          label="Total Time"
+          value={formatDuration(session.total_time_ms)}
+        />
+        <StatCard
+          label="Best Lap"
+          value={session.best_lap_ms ? formatLapTime(session.best_lap_ms) : '--'}
+          highlight
+        />
+        <StatCard label="Laps" value={laps.length.toString()} />
+      </div>
+
+      {/* Lap Time Chart */}
+      {laps.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold mb-4">Lap Times</h2>
+          <LapTimeChart laps={laps} />
+        </div>
+      )}
+
+      {/* Laps Table */}
+      {laps.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-bold">Laps</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Lap
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Delta
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {laps.map((lap: any) => {
+                  const isBest = lap.lap_time_ms === session.best_lap_ms;
+                  const delta = session.best_lap_ms
+                    ? calculateDelta(lap.lap_time_ms, session.best_lap_ms)
+                    : 0;
+
+                  return (
+                    <tr key={lap.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="font-medium">{lap.lap_number}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap font-mono">
+                        <span className={isBest ? 'text-track-green font-semibold' : ''}>
+                          {formatLapTime(lap.lap_time_ms)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right font-mono">
+                        {isBest ? (
+                          <span className="text-track-green font-semibold">Best</span>
+                        ) : (
+                          <span className="text-gray-600 dark:text-gray-400">
+                            {formatDelta(delta)}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Coaching Notes */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+        <h2 className="text-xl font-bold mb-4">Coaching Notes</h2>
+
+        {/* Add Note Form */}
+        <AddNoteForm sessionId={session.id} />
+
+        {/* Existing Notes */}
+        {notes.length > 0 ? (
+          <div className="mt-6 space-y-4">
+            {notes.map((note: any) => (
+              <div
+                key={note.id}
+                className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-semibold">{note.author}</span>
+                  <span className="text-sm text-gray-500">
+                    {formatDate(note.created_at)}
+                  </span>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {note.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm mt-4">
+            No coaching notes yet. Add one above to get started.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+        {label}
+      </div>
+      <div
+        className={`text-3xl font-mono font-bold ${
+          highlight ? 'text-track-green' : ''
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
