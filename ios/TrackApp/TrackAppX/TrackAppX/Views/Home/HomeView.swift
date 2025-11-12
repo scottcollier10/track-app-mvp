@@ -10,10 +10,10 @@ import SwiftUI
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingTrackSelection = false
-    @State private var selectedTrackForNewSession: Track?   // used to push Live
+    @State private var navPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navPath) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     headerSection
@@ -23,23 +23,27 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("Track App")
+            .navigationDestination(for: Track.self) { track in
+                LiveSessionView(track: track, onFinish: { session in
+                    popToHomeAndShowSummary(session)
+                })
+            }
+            .navigationDestination(for: Session.self) { session in
+                SessionSummaryView(
+                    session: session,
+                    track: viewModel.track(for: session),
+                    onDone: {
+                        popToHome()
+                    }
+                )
+            }
             .onAppear { viewModel.loadData() }
-
-            // 1) Select track in a sheet
             .sheet(isPresented: $showingTrackSelection) {
                 TrackSelectionView { track in
-                    // set and let the destination push
-                    selectedTrackForNewSession = track
                     showingTrackSelection = false
+                    navPath.append(track)
                 }
             }
-
-            // 2) Destination when a track was picked (start live session)
-            .navigationDestination(item: $selectedTrackForNewSession) { track in
-                LiveSessionView(track: track)
-            }
-
-            // 3) Simple error surface
             .alert(
                 "Error",
                 isPresented: Binding(
@@ -52,6 +56,16 @@ struct HomeView: View {
                 Text(viewModel.errorMessage ?? "")
             }
         }
+    }
+
+    // MARK: - Navigation Helpers
+    private func popToHome() {
+        navPath = NavigationPath()
+    }
+
+    private func popToHomeAndShowSummary(_ session: Session) {
+        navPath = NavigationPath()
+        navPath.append(session)
     }
 
     // MARK: - Header
@@ -92,18 +106,13 @@ struct HomeView: View {
             Text("Recent Sessions").font(.headline)
 
             ForEach(viewModel.recentSessions) { session in
-                NavigationLink {
-                    SessionSummaryView(
-                        session: session,
-                        track: viewModel.track(for: session)
-                    )
-                } label: {
+                NavigationLink(value: session) {
                     SessionRow(
                         session: session,
                         track: viewModel.track(for: session)
                     )
                 }
-                .buttonStyle(.plain) // keep row look
+                .buttonStyle(.plain)
             }
         }
     }
