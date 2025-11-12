@@ -8,6 +8,42 @@ Next.js coaching dashboard for reviewing track sessions and adding notes.
 - npm or yarn
 - Supabase account (free tier works)
 
+## Portal Quickstart
+
+**Get the portal running in 5 minutes:**
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up Supabase:**
+   - Create project at [supabase.com](https://app.supabase.com)
+   - Run `supabase/migrations/20240101_initial_schema.sql` in SQL Editor
+   - Copy Project URL and anon key from Settings → API
+
+3. **Configure environment:**
+   ```bash
+   cp .env.local.example .env.local
+   # Edit .env.local with your Supabase credentials
+   ```
+
+4. **Start dev server:**
+   ```bash
+   npm run dev
+   ```
+
+5. **Open portal at** [http://localhost:3000](http://localhost:3000)
+
+**Available routes:**
+- `/` - Dashboard with quick stats
+- `/sessions` - List all sessions with filtering
+- `/sessions/[id]` - Session detail with lap times and chart
+- `/tracks` - List all tracks
+- `/tracks/[id]` - Track detail with recent sessions
+
+**Import sessions** from iOS app using POST `/api/import-session`
+
 ## Setup
 
 ### 1. Install Dependencies
