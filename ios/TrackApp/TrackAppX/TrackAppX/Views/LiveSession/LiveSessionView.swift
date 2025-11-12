@@ -12,10 +12,12 @@ struct LiveSessionView: View {
     @State private var tapCount = 0
     @Environment(\.dismiss) private var dismiss
     let track: Track
+    var onFinish: ((Session) -> Void)? = nil
 
-    init(track: Track, viewModel: LiveSessionViewModel = LiveSessionViewModel()) {
+    init(track: Track, viewModel: LiveSessionViewModel = LiveSessionViewModel(), onFinish: ((Session) -> Void)? = nil) {
         self.track = track
         _viewModel = State(initialValue: viewModel)
+        self.onFinish = onFinish
     }
 
     var body: some View {
@@ -206,18 +208,13 @@ struct LiveSessionView: View {
             }
 
         case .end(let session):
-            // Navigate to summary
-            NavigationLink(destination: SessionSummaryView(session: session, track: track)) {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("View Summary")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.trackGreen)
-                .foregroundColor(.white)
-                .cornerRadius(12)
+            // Report finished session upward
+            primaryButton(
+                title: "View Summary",
+                systemImage: "checkmark.circle.fill",
+                color: .trackGreen
+            ) {
+                onFinish?(session)
             }
 
         default:
