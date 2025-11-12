@@ -10,8 +10,7 @@ import SwiftUI
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingTrackSelection = false
-    @State private var selectedTrackForNewSession: Track?   // <- used to push Live
-    @State private var selectedSession: Session?            // <- used to push Summary
+    @State private var selectedTrackForNewSession: Track?   // used to push Live
 
     var body: some View {
         NavigationStack {
@@ -35,44 +34,27 @@ struct HomeView: View {
                 }
             }
 
-            // 2) Destination when a track was picked
+            // 2) Destination when a track was picked (start live session)
             .navigationDestination(item: $selectedTrackForNewSession) { track in
                 LiveSessionView(track: track)
             }
 
-            // 3) Destination for tapping a recent session
-            .navigationDestination(item: $selectedSession) { session in
-                SessionSummaryView(
-                    session: session,
-                    track: viewModel.track(for: session)
-                )
-            }
-
-            // 3) Navigate to a session’s detail/summary
-            //    Replace `SessionSummaryView` with your actual detail view if named differently.
-            .navigationDestination(item: $selectedSession) { session in
-                SessionSummaryView(
-                    session: session,
-                    track: viewModel.track(for: session)
-                )
-            }
-
-            // 4) Simple error surface (optional)
+            // 3) Simple error surface
             .alert(
-                            "Error",
-                            isPresented: Binding(
-                                get: { viewModel.errorMessage != nil },
-                                set: { if !$0 { viewModel.clearError() } }
-                            )
-                        ) {
-                            Button("OK") { viewModel.clearError() }
-                        } message: {
-                            Text(viewModel.errorMessage ?? "")
-                        }
-                    }
-                }
+                "Error",
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.clearError() } }
+                )
+            ) {
+                Button("OK") { viewModel.clearError() }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
+            }
+        }
+    }
 
-    // MARK: - Header Section
+    // MARK: - Header
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Welcome back")
@@ -87,7 +69,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Start Session Button
+    // MARK: - Start Session
     private var startSessionButton: some View {
         Button {
             showingTrackSelection = true
@@ -104,15 +86,24 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Recent Sessions Section
+    // MARK: - Recent Sessions
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Sessions").font(.headline)
 
             ForEach(viewModel.recentSessions) { session in
-                SessionRow(session: session, track: viewModel.track(for: session))
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectedSession = session }
+                NavigationLink {
+                    SessionSummaryView(
+                        session: session,
+                        track: viewModel.track(for: session)
+                    )
+                } label: {
+                    SessionRow(
+                        session: session,
+                        track: viewModel.track(for: session)
+                    )
+                }
+                .buttonStyle(.plain) // keep row look
             }
         }
     }
