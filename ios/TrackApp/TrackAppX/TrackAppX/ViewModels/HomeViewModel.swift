@@ -44,7 +44,7 @@ class HomeViewModel {
     func track(for session: Session) -> Track? {
         tracks.first { $0.id == session.trackId }
     }
-
+    func clearError() { errorMessage = nil }
     /// Delete a session
     func deleteSession(_ session: Session) {
         do {
