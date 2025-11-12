@@ -12,9 +12,11 @@ struct SessionSummaryView: View {
     @State private var showingUploadSheet = false
     @State private var driverEmail = ""
     @Environment(\.dismiss) private var dismiss
+    var onDone: (() -> Void)? = nil
 
-    init(session: Session, track: Track?) {
+    init(session: Session, track: Track?, onDone: (() -> Void)? = nil) {
         _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
+        self.onDone = onDone
     }
 
     var body: some View {
@@ -213,6 +215,11 @@ struct SessionSummaryView: View {
 
             Button {
                 viewModel.saveLocal()
+                if let onDone {
+                    onDone()
+                } else {
+                    dismiss()
+                }
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle")
