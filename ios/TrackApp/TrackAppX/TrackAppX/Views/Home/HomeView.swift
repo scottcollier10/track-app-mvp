@@ -2,24 +2,23 @@
 //  HomeView.swift
 //  TrackApp
 //
-//  Main home screen showing recent sessions and track selection
-//
 
 import SwiftUI
 
 struct HomeView: View {
+    @StateObject private var router = Router()
     @State private var viewModel = HomeViewModel()
+
     @State private var showingTrackSelection = false
-    @State private var selectedSession: Session?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $router.path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header
                     headerSection
 
-                    // Start Session Button
+                    // Start Session
                     startSessionButton
 
                     // Recent Sessions
@@ -30,28 +29,34 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("Track App")
-            .onAppear {
-                viewModel.loadData()
-            }
+            .onAppear { viewModel.loadData() }
             .sheet(isPresented: $showingTrackSelection) {
                 TrackSelectionView { track in
                     showingTrackSelection = false
-                    // Navigate to live session
+                    router.path.append(Route.live(track))
                 }
             }
-            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-                Button("OK") {
-                    // Clear error
-                }
-            } message: {
-                if let error = viewModel.errorMessage {
-                    Text(error)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .live(let track):
+                    LiveSessionView(track: track)
+                        .environmentObject(router)
+
+                case .summary(let session, let track):
+                    SessionSummaryView(session: session, track: track) {
+                        // onDone: go home and refresh
+                        router.popToRoot()
+                        viewModel.loadData()
+                    }
+                    .environmentObject(router)
                 }
             }
         }
+        // pass the router down the tree
+        .environmentObject(router)
     }
 
-    // MARK: - Header Section
+    // MARK: - Header
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Welcome back")
@@ -66,7 +71,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Start Session Button
+    // MARK: - Start
     private var startSessionButton: some View {
         Button {
             showingTrackSelection = true
@@ -85,7 +90,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Recent Sessions Section
+    // MARK: - Recent
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Sessions")
@@ -97,14 +102,14 @@ struct HomeView: View {
                     track: viewModel.track(for: session)
                 )
                 .onTapGesture {
-                    selectedSession = session
+                    router.path.append(.summary(session, viewModel.track(for: session)))
                 }
             }
         }
     }
 }
 
-// MARK: - Session Row
+// MARK: - Session Row (unchanged except kept here for completeness)
 struct SessionRow: View {
     let session: Session
     let track: Track?
@@ -130,9 +135,7 @@ struct SessionRow: View {
             }
 
             Spacer()
-
-            Image(systemName: "chevron.right")
-                .foregroundColor(.secondary)
+            Image(systemName: "chevron.right").foregroundColor(.secondary)
         }
         .padding()
         .background(Color(.systemBackground))
@@ -141,7 +144,4 @@ struct SessionRow: View {
     }
 }
 
-// MARK: - Preview
-#Preview {
-    HomeView()
-}
+#Preview { HomeView() }

@@ -39,6 +39,8 @@ class HomeViewModel {
 
         isLoading = false
     }
+    
+    func clearError() { errorMessage = nil }
 
     /// Get track for a given session
     func track(for session: Session) -> Track? {

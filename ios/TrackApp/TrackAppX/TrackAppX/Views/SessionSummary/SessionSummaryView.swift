@@ -13,10 +13,12 @@ struct SessionSummaryView: View {
     @State private var driverEmail = ""
     @Environment(\.dismiss) private var dismiss
 
-    init(session: Session, track: Track?) {
-        _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
-    }
+    var onDone: (() -> Void)?   // keep this
 
+    init(session: Session, track: Track?, onDone: (() -> Void)? = nil) {
+        _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
+        self.onDone = onDone
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -195,6 +197,8 @@ struct SessionSummaryView: View {
     // MARK: - Actions Section
     private var actionsSection: some View {
         VStack(spacing: 12) {
+
+            // Upload first (green)
             Button {
                 showingUploadSheet = true
             } label: {
@@ -211,8 +215,11 @@ struct SessionSummaryView: View {
             }
             .disabled(viewModel.isUploading)
 
+            // Done second (gray)
             Button {
                 viewModel.saveLocal()
+                onDone?()          // tell the parent we’re done
+                dismiss()          // pop back in the nav stack
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle")
