@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import Link from 'next/link';
+import CoachViewToggle from '@/components/ui/CoachViewToggle';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -41,6 +42,9 @@ export default function RootLayout({
                       Tracks
                     </Link>
                   </div>
+                </div>
+                <div>
+                  <CoachViewToggle />
                 </div>
               </div>
             </nav>

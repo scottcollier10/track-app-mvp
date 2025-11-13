@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
 import InsightsPanel from '@/components/analytics/InsightsPanel';
+import CoachNotes from '@/components/ui/CoachNotes';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -168,7 +169,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Coaching Notes */}
+      {/* Coach Notes (Coach View Only) */}
+      <CoachNotes sessionId={session.id} initialNotes={session.coach_notes} />
+
+      {/* Coaching Notes (Separate Table) */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-bold mb-4">Coaching Notes</h2>
         <AddNoteForm sessionId={session.id} />
