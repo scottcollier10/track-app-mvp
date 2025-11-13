@@ -3,6 +3,7 @@ import { formatDate, formatLapMs, formatDurationMs, formatDateTime } from '@/lib
 import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
+import InsightsPanel from '@/components/analytics/InsightsPanel';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +84,9 @@ export default async function SessionDetailPage({ params }: PageProps) {
         />
         <StatCard label="Laps" value={laps.length.toString()} />
       </div>
+
+      {/* Session Insights */}
+      {laps.length > 0 && <InsightsPanel laps={laps} />}
 
       {/* Lap Time Chart */}
       {laps.length > 0 && (
