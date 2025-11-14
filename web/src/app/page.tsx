@@ -7,16 +7,12 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage() {
   const supabase = createServerClient();
 
-  // Fetch dashboard stats
+  // Fetch all data needed for dashboard
   const [
-    { count: totalSessions },
-    { count: totalDrivers },
+    { data: allSessions },
     { count: totalTracks },
-    { data: recentSessions },
+    { count: totalLaps },
   ] = await Promise.all([
-    supabase.from('sessions').select('*', { count: 'exact', head: true }),
-    supabase.from('drivers').select('*', { count: 'exact', head: true }),
-    supabase.from('tracks').select('*', { count: 'exact', head: true }),
     supabase
       .from('sessions')
       .select(`
@@ -24,9 +20,31 @@ export default async function DashboardPage() {
         driver:drivers(*),
         track:tracks(*)
       `)
-      .order('date', { ascending: false })
-      .limit(5),
+      .order('date', { ascending: false }),
+    supabase.from('tracks').select('*', { count: 'exact', head: true }),
+    supabase.from('laps').select('*', { count: 'exact', head: true }),
   ]);
+
+  const sessions = allSessions || [];
+  const lastSession = sessions[0] || null;
+  const recentSessions = sessions.slice(0, 10);
+
+  // Calculate best lap across all sessions
+  const bestLapMs = sessions.reduce((best: number | null, session: any) => {
+    if (!session.best_lap_ms) return best;
+    if (best === null) return session.best_lap_ms;
+    return Math.min(best, session.best_lap_ms);
+  }, null);
+
+  // Get lap count for last session
+  let lastSessionLapCount = 0;
+  if (lastSession) {
+    const { count } = await supabase
+      .from('laps')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', lastSession.id);
+    lastSessionLapCount = count || 0;
+  }
 
   return (
     <div className="space-y-8">
@@ -38,71 +56,141 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Last Session Card */}
+      {lastSession ? (
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg shadow-md p-8 border-2 border-blue-200 dark:border-blue-900">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
+                LAST SESSION
+              </p>
+              <h2 className="text-2xl font-bold mb-2">
+                {lastSession.track?.name || 'Unknown Track'}
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                {lastSession.driver?.name || 'Unknown Driver'} • {formatDate(lastSession.date)}
+              </p>
+            </div>
+            <div className="text-right">
+              {lastSession.best_lap_ms && (
+                <div className="text-3xl font-mono font-bold text-green-600 dark:text-green-400">
+                  {formatLapTime(lastSession.best_lap_ms)}
+                </div>
+              )}
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Best Lap
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                {lastSessionLapCount} laps
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/sessions/${lastSession.id}`}
+            className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-lg transition-colors"
+          >
+            View Session →
+          </Link>
+        </div>
+      ) : (
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+          <div className="text-5xl mb-4">🏁</div>
+          <p className="text-gray-600 dark:text-gray-400 text-lg">
+            No sessions yet. Import your first session from the iOS app.
+          </p>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Best Lap"
+          value={bestLapMs ? formatLapTime(bestLapMs) : '--'}
+          icon="⚡"
+          isTime
+        />
         <StatCard
           title="Total Sessions"
-          value={totalSessions || 0}
+          value={sessions.length}
           icon="📊"
         />
         <StatCard
-          title="Active Drivers"
-          value={totalDrivers || 0}
-          icon="👤"
-        />
-        <StatCard
-          title="Tracks"
+          title="Tracks Visited"
           value={totalTracks || 0}
           icon="🏁"
         />
+        <StatCard
+          title="Total Laps"
+          value={totalLaps || 0}
+          icon="🔄"
+        />
       </div>
 
-      {/* Recent Sessions */}
+      {/* Recent Sessions Table */}
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Recent Sessions</h2>
           <Link
             href="/sessions"
-            className="text-track-blue hover:underline text-sm"
+            className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
           >
             View all →
           </Link>
         </div>
 
-        {recentSessions && recentSessions.length > 0 ? (
-          <div className="space-y-4">
-            {recentSessions.map((session: any) => (
-              <Link
-                key={session.id}
-                href={`/sessions/${session.id}`}
-                className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-200 dark:border-gray-700"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">
-                      {session.track?.name || 'Unknown Track'}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {session.driver?.name || 'Unknown Driver'} •{' '}
-                      {formatDate(session.date)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {session.best_lap_ms && (
-                      <div className="text-lg font-mono font-semibold text-track-green">
-                        {formatLapTime(session.best_lap_ms)}
-                      </div>
-                    )}
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        {recentSessions.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Track
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Best Lap
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {recentSessions.map((session: any) => (
+                    <tr key={session.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {formatDate(session.date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium">
+                          {session.track?.name || 'Unknown Track'}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {session.driver?.name || 'Unknown Driver'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-sm font-semibold text-green-600 dark:text-green-400">
+                        {session.best_lap_ms ? formatLapTime(session.best_lap_ms) : '--'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <Link
+                          href={`/sessions/${session.id}`}
+                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
+                        >
+                          View →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center">
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
             <p className="text-gray-600 dark:text-gray-400">
               No sessions yet. Import a session from the iOS app to get started.
             </p>
@@ -113,13 +201,25 @@ export default async function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon }: { title: string; value: number; icon: string }) {
+function StatCard({
+  title,
+  value,
+  icon,
+  isTime = false,
+}: {
+  title: string;
+  value: number | string;
+  icon: string;
+  isTime?: boolean;
+}) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
       <div className="flex items-center gap-4">
         <div className="text-4xl">{icon}</div>
-        <div>
-          <div className="text-3xl font-bold">{value}</div>
+        <div className="flex-1">
+          <div className={`text-2xl font-bold ${isTime ? 'font-mono' : ''}`}>
+            {value}
+          </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">{title}</div>
         </div>
       </div>

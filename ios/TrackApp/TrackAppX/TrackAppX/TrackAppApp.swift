@@ -8,18 +8,19 @@
 import SwiftUI
 
 @main
-struct TrackAppApp: App {
+struct TrackAppXApp: App {
     init() {
-        // Print app directory path for debugging
+        // (optional) keep this print if you like seeing the documents path
         if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            print("📁 App Documents Directory:")
+            print("# App Documents Directory:")
             print(documentsPath.path)
         }
     }
 
     var body: some Scene {
         WindowGroup {
-            LiveSessionView(track: Track.preview)
+            HomeView()
         }
     }
 }
+

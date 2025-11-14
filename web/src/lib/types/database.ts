@@ -13,7 +13,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       drivers: {
@@ -43,6 +43,7 @@ export interface Database {
           location: string | null;
           length_meters: number | null;
           config: string | null;
+          map_image_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -51,6 +52,7 @@ export interface Database {
           location?: string | null;
           length_meters?: number | null;
           config?: string | null;
+          map_image_url?: string | null;
           created_at?: string;
         };
         Update: {
@@ -59,6 +61,7 @@ export interface Database {
           location?: string | null;
           length_meters?: number | null;
           config?: string | null;
+          map_image_url?: string | null;
           created_at?: string;
         };
       };
@@ -70,6 +73,7 @@ export interface Database {
           date: string;
           total_time_ms: number;
           best_lap_ms: number | null;
+          coach_notes: string | null;
           source: string;
           created_at: string;
         };
@@ -80,6 +84,7 @@ export interface Database {
           date: string;
           total_time_ms: number;
           best_lap_ms?: number | null;
+          coach_notes?: string | null;
           source?: string;
           created_at?: string;
         };
@@ -90,6 +95,7 @@ export interface Database {
           date?: string;
           total_time_ms?: number;
           best_lap_ms?: number | null;
+          coach_notes?: string | null;
           source?: string;
           created_at?: string;
         };
@@ -154,4 +160,12 @@ export interface Database {
       [_ in never]: never;
     };
   };
-}
+};
+
+// Helper types for easier usage
+export type Tables<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Row'];
+export type TablesInsert<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Insert'];
+export type TablesUpdate<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Update'];

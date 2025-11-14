@@ -213,6 +213,7 @@ struct SessionSummaryView: View {
 
             Button {
                 viewModel.saveLocal()
+                dismiss()
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle")

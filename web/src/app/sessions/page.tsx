@@ -1,112 +1,138 @@
-import { createServerClient } from '@/lib/supabase/client';
-import { formatDate, formatLapTime, formatDuration } from '@/lib/utils/formatters';
+import { getRecentSessions } from '@/data/sessions';
+import { formatDate, formatLapMs, formatDurationMs } from '@/lib/time';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SessionsPage() {
-  const supabase = createServerClient();
+  const { data: sessions, error } = await getRecentSessions(50);
 
-  // Fetch all sessions with relations
-  const { data: sessions, error } = await supabase
-    .from('sessions')
-    .select(`
-      *,
-      driver:drivers(*),
-      track:tracks(*),
-      laps(count)
-    `)
-    .order('date', { ascending: false });
-
+  // Error state
   if (error) {
-    console.error('Error fetching sessions:', error);
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Sessions</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Browse all track sessions
+          </p>
+        </div>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+          <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+            Error Loading Sessions
+          </h3>
+          <p className="text-red-700 dark:text-red-300 text-sm">
+            {error.message || 'Failed to load sessions. Please try again later.'}
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  // Fetch all tracks for filter
-  const { data: tracks } = await supabase
-    .from('tracks')
-    .select('*')
-    .order('name');
+  // Empty state
+  if (!sessions || sessions.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Sessions</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Browse all track sessions
+          </p>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+          <div className="text-5xl mb-4">🏁</div>
+          <h3 className="text-xl font-semibold mb-2">No Sessions Yet</h3>
+          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+            Demo data unavailable. Import a session from the iOS app or add sample data to your database.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
+  // Success state - render sessions table
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Sessions</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
-          Browse and filter all track sessions
+          {sessions.length} track {sessions.length === 1 ? 'session' : 'sessions'}
         </p>
       </div>
 
-      {/* Filters */}
-      {/* TODO: Add client-side filters for track and date range */}
-
-      {/* Sessions List */}
-      {sessions && sessions.length > 0 ? (
-        <div className="space-y-4">
-          {sessions.map((session: any) => (
-            <Link
-              key={session.id}
-              href={`/sessions/${session.id}`}
-              className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex flex-col sm:flex-row justify-between gap-4">
-                {/* Session Info */}
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">
-                    {session.track?.name || 'Unknown Track'}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {session.driver?.name || 'Unknown Driver'} •{' '}
-                    {formatDate(session.date)}
-                  </p>
-                  {session.track?.location && (
-                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                      📍 {session.track.location}
-                    </p>
-                  )}
-                </div>
-
-                {/* Session Stats */}
-                <div className="flex gap-6">
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Laps
+      {/* Sessions Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Track
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Driver
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Laps
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Best Lap
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Time
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {sessions.map((session) => (
+                <tr
+                  key={session.id}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Link
+                      href={`/sessions/${session.id}`}
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {formatDate(session.date)}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        {session.track?.name || 'Unknown Track'}
+                      </span>
+                      {session.track?.location && (
+                        <span className="text-sm text-gray-500">
+                          {session.track.location}
+                        </span>
+                      )}
                     </div>
-                    <div className="font-mono font-semibold">
-                      {session.laps?.[0]?.count || 0}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Total Time
-                    </div>
-                    <div className="font-mono font-semibold">
-                      {formatDuration(session.total_time_ms)}
-                    </div>
-                  </div>
-                  {session.best_lap_ms && (
-                    <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        Best Lap
-                      </div>
-                      <div className="font-mono font-semibold text-track-green">
-                        {formatLapTime(session.best_lap_ms)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Link>
-          ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                    {session.driver?.name || 'Unknown'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right font-mono">
+                    {session.lapCount}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-green-600 dark:text-green-400 font-semibold">
+                    {session.best_lap_ms
+                      ? formatLapMs(session.best_lap_ms)
+                      : '—'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-gray-600 dark:text-gray-400">
+                    {formatDurationMs(session.total_time_ms)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center">
-          <p className="text-gray-600 dark:text-gray-400">
-            No sessions found. Import a session from the iOS app to get started.
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
