@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
       const { data: newDriver, error: driverError } = await supabase
         .from('drivers')
-        .insert([driverInsert])
+        .insert([driverInsert as any])
         .select()
         .single();
 
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     const { error: lapsError } = await supabase
       .from('laps')
-      .insert(lapsToInsert);
+      .insert(lapsToInsert as any);
 
     if (lapsError) {
       console.error('Error creating laps:', lapsError);
