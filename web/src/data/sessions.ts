@@ -46,8 +46,8 @@ export async function getRecentSessions(
   try {
     const supabase = createServerClient();
 
-    const { data: sessions, error } = await supabase
-      .from('sessions')
+    const { data: sessions, error } = await (supabase
+      .from('sessions') as any)
       .select(
         `
         id,
@@ -68,8 +68,8 @@ export async function getRecentSessions(
     // Get lap counts separately
     const sessionsWithCounts = await Promise.all(
       (sessions || []).map(async (session: any) => {
-        const { count } = await supabase
-          .from('laps')
+        const { count } = await (supabase
+          .from('laps') as any)
           .select('*', { count: 'exact', head: true })
           .eq('session_id', session.id);
 
@@ -98,8 +98,8 @@ export async function getSessionWithLaps(
   try {
     const supabase = createServerClient();
 
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
+    const { data: session, error: sessionError } = await (supabase
+      .from('sessions') as any)
       .select(
         `
         id,
@@ -119,8 +119,8 @@ export async function getSessionWithLaps(
     }
 
     // Fetch laps separately
-    const { data: laps, error: lapsError } = await supabase
-      .from('laps')
+    const { data: laps, error: lapsError } = await (supabase
+      .from('laps') as any)
       .select('id, lap_number, lap_time_ms')
       .eq('session_id', id)
       .order('lap_number', { ascending: true });

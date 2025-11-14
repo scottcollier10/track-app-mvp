@@ -13,16 +13,16 @@ export default async function DashboardPage() {
     { count: totalTracks },
     { count: totalLaps },
   ] = await Promise.all([
-    supabase
-      .from('sessions')
+    (supabase
+      .from('sessions') as any)
       .select(`
         *,
         driver:drivers(*),
         track:tracks(*)
       `)
       .order('date', { ascending: false }),
-    supabase.from('tracks').select('*', { count: 'exact', head: true }),
-    supabase.from('laps').select('*', { count: 'exact', head: true }),
+    (supabase.from('tracks') as any).select('*', { count: 'exact', head: true }),
+    (supabase.from('laps') as any).select('*', { count: 'exact', head: true }),
   ]);
 
   const sessions = allSessions || [];
@@ -39,8 +39,8 @@ export default async function DashboardPage() {
   // Get lap count for last session
   let lastSessionLapCount = 0;
   if (lastSession) {
-    const { count } = await supabase
-      .from('laps')
+    const { count } = await (supabase
+      .from('laps') as any)
       .select('*', { count: 'exact', head: true })
       .eq('session_id', lastSession.id);
     lastSessionLapCount = count || 0;

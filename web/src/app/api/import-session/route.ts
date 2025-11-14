@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 import { ImportSessionPayload } from '@/lib/types';
-import type { TablesInsert } from '@/lib/types/database';
+import type { TablesInsert, Tables } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,13 +26,15 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // 1. Find or create driver by email
-    let { data: driver } = await supabase
+    const { data: existingDriver } = await supabase
       .from('drivers')
       .select('*')
       .eq('email', payload.driverEmail)
       .single();
 
-    if (!driver) {
+    let driver: Tables<'drivers'>;
+
+    if (!existingDriver) {
       // Extract name from email (before @)
       const name = payload.driverEmail.split('@')[0];
 
@@ -41,8 +43,8 @@ export async function POST(request: NextRequest) {
         name: name,
       };
 
-      const { data: newDriver, error: driverError } = await supabase
-        .from('drivers')
+      const { data: newDriver, error: driverError } = await (supabase
+        .from('drivers') as any)
         .insert(driverInsert)
         .select()
         .single();
@@ -55,7 +57,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      driver = newDriver;
+      driver = newDriver as Tables<'drivers'>;
+    } else {
+      driver = existingDriver as Tables<'drivers'>;
     }
 
     // 2. Verify track exists
@@ -82,19 +86,21 @@ export async function POST(request: NextRequest) {
       source: 'ios_app',
     };
 
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
+    const { data: sessionData, error: sessionError } = await (supabase
+      .from('sessions') as any)
       .insert(sessionInsert)
       .select()
       .single();
 
-    if (sessionError || !session) {
+    if (sessionError || !sessionData) {
       console.error('Error creating session:', sessionError);
       return NextResponse.json(
         { error: 'Failed to create session' },
         { status: 500 }
       );
     }
+
+    const session = sessionData as Tables<'sessions'>;
 
     // 4. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
@@ -104,8 +110,8 @@ export async function POST(request: NextRequest) {
       sector_data: lap.sectorData || null,
     }));
 
-    const { error: lapsError } = await supabase
-      .from('laps')
+    const { error: lapsError } = await (supabase
+      .from('laps') as any)
       .insert(lapsToInsert);
 
     if (lapsError) {
