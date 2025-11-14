@@ -13,10 +13,12 @@ struct SessionSummaryView: View {
     @State private var driverEmail = ""
     @Environment(\.dismiss) private var dismiss
 
-    init(session: Session, track: Track?) {
-        _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
-    }
+    var onDone: (() -> Void)?   // keep this
 
+    init(session: Session, track: Track?, onDone: (() -> Void)? = nil) {
+        _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
+        self.onDone = onDone
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {

@@ -10,8 +10,11 @@ import Observation
 
 @Observable
 class LiveSessionViewModel {
+
     // MARK: - State
     let stateMachine: SessionStateMachine
+
+    // timers + timekeeping
     private(set) var currentLapTime: TimeInterval = 0
     private(set) var lastLapTime: TimeInterval?
     private(set) var sessionElapsedTime: TimeInterval = 0
@@ -28,7 +31,7 @@ class LiveSessionViewModel {
     // MARK: - Dependencies
     private let persistence: PersistenceService
 
-    // MARK: - Initialization
+    // MARK: - Init
     init(
         stateMachine: SessionStateMachine = SessionStateMachine(),
         persistence: PersistenceService = FileManagerPersistence()
@@ -36,17 +39,16 @@ class LiveSessionViewModel {
         self.stateMachine = stateMachine
         self.persistence = persistence
 
-        // Set up state machine callbacks
+        // state machine callbacks
         stateMachine.onStateChange = { [weak self] oldState, newState in
             self?.handleStateChange(from: oldState, to: newState)
         }
-
         stateMachine.onLapCompleted = { [weak self] lap in
             self?.handleLapCompleted(lap)
         }
     }
 
-    // MARK: - Timer Management
+    // MARK: - Timers
     private func startTimers() {
         sessionStartTime = Date()
         currentLapStartTime = Date()
@@ -65,22 +67,16 @@ class LiveSessionViewModel {
 
     private func updateTimers() {
         if stateMachine.state.isRecording {
-            if let sessionStart = sessionStartTime {
-                sessionElapsedTime = Date().timeIntervalSince(sessionStart)
-            }
-            if let lapStart = currentLapStartTime {
-                currentLapTime = Date().timeIntervalSince(lapStart)
-            }
+            if let s = sessionStartTime { sessionElapsedTime = Date().timeIntervalSince(s) }
+            if let l = currentLapStartTime { currentLapTime = Date().timeIntervalSince(l) }
         }
     }
 
-    // MARK: - State Change Handling
+    // MARK: - State handling
     private func handleStateChange(from oldState: SessionState, to newState: SessionState) {
         switch newState {
         case .recording:
-            if !oldState.isRecording {
-                startTimers()
-            }
+            if !oldState.isRecording { startTimers() }
         case .pitsPause, .end:
             stopTimers()
         case .disarmed:
@@ -89,7 +85,7 @@ class LiveSessionViewModel {
             break
         }
 
-        // Auto-save session on state changes
+        // opportunistic persistence
         if case .recording(let session, _, _) = newState {
             try? persistence.saveSession(session)
         } else if case .end(let session) = newState {
@@ -102,7 +98,6 @@ class LiveSessionViewModel {
         currentLapStartTime = Date()
         currentLapTime = 0
 
-        // Save session after each lap
         if case .recording(let session, _, _) = stateMachine.state {
             try? persistence.saveSession(session)
         }
@@ -116,26 +111,15 @@ class LiveSessionViewModel {
         currentLapStartTime = nil
     }
 
-    // MARK: - Dev Mode Actions
-    func toggleDevMode() {
-        isDevModeEnabled.toggle()
-    }
+    // MARK: - Dev actions
+    func toggleDevMode() { isDevModeEnabled.toggle() }
 
-    func simulateCrossStartFinish() {
-        stateMachine.handle(.crossStartFinish)
-    }
-
-    func simulateEnterPitLane() {
-        stateMachine.handle(.enterPitLane)
-    }
-
-    func simulateExitPitLane() {
-        stateMachine.handle(.exitPitLane)
-    }
+    func simulateCrossStartFinish() { stateMachine.handle(.crossStartFinish) }
+    func simulateEnterPitLane()   { stateMachine.handle(.enterPitLane) }
+    func simulateExitPitLane()    { stateMachine.handle(.exitPitLane) }
 
     func updateSimulatedSpeed(_ speed: Double) {
         simulatedSpeed = speed
-
         if speed >= Config.autoStartSpeedThreshold {
             stateMachine.handle(.speedAboveThreshold(mph: speed))
         } else if speed < Config.autoStopSpeedThreshold {
@@ -143,14 +127,14 @@ class LiveSessionViewModel {
         }
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Computed
     var formattedCurrentLapTime: String {
         TimeFormatter.formatLapTime(seconds: currentLapTime)
     }
 
     var formattedLastLapTime: String? {
-        guard let time = lastLapTime else { return nil }
-        return TimeFormatter.formatLapTime(seconds: time)
+        guard let t = lastLapTime else { return nil }
+        return TimeFormatter.formatLapTime(seconds: t)
     }
 
     var formattedSessionTime: String {
@@ -158,22 +142,27 @@ class LiveSessionViewModel {
     }
 
     var bestLapTime: String? {
-        guard case .recording(let session, _, _) = stateMachine.state,
-              let bestMs = session.bestLapMs else {
-            return nil
+        if case .recording(let session, _, _) = stateMachine.state,
+           let best = session.bestLapMs {
+            return TimeFormatter.formatLapTime(milliseconds: best)
         }
-        return TimeFormatter.formatLapTime(milliseconds: bestMs)
+        if case .end(let session) = stateMachine.state,
+           let best = session.bestLapMs {
+            return TimeFormatter.formatLapTime(milliseconds: best)
+        }
+        return nil
     }
 
     var lapCount: Int {
-        guard let session = stateMachine.state.currentSession else {
-            return 0
+        if case .recording(let session, _, _) = stateMachine.state {
+            return session.lapCount
         }
-        return session.lapCount
+        if case .end(let session) = stateMachine.state {
+            return session.lapCount
+        }
+        return 0
     }
 
     // MARK: - Cleanup
-    deinit {
-        stopTimers()
-    }
+    deinit { stopTimers() }
 }
