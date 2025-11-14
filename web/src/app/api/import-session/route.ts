@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 import { ImportSessionPayload } from '@/lib/types';
+import type { TablesInsert } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,9 +36,14 @@ export async function POST(request: NextRequest) {
       // Extract name from email (before @)
       const name = payload.driverEmail.split('@')[0];
 
+      const driverInsert: TablesInsert<'drivers'> = {
+        email: payload.driverEmail,
+        name: name,
+      };
+
       const { data: newDriver, error: driverError } = await supabase
         .from('drivers')
-        .insert({ email: payload.driverEmail, name })
+        .insert(driverInsert)
         .select()
         .single();
 
@@ -67,16 +73,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Create session
+    const sessionInsert: TablesInsert<'sessions'> = {
+      driver_id: driver.id,
+      track_id: payload.trackId,
+      date: payload.date,
+      total_time_ms: payload.totalTimeMs,
+      best_lap_ms: payload.bestLapMs,
+      source: 'ios_app',
+    };
+
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
-      .insert({
-        driver_id: driver.id,
-        track_id: payload.trackId,
-        date: payload.date,
-        total_time_ms: payload.totalTimeMs,
-        best_lap_ms: payload.bestLapMs,
-        source: 'ios_app',
-      })
+      .insert(sessionInsert)
       .select()
       .single();
 
@@ -89,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Create laps
-    const lapsToInsert = payload.laps.map((lap) => ({
+    const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
       session_id: session.id,
       lap_number: lap.lapNumber,
       lap_time_ms: lap.lapTimeMs,

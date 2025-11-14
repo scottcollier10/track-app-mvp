@@ -4,7 +4,7 @@
  * Creates and exports Supabase client instances for browser and server use
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../types/database';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -26,6 +26,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
  * Create a new Supabase client for server-side usage
  * Use this in Server Components, API routes, and server actions
  */
-export function createServerClient() {
+export function createServerClient(): SupabaseClient<Database> {
   return createClient<Database>(supabaseUrl, supabaseAnonKey);
 }

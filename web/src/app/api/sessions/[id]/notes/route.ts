@@ -6,6 +6,7 @@
 
 import { createServerClient } from '@/lib/supabase/client';
 import { NextRequest, NextResponse } from 'next/server';
+import type { TablesUpdate } from '@/lib/types/database';
 
 export async function PATCH(
   request: NextRequest,
@@ -15,10 +16,14 @@ export async function PATCH(
     const supabase = createServerClient();
     const { coach_notes } = await request.json();
 
+    const updateData: TablesUpdate<'sessions'> = {
+      coach_notes,
+    };
+
     // Update the session's coach_notes
     const { data, error } = await supabase
       .from('sessions')
-      .update({ coach_notes })
+      .update(updateData)
       .eq('id', params.id)
       .select()
       .single();
