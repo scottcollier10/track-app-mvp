@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
       const { data: newDriver, error: driverError } = await supabase
         .from('drivers')
-        .insert(driverInsert)
+        .insert([driverInsert])
         .select()
         .single();
 
