@@ -12,11 +12,11 @@ import type { TablesInsert } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
-    const payload: ImportSessionPayload = await request.json();
+    // 1. Parse request body
+    const payload = (await request.json()) as ImportSessionPayload;
 
-    // Validate payload
-    if (!payload.driverEmail || !payload.trackId || !payload.laps) {
+    // 2. Validate payload
+    if (!payload.driverEmail || !payload.trackId || !payload.laps || payload.laps.length === 0) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -24,9 +24,11 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+    // Bypass Supabase's strict TS typing for this MVP endpoint
+    const db = supabase as any;
 
-    // 1. Find or create driver by email
-    let { data: driver } = await supabase
+    // 3. Find or create driver by email
+    let { data: driver } = await db
       .from('drivers')
       .select('*')
       .eq('email', payload.driverEmail)
@@ -38,16 +40,14 @@ export async function POST(request: NextRequest) {
 
       const driverInsert: TablesInsert<'drivers'> = {
         email: payload.driverEmail,
-        name: name,
+        name,
       };
 
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-     // @ts-ignore – Supabase typing is wrong here in CI; runtime is fine for MVP
-      const { data: newDriver, error: driverError } = await supabase
-      .from('drivers')
-      .insert([driverInsert])
-      .select()
-      .single();
+      const { data: newDriver, error: driverError } = await db
+        .from('drivers')
+        .insert([driverInsert] as any) // TS bypass for Vercel
+        .select()
+        .single();
 
       if (driverError || !newDriver) {
         console.error('Error creating driver:', driverError);
@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
       driver = newDriver;
     }
 
-    // 2. Verify track exists
-    const { data: track } = await supabase
+    // 4. Verify track exists
+    const { data: track } = await db
       .from('tracks')
       .select('*')
       .eq('id', payload.trackId)
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Create session
+    // 5. Create session
     const sessionInsert: TablesInsert<'sessions'> = {
       driver_id: driver.id,
       track_id: payload.trackId,
@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
       source: 'ios_app',
     };
 
-    const { data: session, error: sessionError } = await supabase
+    const { data: session, error: sessionError } = await db
       .from('sessions')
-      .insert(sessionInsert)
+      .insert(sessionInsert as any) // TS bypass for Vercel
       .select()
       .single();
 
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create laps
+    // 6. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
       session_id: session.id,
       lap_number: lap.lapNumber,
@@ -106,11 +106,9 @@ export async function POST(request: NextRequest) {
       sector_data: lap.sectorData || null,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore – same TS typing issue as drivers insert 
-    await supabase
+    const { error: lapsError } = await db
       .from('laps')
-      .insert(lapsToInsert);
+      .insert(lapsToInsert as any); // TS bypass for Vercel
 
     if (lapsError) {
       console.error('Error creating laps:', lapsError);
@@ -125,7 +123,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Success!
+    // 7. Success
     return NextResponse.json(
       {
         sessionId: session.id,
