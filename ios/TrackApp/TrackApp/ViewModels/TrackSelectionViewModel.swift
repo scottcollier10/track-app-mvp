@@ -18,10 +18,15 @@ class TrackSelectionViewModel {
 
     // MARK: - Dependencies
     private let persistence: PersistenceService
+    private let apiService: APIService
 
     // MARK: - Initialization
-    init(persistence: PersistenceService = FileManagerPersistence()) {
+    init(
+        persistence: PersistenceService = FileManagerPersistence(),
+        apiService: APIService = APIService()
+    ) {
         self.persistence = persistence
+        self.apiService = apiService
     }
 
     // MARK: - Computed Properties
@@ -40,12 +45,35 @@ class TrackSelectionViewModel {
         isLoading = true
         errorMessage = nil
 
-        do {
-            tracks = try persistence.loadTracks()
-        } catch {
-            errorMessage = "Failed to load tracks: \(error.localizedDescription)"
-        }
+        Task {
+            do {
+                // Try to fetch tracks from the API first
+                let fetchedTracks = try await apiService.fetchTracks()
 
-        isLoading = false
+                // Cache the tracks locally for offline use
+                try? persistence.saveTracks(fetchedTracks)
+
+                // Update UI on main thread
+                await MainActor.run {
+                    self.tracks = fetchedTracks
+                    self.isLoading = false
+                }
+            } catch {
+                // If API fails, fall back to cached tracks
+                do {
+                    let cachedTracks = try persistence.loadTracks()
+                    await MainActor.run {
+                        self.tracks = cachedTracks
+                        self.isLoading = false
+                        self.errorMessage = "Using cached tracks (offline mode)"
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.errorMessage = "Failed to load tracks: \(error.localizedDescription)"
+                        self.isLoading = false
+                    }
+                }
+            }
+        }
     }
 }
