@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingTrackSelection = false
     @State private var selectedSession: Session?
+    @State private var selectedTrack: Track?
 
     var body: some View {
         NavigationStack {
@@ -30,13 +31,29 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("Track App")
+            .navigationDestination(item: $selectedTrack) { track in
+                LiveSessionView(track: track)
+            }
+            .navigationDestination(item: $selectedSession) { session in
+                SessionSummaryView(session: session, track: viewModel.track(for: session))
+            }
             .onAppear {
                 viewModel.loadData()
+            }
+            .onChange(of: selectedTrack) { _, newValue in
+                if newValue == nil {
+                    viewModel.loadData()
+                }
+            }
+            .onChange(of: selectedSession) { _, newValue in
+                if newValue == nil {
+                    viewModel.loadData()
+                }
             }
             .sheet(isPresented: $showingTrackSelection) {
                 TrackSelectionView { track in
                     showingTrackSelection = false
-                    // Navigate to live session
+                    selectedTrack = track
                 }
             }
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
