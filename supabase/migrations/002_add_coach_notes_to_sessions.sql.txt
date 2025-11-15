@@ -1,0 +1,16 @@
+-- 002_add_coach_notes_to_sessions.sql
+-- Adds coach_notes column to sessions if it doesn't already exist.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'sessions'
+      AND column_name = 'coach_notes'
+  ) THEN
+    ALTER TABLE public.sessions
+      ADD COLUMN coach_notes text;
+  END IF;
+END $$;

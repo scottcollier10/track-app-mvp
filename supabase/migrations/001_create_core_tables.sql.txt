@@ -1,0 +1,45 @@
+-- 001_create_core_tables.sql
+-- Source of truth for Track App core tables.
+-- IMPORTANT: For a *new* project. Do NOT run blindly on your existing prod DB.
+
+-- TODO: Replace the placeholder CREATE TABLE blocks with the exact DDL
+-- from Supabase (Table editor → ... → "Show SQL"/"Create table" script).
+
+-- Example structure, replace with your real one:
+
+-- Tracks table
+-- ====================================
+-- CREATE TABLE public.tracks (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   name text NOT NULL,
+--   location text,
+--   length_meters integer,
+--   config text,
+--   created_at timestamptz DEFAULT now()
+-- );
+
+-- Sessions table
+-- ====================================
+-- CREATE TABLE public.sessions (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   track_id uuid NOT NULL REFERENCES public.tracks(id),
+--   driver_name text,
+--   driver_email text,
+--   started_at timestamptz,
+--   total_time_ms integer,
+--   best_lap_ms integer,
+--   laps_count integer,
+--   created_at timestamptz DEFAULT now()
+-- );
+
+-- Laps table
+-- ====================================
+-- CREATE TABLE public.laps (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   session_id uuid NOT NULL REFERENCES public.sessions(id),
+--   lap_number integer NOT NULL,
+--   lap_time_ms integer NOT NULL,
+--   delta_ms integer,
+--   is_best boolean DEFAULT false,
+--   created_at timestamptz DEFAULT now()
+-- );

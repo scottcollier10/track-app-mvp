@@ -1,0 +1,53 @@
+-- 001_seed_tracks.sql
+-- Idempotent-ish seed for base track records.
+
+-- NOTE: Replace UUIDs with the *actual* ids from your existing tracks table
+-- if you want iOS + web to line up exactly on a fresh DB.
+
+-- Laguna Seca
+INSERT INTO public.tracks (id, name, location, length_meters, config)
+VALUES (
+  '550e8400-e29b-41d4-a716-446655440001',
+  'Laguna Seca',
+  'Monterey, CA',
+  3602,
+  'Full'
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  location = EXCLUDED.location,
+  length_meters = EXCLUDED.length_meters,
+  config = EXCLUDED.config;
+
+-- Sonoma Raceway (example)
+INSERT INTO public.tracks (id, name, location, length_meters, config)
+VALUES (
+  '550e8400-e29b-41d4-a716-446655440004',
+  'Sonoma Raceway',
+  'ASonoma, CA',
+  5513,
+  'Grand Prix'
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  location = EXCLUDED.location,
+  length_meters = EXCLUDED.length_meters,
+  config = EXCLUDED.config;
+
+-- Thunderhill
+INSERT INTO public.tracks (id, name, location, length_meters, config)
+VALUES (
+  '550e8400-e29b-41d4-a716-446655440002',
+  'Thunderhill',
+  'Willows, CA',
+  4500,
+  '3-mile'
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  location = EXCLUDED.location,
+  length_meters = EXCLUDED.length_meters,
+  config = EXCLUDED.config;
