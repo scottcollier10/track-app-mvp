@@ -1,8 +1,9 @@
-import { getRecentSessions } from '@/data/sessions';
-import { formatDate, formatLapMs, formatDurationMs } from '@/lib/time';
-import Link from 'next/link';
+import { getRecentSessions } from "@/data/sessions";
+import { formatDate, formatLapMs, formatDurationMs } from "@/lib/time";
+import Link from "next/link";
+import SessionsSubtitle from "@/components/ui/SessionsSubtitle";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function SessionsPage() {
   const { data: sessions, error } = await getRecentSessions(50);
@@ -22,7 +23,8 @@ export default async function SessionsPage() {
             Error Loading Sessions
           </h3>
           <p className="text-red-700 dark:text-red-300 text-sm">
-            {error.message || 'Failed to load sessions. Please try again later.'}
+            {error.message ||
+              "Failed to load sessions. Please try again later."}
           </p>
         </div>
       </div>
@@ -43,12 +45,19 @@ export default async function SessionsPage() {
           <div className="text-5xl mb-4">🏁</div>
           <h3 className="text-xl font-semibold mb-2">No Sessions Yet</h3>
           <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-            Demo data unavailable. Import a session from the iOS app or add sample data to your database.
+            Demo data unavailable. Import a session from the iOS app or add
+            sample data to your database.
           </p>
         </div>
       </div>
     );
   }
+
+  // Derived counts for subtitle
+  const totalSessions = sessions.length;
+  const uniqueDrivers = new Set(
+    sessions.map((s) => s.driver?.name || "Unknown")
+  ).size;
 
   // Success state - render sessions table
   return (
@@ -56,9 +65,10 @@ export default async function SessionsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Sessions</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          {sessions.length} track {sessions.length === 1 ? 'session' : 'sessions'}
-        </p>
+        <SessionsSubtitle
+          totalSessions={totalSessions}
+          uniqueDrivers={uniqueDrivers}
+        />
       </div>
 
       {/* Sessions Table */}
@@ -104,7 +114,7 @@ export default async function SessionsPage() {
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-medium">
-                        {session.track?.name || 'Unknown Track'}
+                        {session.track?.name || "Unknown Track"}
                       </span>
                       {session.track?.location && (
                         <span className="text-sm text-gray-500">
@@ -114,7 +124,7 @@ export default async function SessionsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
-                    {session.driver?.name || 'Unknown'}
+                    {session.driver?.name || "Unknown"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right font-mono">
                     {session.lapCount}
@@ -122,7 +132,7 @@ export default async function SessionsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-green-600 dark:text-green-400 font-semibold">
                     {session.best_lap_ms
                       ? formatLapMs(session.best_lap_ms)
-                      : '—'}
+                      : "—"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-gray-600 dark:text-gray-400">
                     {formatDurationMs(session.total_time_ms)}

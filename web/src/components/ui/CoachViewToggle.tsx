@@ -1,89 +1,31 @@
-'use client';
+"use client";
 
-/**
- * CoachViewToggle Component
- *
- * Toggle for enabling/disabling coach view features
- * Stores state in localStorage
- */
-
-import { useEffect, useState } from 'react';
+import { useCoachView } from "@/context/coach-view";
 
 export default function CoachViewToggle() {
-  const [isCoachView, setIsCoachView] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem('coachViewEnabled');
-    setIsCoachView(stored === 'true');
-  }, []);
-
-  const handleToggle = () => {
-    const newValue = !isCoachView;
-    setIsCoachView(newValue);
-    localStorage.setItem('coachViewEnabled', String(newValue));
-    // Trigger a custom event to notify other components
-    window.dispatchEvent(new Event('coach-view-changed'));
-  };
-
-  // Avoid hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-600 dark:text-gray-400">Coach View:</span>
-        <div className="w-12 h-6 bg-gray-300 rounded-full"></div>
-      </div>
-    );
-  }
+  const { coachView, toggleCoachView } = useCoachView();
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-600 dark:text-gray-400">Coach View:</span>
+    <div className="flex items-center gap-2 text-xs text-slate-300">
+      <span>Coach View</span>
       <button
-        onClick={handleToggle}
-        className={`relative w-12 h-6 rounded-full transition-colors ${
-          isCoachView
-            ? 'bg-green-600 dark:bg-green-500'
-            : 'bg-gray-300 dark:bg-gray-600'
-        }`}
-        aria-label={`Coach View ${isCoachView ? 'On' : 'Off'}`}
-      >
-        <div
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-            isCoachView ? 'translate-x-6' : 'translate-x-0'
+        type="button"
+        onClick={toggleCoachView}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full border transition
+          ${
+            coachView
+              ? "bg-emerald-500 border-emerald-500"
+              : "bg-slate-700 border-slate-500"
           }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-slate-900 transition
+            ${coachView ? "translate-x-4" : "translate-x-1"}`}
         />
       </button>
-      <span className="text-xs font-medium text-gray-700 dark:text-gray-300 uppercase">
-        {isCoachView ? 'ON' : 'OFF'}
+      <span className="text-[11px] text-slate-400">
+        {coachView ? "ON" : "OFF"}
       </span>
     </div>
   );
-}
-
-/**
- * Hook to check if coach view is enabled
- * Use in client components
- */
-export function useCoachView() {
-  const [isCoachView, setIsCoachView] = useState(false);
-
-  useEffect(() => {
-    // Initial load
-    const stored = localStorage.getItem('coachViewEnabled');
-    setIsCoachView(stored === 'true');
-
-    // Listen for changes
-    const handleChange = () => {
-      const stored = localStorage.getItem('coachViewEnabled');
-      setIsCoachView(stored === 'true');
-    };
-
-    window.addEventListener('coach-view-changed', handleChange);
-    return () => window.removeEventListener('coach-view-changed', handleChange);
-  }, []);
-
-  return isCoachView;
 }

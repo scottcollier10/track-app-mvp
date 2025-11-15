@@ -172,11 +172,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {/* Coach Notes (Coach View Only) */}
       <CoachNotes sessionId={session.id} initialNotes={session.coach_notes} />
 
-      {/* Coaching Notes (Separate Table) */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-        <h2 className="text-xl font-bold mb-4">Coaching Notes</h2>
-        <AddNoteForm sessionId={session.id} />
-      </div>
+      
     </div>
   );
 }

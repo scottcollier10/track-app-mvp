@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * CoachNotes Component
@@ -8,50 +8,54 @@
  * Saves to sessions.coach_notes column
  */
 
-import { useState, useEffect } from 'react';
-import { useCoachView } from './CoachViewToggle';
+import { useState, useEffect } from "react";
+import { useCoachView } from "@/context/coach-view";
 
 interface CoachNotesProps {
   sessionId: string;
   initialNotes: string | null;
 }
 
-export default function CoachNotes({ sessionId, initialNotes }: CoachNotesProps) {
-  const isCoachView = useCoachView();
-  const [notes, setNotes] = useState(initialNotes || '');
+export default function CoachNotes({
+  sessionId,
+  initialNotes,
+}: CoachNotesProps) {
+  const { coachView } = useCoachView();
+
+  const [notes, setNotes] = useState(initialNotes || "");
   const [isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] =
+    useState<"idle" | "success" | "error">("idle");
 
   useEffect(() => {
-    setNotes(initialNotes || '');
+    setNotes(initialNotes || "");
   }, [initialNotes]);
 
-  if (!isCoachView) {
-    return null;
-  }
+  // 🔒 Hide notes completely when Coach View is OFF
+  if (!coachView) return null;
 
   const handleSave = async () => {
     setIsSaving(true);
-    setSaveStatus('idle');
+    setSaveStatus("idle");
 
     try {
       const response = await fetch(`/api/sessions/${sessionId}/notes`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ coach_notes: notes }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save notes');
+        throw new Error("Failed to save notes");
       }
 
-      setSaveStatus('success');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      setSaveStatus("success");
+      setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (error) {
-      console.error('Error saving coach notes:', error);
-      setSaveStatus('error');
+      console.error("Error saving coach notes:", error);
+      setSaveStatus("error");
     } finally {
       setIsSaving(false);
     }
@@ -82,12 +86,12 @@ export default function CoachNotes({ sessionId, initialNotes }: CoachNotesProps)
           {notes.length} characters
         </div>
         <div className="flex items-center gap-3">
-          {saveStatus === 'success' && (
+          {saveStatus === "success" && (
             <span className="text-sm text-green-600 dark:text-green-400 font-medium">
               ✓ Saved
             </span>
           )}
-          {saveStatus === 'error' && (
+          {saveStatus === "error" && (
             <span className="text-sm text-red-600 dark:text-red-400 font-medium">
               Failed to save
             </span>
@@ -97,7 +101,7 @@ export default function CoachNotes({ sessionId, initialNotes }: CoachNotesProps)
             disabled={isSaving}
             className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? 'Saving...' : 'Save Notes'}
+            {isSaving ? "Saving..." : "Save Notes"}
           </button>
         </div>
       </div>
