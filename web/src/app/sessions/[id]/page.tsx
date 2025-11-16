@@ -3,9 +3,13 @@ import { formatDate, formatLapMs, formatDurationMs, formatDateTime } from '@/lib
 import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
-import InsightsPanel from '@/components/analytics/InsightsPanel';
 import CoachNotes from '@/components/ui/CoachNotes';
 import Link from 'next/link';
+import {
+  getSessionInsightsFromMs,
+  getScoreLabel,
+  INSIGHT_HELPERS,
+} from '@/lib/insights';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +51,12 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
   const laps = session.laps || [];
 
+  // Calculate session insights
+  const lapTimes = laps.map(lap => lap.lap_time_ms).filter((t): t is number => t != null);
+  const insights = getSessionInsightsFromMs(lapTimes);
+  const consistencyLabel = getScoreLabel(insights.consistencyScore);
+  const behaviorLabel = getScoreLabel(insights.drivingBehaviorScore);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -87,7 +97,51 @@ export default async function SessionDetailPage({ params }: PageProps) {
       </div>
 
       {/* Session Insights */}
-      {laps.length > 0 && <InsightsPanel laps={laps} />}
+      {laps.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-white">Session Insights</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Consistency */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="text-sm font-medium text-slate-400">Consistency</div>
+              <div className="mt-2 text-2xl font-semibold text-white">
+                {insights.consistencyScore != null ? Math.round(insights.consistencyScore) : '--'}/100
+              </div>
+              <div className={`mt-1 text-sm font-medium ${consistencyLabel.colorClass}`}>
+                {consistencyLabel.label}
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                {INSIGHT_HELPERS.consistency}
+              </p>
+            </div>
+
+            {/* Pace Trend */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="text-sm font-medium text-slate-400">Pace Trend</div>
+              <div className="mt-2 text-lg font-semibold text-emerald-400">
+                {insights.paceTrendLabel}
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                {insights.paceTrendDetail}
+              </p>
+            </div>
+
+            {/* Driving Behavior */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="text-sm font-medium text-slate-400">Driving Behavior</div>
+              <div className="mt-2 text-2xl font-semibold text-white">
+                {insights.drivingBehaviorScore != null ? Math.round(insights.drivingBehaviorScore) : '--'}/100
+              </div>
+              <div className={`mt-1 text-sm font-medium ${behaviorLabel.colorClass}`}>
+                {behaviorLabel.label}
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                {INSIGHT_HELPERS.behavior}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lap Time Chart */}
       {laps.length > 0 && (
