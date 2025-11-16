@@ -12,6 +12,7 @@ import {
   INSIGHT_HELPERS,
 } from '@/lib/insights';
 import EmptyInsights from '@/components/analytics/EmptyInsights';
+import AICoachingCard from '@/components/coaching/AICoachingCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,7 +109,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {laps.length > 0 && (
         <div className="space-y-6">
           <h2 className="text-xl font-semibold">Session Insights</h2>
-          
+
           {laps.length < 6 ? (
             <EmptyInsights lapCount={laps.length} />
           ) : (
@@ -134,7 +135,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                 <div className="text-xs text-gray-500 mb-3">
                   {insights.paceTrendDetail}
                 </div>
-                <Sparkline 
+                <Sparkline
                   data={lapTimes}
                   height={40}
                   color={insights.paceTrendLabel.includes('Improving') ? '#10b981' : insights.paceTrendLabel.includes('Fading') ? '#f59e0b' : '#6b7280'}
@@ -155,6 +156,14 @@ export default async function SessionDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* AI Coaching (Coach View Only) */}
+      {laps.length >= 6 && (
+        <AICoachingCard
+          sessionId={session.id}
+          initialCoaching={session.ai_coaching_summary}
+        />
       )}
 
       {/* Lap Time Chart */}
