@@ -18,6 +18,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ) {
+  const supabase = createServerClient();
+
   try {
     // Accept either coach_notes or notes in the body
     const body = await request.json();
