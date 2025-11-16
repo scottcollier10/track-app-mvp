@@ -61,8 +61,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
     drivingBehaviorScore: insightsData.drivingBehaviorScore || 0,
     paceTrendLabel: insightsData.paceTrendLabel,
     paceTrendDetail: insightsData.paceTrendDetail,
-    consistencyLabel: getScoreLabel(insightsData.consistencyScore || 0, 'consistency').label,
-    drivingBehaviorLabel: getScoreLabel(insightsData.drivingBehaviorScore || 0, 'behavior').label,
+    consistencyLabel: getScoreLabel(insightsData.consistencyScore || 0).label,
+    drivingBehaviorLabel: getScoreLabel(insightsData.drivingBehaviorScore || 0).label,
   };
 
   return (
@@ -149,7 +149,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                   {insights.drivingBehaviorLabel}
                 </div>
                 <div className="text-xs text-gray-500 mt-2">
-                  {INSIGHT_HELPERS.drivingBehavior}
+                  {INSIGHT_HELPERS.behavior}
                 </div>
               </div>
             </div>
