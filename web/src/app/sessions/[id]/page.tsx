@@ -11,6 +11,7 @@ import {
   getScoreLabel,
   INSIGHT_HELPERS,
 } from '@/lib/insights';
+import EmptyInsights from '@/components/analytics/EmptyInsights';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,55 +102,101 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {laps.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-xl font-bold text-white">Session Insights</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Consistency */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Consistency</div>
-              <div className="mt-2 text-2xl font-semibold text-white">
-                {insights.consistencyScore != null ? Math.round(insights.consistencyScore) : '--'}/100
-              </div>
-              <div className={`mt-1 text-sm font-medium ${consistencyLabel.colorClass}`}>
-                {consistencyLabel.label}
-              </div>
-              <p className="mt-3 text-xs text-slate-400">
-                {INSIGHT_HELPERS.consistency}
-              </p>
-            </div>
-
-            {/* Pace Trend */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Pace Trend</div>
-              <div className="mt-2 text-lg font-semibold text-emerald-400">
-                {insights.paceTrendLabel}
-              </div>
-              {lapTimes.length > 0 && (
-                <div className="mt-3">
-                  <Sparkline
-                    data={lapTimes}
-                    height={40}
-                    color={insights.paceTrendLabel.includes('Improving') ? '#10b981' : insights.paceTrendLabel.includes('Fading') ? '#f59e0b' : '#6b7280'}
-                  />
+          {laps.length < 6 ? (
+            <EmptyInsights lapCount={laps.length} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Consistency */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Consistency</div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {insights.consistencyScore != null ? Math.round(insights.consistencyScore) : '--'}/100
                 </div>
-              )}
-              <p className="mt-3 text-xs text-slate-400">
-                {insights.paceTrendDetail}
-              </p>
-            </div>
+                <div className={`mt-1 text-sm font-medium ${consistencyLabel.colorClass}`}>
+                  {consistencyLabel.label}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {INSIGHT_HELPERS.consistency}
+                </p>
+              </div>
 
-            {/* Driving Behavior */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Driving Behavior</div>
-              <div className="mt-2 text-2xl font-semibold text-white">
-                {insights.drivingBehaviorScore != null ? Math.round(insights.drivingBehaviorScore) : '--'}/100
+              {/* Pace Trend */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Pace Trend</div>
+                <div className="mt-2 text-lg font-semibold text-emerald-400">
+                  {insights.paceTrendLabel}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {insights.paceTrendDetail}
+                </p>
               </div>
-              <div className={`mt-1 text-sm font-medium ${behaviorLabel.colorClass}`}>
-                {behaviorLabel.label}
+{/* Session Insights */}
+<div className="space-y-6">
+  <h2 className="text-xl font-semibold">Session Insights</h2>
+  
+  {laps.length < 6 ? (
+    <EmptyInsights lapCount={laps.length} />
+  ) : (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Consistency Card */}
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="text-sm text-gray-400 mb-2">Consistency</div>
+        <div className="text-3xl font-bold mb-1">{insights.consistency}/100</div>
+        <div className={`text-sm font-medium ${insights.consistencyLabel === 'Excellent' ? 'text-emerald-400' : insights.consistencyLabel === 'Strong' ? 'text-green-400' : insights.consistencyLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
+          {insights.consistencyLabel}
+        </div>
+        <div className="text-xs text-gray-500 mt-2">
+          {INSIGHT_HELPERS.consistency}
+        </div>
+      </div>
+
+      {/* Pace Trend Card with Sparkline */}
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="text-sm text-gray-400 mb-2">Pace Trend</div>
+        <div className={`text-lg font-bold mb-1 ${insights.paceTrend.includes('Improving') ? 'text-green-400' : insights.paceTrend.includes('Fading') ? 'text-amber-400' : 'text-gray-400'}`}>
+          {insights.paceTrend}
+        </div>
+        <div className="text-xs text-gray-500 mb-3">
+          {insights.paceTrendDetail}
+        </div>
+        {/* Sparkline visualization */}
+        <Sparkline 
+          data={lapTimes}
+          height={40}
+          color={insights.paceTrend.includes('Improving') ? '#10b981' : insights.paceTrend.includes('Fading') ? '#f59e0b' : '#6b7280'}
+        />
+      </div>
+
+      {/* Driving Behavior Card */}
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+        <div className="text-sm text-gray-400 mb-2">Driving Behavior</div>
+        <div className="text-3xl font-bold mb-1">{insights.drivingBehavior}/100</div>
+        <div className={`text-sm font-medium ${insights.drivingBehaviorLabel === 'Excellent' ? 'text-emerald-400' : insights.drivingBehaviorLabel === 'Strong' ? 'text-green-400' : insights.drivingBehaviorLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
+          {insights.drivingBehaviorLabel}
+        </div>
+        <div className="text-xs text-gray-500 mt-2">
+          {INSIGHT_HELPERS.drivingBehavior}
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+
+              {/* Driving Behavior */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Driving Behavior</div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {insights.drivingBehaviorScore != null ? Math.round(insights.drivingBehaviorScore) : '--'}/100
+                </div>
+                <div className={`mt-1 text-sm font-medium ${behaviorLabel.colorClass}`}>
+                  {behaviorLabel.label}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {INSIGHT_HELPERS.behavior}
+                </p>
               </div>
-              <p className="mt-3 text-xs text-slate-400">
-                {INSIGHT_HELPERS.behavior}
-              </p>
             </div>
-          </div>
+          )}
         </div>
       )}
 
