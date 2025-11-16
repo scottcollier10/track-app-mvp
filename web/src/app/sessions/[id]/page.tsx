@@ -10,6 +10,7 @@ import {
   getScoreLabel,
   INSIGHT_HELPERS,
 } from '@/lib/insights';
+import EmptyInsights from '@/components/analytics/EmptyInsights';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,46 +101,50 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {laps.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-xl font-bold text-white">Session Insights</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Consistency */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Consistency</div>
-              <div className="mt-2 text-2xl font-semibold text-white">
-                {insights.consistencyScore != null ? Math.round(insights.consistencyScore) : '--'}/100
+          {laps.length < 6 ? (
+            <EmptyInsights lapCount={laps.length} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Consistency */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Consistency</div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {insights.consistencyScore != null ? Math.round(insights.consistencyScore) : '--'}/100
+                </div>
+                <div className={`mt-1 text-sm font-medium ${consistencyLabel.colorClass}`}>
+                  {consistencyLabel.label}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {INSIGHT_HELPERS.consistency}
+                </p>
               </div>
-              <div className={`mt-1 text-sm font-medium ${consistencyLabel.colorClass}`}>
-                {consistencyLabel.label}
-              </div>
-              <p className="mt-3 text-xs text-slate-400">
-                {INSIGHT_HELPERS.consistency}
-              </p>
-            </div>
 
-            {/* Pace Trend */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Pace Trend</div>
-              <div className="mt-2 text-lg font-semibold text-emerald-400">
-                {insights.paceTrendLabel}
+              {/* Pace Trend */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Pace Trend</div>
+                <div className="mt-2 text-lg font-semibold text-emerald-400">
+                  {insights.paceTrendLabel}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {insights.paceTrendDetail}
+                </p>
               </div>
-              <p className="mt-3 text-xs text-slate-400">
-                {insights.paceTrendDetail}
-              </p>
-            </div>
 
-            {/* Driving Behavior */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div className="text-sm font-medium text-slate-400">Driving Behavior</div>
-              <div className="mt-2 text-2xl font-semibold text-white">
-                {insights.drivingBehaviorScore != null ? Math.round(insights.drivingBehaviorScore) : '--'}/100
+              {/* Driving Behavior */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="text-sm font-medium text-slate-400">Driving Behavior</div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {insights.drivingBehaviorScore != null ? Math.round(insights.drivingBehaviorScore) : '--'}/100
+                </div>
+                <div className={`mt-1 text-sm font-medium ${behaviorLabel.colorClass}`}>
+                  {behaviorLabel.label}
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  {INSIGHT_HELPERS.behavior}
+                </p>
               </div>
-              <div className={`mt-1 text-sm font-medium ${behaviorLabel.colorClass}`}>
-                {behaviorLabel.label}
-              </div>
-              <p className="mt-3 text-xs text-slate-400">
-                {INSIGHT_HELPERS.behavior}
-              </p>
             </div>
-          </div>
+          )}
         </div>
       )}
 
