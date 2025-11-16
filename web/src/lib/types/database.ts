@@ -36,6 +36,32 @@ export type Database = {
           created_at?: string;
         };
       };
+      driver_profiles: {
+        Row: {
+          id: string;
+          driver_id: string;
+          experience_level: 'beginner' | 'intermediate' | 'advanced';
+          total_sessions: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          driver_id: string;
+          experience_level: 'beginner' | 'intermediate' | 'advanced';
+          total_sessions?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          driver_id?: string;
+          experience_level?: 'beginner' | 'intermediate' | 'advanced';
+          total_sessions?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       tracks: {
         Row: {
           id: string;
@@ -74,6 +100,7 @@ export type Database = {
           total_time_ms: number;
           best_lap_ms: number | null;
           coach_notes: string | null;
+          ai_coaching_summary: string | null;
           source: string;
           created_at: string;
         };
@@ -85,6 +112,7 @@ export type Database = {
           total_time_ms: number;
           best_lap_ms?: number | null;
           coach_notes?: string | null;
+          ai_coaching_summary?: string | null;
           source?: string;
           created_at?: string;
         };
@@ -96,6 +124,7 @@ export type Database = {
           total_time_ms?: number;
           best_lap_ms?: number | null;
           coach_notes?: string | null;
+          ai_coaching_summary?: string | null;
           source?: string;
           created_at?: string;
         };
