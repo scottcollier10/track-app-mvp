@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
 import CoachNotes from '@/components/ui/CoachNotes';
+import Sparkline from '@/components/analytics/Sparkline';
 import Link from 'next/link';
 import {
   getSessionInsightsFromMs,
@@ -121,6 +122,15 @@ export default async function SessionDetailPage({ params }: PageProps) {
               <div className="mt-2 text-lg font-semibold text-emerald-400">
                 {insights.paceTrendLabel}
               </div>
+              {lapTimes.length > 0 && (
+                <div className="mt-3">
+                  <Sparkline
+                    data={lapTimes}
+                    height={40}
+                    color={insights.paceTrendLabel.includes('Improving') ? '#10b981' : insights.paceTrendLabel.includes('Fading') ? '#f59e0b' : '#6b7280'}
+                  />
+                </div>
+              )}
               <p className="mt-3 text-xs text-slate-400">
                 {insights.paceTrendDetail}
               </p>
