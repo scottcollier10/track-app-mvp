@@ -16,6 +16,11 @@ export async function PATCH(
     const supabase = createServerClient();
     const { coach_notes } = await request.json();
 
+    console.log('[Coach Notes] Update started', {
+      sessionId: params.id,
+      notesLength: coach_notes?.length || 0,
+    });
+
     const updateData: TablesUpdate<'sessions'> = {
       coach_notes,
     };
@@ -29,16 +34,26 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error('Error updating coach notes:', error);
+      console.error('[Coach Notes] Update failed', {
+        sessionId: params.id,
+        error: error.message,
+      });
       return NextResponse.json(
         { error: 'Failed to update coach notes' },
         { status: 500 }
       );
     }
 
+    console.log('[Coach Notes] Success', {
+      sessionId: params.id,
+    });
+
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error('Error in PATCH /api/sessions/[id]/notes:', error);
+    console.error('[Coach Notes] Error', {
+      sessionId: params.id,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

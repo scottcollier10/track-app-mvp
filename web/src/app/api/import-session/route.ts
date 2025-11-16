@@ -11,6 +11,8 @@ import { ImportSessionPayload } from '@/lib/types';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+
   try {
     // Parse request body
     const payload: ImportSessionPayload = await request.json();
@@ -26,8 +28,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
 
     // 1. Find or create driver by email
-    const { data: existingDriver } = await supabase
-      .from('drivers')
+    const { data: existingDriver } = await (supabase
+      .from('drivers') as any)
       .select('*')
       .eq('email', payload.driverEmail)
       .single();
@@ -50,7 +52,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (driverError || !newDriver) {
-        console.error('Error creating driver:', driverError);
+        console.error('[Import Session] Driver creation failed', {
+          email: payload.driverEmail,
+          error: driverError?.message || 'Driver data missing',
+        });
         return NextResponse.json(
           { error: 'Failed to create driver' },
           { status: 500 }
@@ -63,8 +68,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Verify track exists
-    const { data: track } = await supabase
-      .from('tracks')
+    const { data: track } = await (supabase
+      .from('tracks') as any)
       .select('*')
       .eq('id', payload.trackId)
       .single();
@@ -75,6 +80,13 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    console.log('[Import Session] Started', {
+      timestamp: new Date().toISOString(),
+      driverEmail: payload.driverEmail,
+      trackName: track.name,
+      lapCount: payload.laps?.length || 0,
+    });
 
     // 3. Create session
     const sessionInsert: TablesInsert<'sessions'> = {
@@ -93,7 +105,11 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (sessionError || !sessionData) {
-      console.error('Error creating session:', sessionError);
+      console.error('[Import Session] Session creation failed', {
+        driverId: driver.id,
+        trackId: payload.trackId,
+        error: sessionError?.message || 'Session data missing',
+      });
       return NextResponse.json(
         { error: 'Failed to create session' },
         { status: 500 }
@@ -115,7 +131,11 @@ export async function POST(request: NextRequest) {
       .insert(lapsToInsert);
 
     if (lapsError) {
-      console.error('Error creating laps:', lapsError);
+      console.error('[Import Session] Laps creation failed', {
+        sessionId: session.id,
+        lapCount: lapsToInsert.length,
+        error: lapsError.message,
+      });
       // Still return success since session was created
       return NextResponse.json(
         {
@@ -128,6 +148,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Success!
+    const duration = Date.now() - startTime;
+    console.log('[Import Session] Success', {
+      sessionId: session.id,
+      durationMs: duration,
+      lapsCreated: lapsToInsert.length,
+    });
+
     return NextResponse.json(
       {
         sessionId: session.id,
@@ -136,7 +163,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Import session error:', error);
+    const duration = Date.now() - startTime;
+    console.error('[Import Session] Error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      durationMs: duration,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
