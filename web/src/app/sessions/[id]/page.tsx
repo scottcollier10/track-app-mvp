@@ -138,47 +138,46 @@ export default async function SessionDetailPage({ params }: PageProps) {
     <EmptyInsights lapCount={laps.length} />
   ) : (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Consistency Card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <div className="text-sm text-gray-400 mb-2">Consistency</div>
-        <div className="text-3xl font-bold mb-1">{insights.consistency}/100</div>
-        <div className={`text-sm font-medium ${insights.consistencyLabel === 'Excellent' ? 'text-emerald-400' : insights.consistencyLabel === 'Strong' ? 'text-green-400' : insights.consistencyLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
-          {insights.consistencyLabel}
-        </div>
-        <div className="text-xs text-gray-500 mt-2">
-          {INSIGHT_HELPERS.consistency}
-        </div>
-      </div>
-
-      {/* Pace Trend Card with Sparkline */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <div className="text-sm text-gray-400 mb-2">Pace Trend</div>
-        <div className={`text-lg font-bold mb-1 ${insights.paceTrend.includes('Improving') ? 'text-green-400' : insights.paceTrend.includes('Fading') ? 'text-amber-400' : 'text-gray-400'}`}>
-          {insights.paceTrend}
-        </div>
-        <div className="text-xs text-gray-500 mb-3">
-          {insights.paceTrendDetail}
-        </div>
-        {/* Sparkline visualization */}
-        <Sparkline 
-          data={lapTimes}
-          height={40}
-          color={insights.paceTrend.includes('Improving') ? '#10b981' : insights.paceTrend.includes('Fading') ? '#f59e0b' : '#6b7280'}
-        />
-      </div>
-
-      {/* Driving Behavior Card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <div className="text-sm text-gray-400 mb-2">Driving Behavior</div>
-        <div className="text-3xl font-bold mb-1">{insights.drivingBehavior}/100</div>
-        <div className={`text-sm font-medium ${insights.drivingBehaviorLabel === 'Excellent' ? 'text-emerald-400' : insights.drivingBehaviorLabel === 'Strong' ? 'text-green-400' : insights.drivingBehaviorLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
-          {insights.drivingBehaviorLabel}
-        </div>
-        <div className="text-xs text-gray-500 mt-2">
-          {INSIGHT_HELPERS.drivingBehavior}
-        </div>
-      </div>
+  {/* Consistency Card */}
+  <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <div className="text-sm text-gray-400 mb-2">Consistency</div>
+    <div className="text-3xl font-bold mb-1">{insights.consistencyScore}/100</div>
+    <div className={`text-sm font-medium ${insights.consistencyLabel === 'Excellent' ? 'text-emerald-400' : insights.consistencyLabel === 'Strong' ? 'text-green-400' : insights.consistencyLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
+      {insights.consistencyLabel}
     </div>
+    <div className="text-xs text-gray-500 mt-2">
+      {INSIGHT_HELPERS.consistency}
+    </div>
+  </div>
+
+  {/* Pace Trend Card with Sparkline */}
+  <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <div className="text-sm text-gray-400 mb-2">Pace Trend</div>
+    <div className={`text-lg font-bold mb-1 ${insights.paceTrend.includes('Improving') ? 'text-green-400' : insights.paceTrend.includes('Fading') ? 'text-amber-400' : 'text-gray-400'}`}>
+      {insights.paceTrend}
+    </div>
+    <div className="text-xs text-gray-500 mb-3">
+      {insights.paceTrendDetail}
+    </div>
+    <Sparkline 
+      data={lapTimes}
+      height={40}
+      color={insights.paceTrend.includes('Improving') ? '#10b981' : insights.paceTrend.includes('Fading') ? '#f59e0b' : '#6b7280'}
+    />
+  </div>
+
+  {/* Driving Behavior Card */}
+  <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <div className="text-sm text-gray-400 mb-2">Driving Behavior</div>
+    <div className="text-3xl font-bold mb-1">{insights.drivingBehaviorScore}/100</div>
+    <div className={`text-sm font-medium ${insights.drivingBehaviorLabel === 'Excellent' ? 'text-emerald-400' : insights.drivingBehaviorLabel === 'Strong' ? 'text-green-400' : insights.drivingBehaviorLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
+      {insights.drivingBehaviorLabel}
+    </div>
+    <div className="text-xs text-gray-500 mt-2">
+      {INSIGHT_HELPERS.drivingBehavior}
+    </div>
+  </div>
+</div>
   )}
 </div>
 
