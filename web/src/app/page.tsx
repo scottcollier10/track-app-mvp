@@ -6,8 +6,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const supabase = createServerClient();
-  // TypeScript escape hatch for Vercel build - runtime works fine
-  const db = supabase as any;
 
   // Fetch all data needed for dashboard
   const [
@@ -15,20 +13,20 @@ export default async function DashboardPage() {
     { count: totalTracks },
     { count: totalLaps },
   ] = await Promise.all([
-    db
-      .from('sessions')
+    (supabase
+      .from('sessions') as any)
       .select(`
         *,
         driver:drivers(*),
         track:tracks(*)
       `)
       .order('date', { ascending: false }),
-    db.from('tracks').select('*', { count: 'exact', head: true }),
-    db.from('laps').select('*', { count: 'exact', head: true }),
+    (supabase.from('tracks') as any).select('*', { count: 'exact', head: true }),
+    (supabase.from('laps') as any).select('*', { count: 'exact', head: true }),
   ]);
 
-  const sessions = (allSessions || []) as any[];
-  const lastSession = (sessions[0] ?? null) as any;
+  const sessions = allSessions || [];
+  const lastSession = sessions[0] || null;
   const recentSessions = sessions.slice(0, 10);
 
   // Calculate best lap across all sessions
@@ -41,10 +39,10 @@ export default async function DashboardPage() {
   // Get lap count for last session
   let lastSessionLapCount = 0;
   if (lastSession) {
-    const { count } = await db
-      .from('laps')
+    const { count } = await (supabase
+      .from('laps') as any)
       .select('*', { count: 'exact', head: true })
-      .eq('session_id', lastSession?.id);  // Added optional chaining for safety
+      .eq('session_id', lastSession.id);
     lastSessionLapCount = count || 0;
   }
 

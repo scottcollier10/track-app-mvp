@@ -8,9 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 import { ImportSessionPayload } from '@/lib/types';
-import type { TablesInsert } from '@/lib/types/database';
+import type { TablesInsert, Tables } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+
   try {
     // 1. Parse request body
     const payload = (await request.json()) as ImportSessionPayload;
@@ -27,14 +29,16 @@ export async function POST(request: NextRequest) {
     // Bypass Supabase's strict TS typing for this MVP endpoint
     const db = supabase as any;
 
-    // 3. Find or create driver by email
-    let { data: driver } = await db
-      .from('drivers')
+    // 1. Find or create driver by email
+    const { data: existingDriver } = await (supabase
+      .from('drivers') as any)
       .select('*')
       .eq('email', payload.driverEmail)
       .single();
 
-    if (!driver) {
+    let driver: Tables<'drivers'>;
+
+    if (!existingDriver) {
       // Extract name from email (before @)
       const name = payload.driverEmail.split('@')[0];
 
@@ -43,26 +47,31 @@ export async function POST(request: NextRequest) {
         name,
       };
 
-      const { data: newDriver, error: driverError } = await db
-        .from('drivers')
-        .insert([driverInsert] as any) // TS bypass for Vercel
+      const { data: newDriver, error: driverError } = await (supabase
+        .from('drivers') as any)
+        .insert(driverInsert)
         .select()
         .single();
 
       if (driverError || !newDriver) {
-        console.error('Error creating driver:', driverError);
+        console.error('[Import Session] Driver creation failed', {
+          email: payload.driverEmail,
+          error: driverError?.message || 'Driver data missing',
+        });
         return NextResponse.json(
           { error: 'Failed to create driver' },
           { status: 500 }
         );
       }
 
-      driver = newDriver;
+      driver = newDriver as Tables<'drivers'>;
+    } else {
+      driver = existingDriver as Tables<'drivers'>;
     }
 
-    // 4. Verify track exists
-    const { data: track } = await db
-      .from('tracks')
+    // 2. Verify track exists
+    const { data: track } = await (supabase
+      .from('tracks') as any)
       .select('*')
       .eq('id', payload.trackId)
       .single();
@@ -74,7 +83,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Create session
+    console.log('[Import Session] Started', {
+      timestamp: new Date().toISOString(),
+      driverEmail: payload.driverEmail,
+      trackName: track.name,
+      lapCount: payload.laps?.length || 0,
+    });
+
+    // 3. Create session
     const sessionInsert: TablesInsert<'sessions'> = {
       driver_id: driver.id,
       track_id: payload.trackId,
@@ -84,21 +100,27 @@ export async function POST(request: NextRequest) {
       source: 'ios_app',
     };
 
-    const { data: session, error: sessionError } = await db
-      .from('sessions')
-      .insert(sessionInsert as any) // TS bypass for Vercel
+    const { data: sessionData, error: sessionError } = await (supabase
+      .from('sessions') as any)
+      .insert(sessionInsert)
       .select()
       .single();
 
-    if (sessionError || !session) {
-      console.error('Error creating session:', sessionError);
+    if (sessionError || !sessionData) {
+      console.error('[Import Session] Session creation failed', {
+        driverId: driver.id,
+        trackId: payload.trackId,
+        error: sessionError?.message || 'Session data missing',
+      });
       return NextResponse.json(
         { error: 'Failed to create session' },
         { status: 500 }
       );
     }
 
-    // 6. Create laps
+    const session = sessionData as Tables<'sessions'>;
+
+    // 4. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
       session_id: session.id,
       lap_number: lap.lapNumber,
@@ -106,12 +128,16 @@ export async function POST(request: NextRequest) {
       sector_data: lap.sectorData || null,
     }));
 
-    const { error: lapsError } = await db
-      .from('laps')
-      .insert(lapsToInsert as any); // TS bypass for Vercel
+    const { error: lapsError } = await (supabase
+      .from('laps') as any)
+      .insert(lapsToInsert);
 
     if (lapsError) {
-      console.error('Error creating laps:', lapsError);
+      console.error('[Import Session] Laps creation failed', {
+        sessionId: session.id,
+        lapCount: lapsToInsert.length,
+        error: lapsError.message,
+      });
       // Still return success since session was created
       return NextResponse.json(
         {
@@ -123,7 +149,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Success
+    // Success!
+    const duration = Date.now() - startTime;
+    console.log('[Import Session] Success', {
+      sessionId: session.id,
+      durationMs: duration,
+      lapsCreated: lapsToInsert.length,
+    });
+
     return NextResponse.json(
       {
         sessionId: session.id,
@@ -132,7 +165,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Import session error:', error);
+    const duration = Date.now() - startTime;
+    console.error('[Import Session] Error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      durationMs: duration,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

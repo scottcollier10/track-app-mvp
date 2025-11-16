@@ -48,8 +48,8 @@ export async function getRecentSessions(
     // TypeScript escape hatch for build compatibility
     const db = supabase as any;
 
-    const { data: sessions, error } = await db
-      .from('sessions')
+    const { data: sessions, error } = await (supabase
+      .from('sessions') as any)
       .select(
         `
         id,
@@ -69,9 +69,9 @@ export async function getRecentSessions(
 
     // Get lap counts separately
     const sessionsWithCounts = await Promise.all(
-      ((sessions || []) as any[]).map(async (session: any) => {
-        const { count } = await db
-          .from('laps')
+      (sessions || []).map(async (session: any) => {
+        const { count } = await (supabase
+          .from('laps') as any)
           .select('*', { count: 'exact', head: true })
           .eq('session_id', session.id);
 
@@ -102,8 +102,8 @@ export async function getSessionWithLaps(
     // TypeScript escape hatch for build compatibility
     const db = supabase as any;
 
-    const { data: session, error: sessionError } = await db
-      .from('sessions')
+    const { data: session, error: sessionError } = await (supabase
+      .from('sessions') as any)
       .select(
         `
         id,
@@ -123,8 +123,8 @@ export async function getSessionWithLaps(
     }
 
     // Fetch laps separately
-    const { data: laps, error: lapsError } = await db
-      .from('laps')
+    const { data: laps, error: lapsError } = await (supabase
+      .from('laps') as any)
       .select('id, lap_number, lap_time_ms')
       .eq('session_id', id)
       .order('lap_number', { ascending: true });

@@ -16,6 +16,28 @@ class APIService {
         self.session = URLSession.shared
     }
 
+    // MARK: - Tracks
+    /// Fetch all available tracks from the server
+    func fetchTracks() async throws -> [Track] {
+        let url = URL(string: "\(baseURL)/api/tracks")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+
+        let decoder = JSONDecoder()
+        let tracksResponse = try decoder.decode(TracksResponse.self, from: data)
+        return tracksResponse.tracks
+    }
+
     // MARK: - Session Import
     /// Upload a session to the web dashboard
     func importSession(
@@ -62,6 +84,10 @@ class APIService {
 }
 
 // MARK: - Request/Response Models
+struct TracksResponse: Codable {
+    let tracks: [Track]
+}
+
 struct ImportSessionRequest: Codable {
     let driverEmail: String
     let trackId: UUID

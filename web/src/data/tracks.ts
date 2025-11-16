@@ -34,8 +34,8 @@ export async function getTracks(): Promise<{
     const supabase = createServerClient();
     const db = supabase as any;
 
-    const { data, error } = await db
-      .from('tracks')
+    const { data, error } = await (supabase
+      .from('tracks') as any)
       .select('id, name, location, length_meters, config')
       .order('name', { ascending: true });
 
@@ -63,8 +63,8 @@ export async function getTrack(
     const db = supabase as any;
 
     // Fetch track details
-    const { data: track, error: trackError } = await db
-      .from('tracks')
+    const { data: track, error: trackError } = await (supabase
+      .from('tracks') as any)
       .select('id, name, location, length_meters, config')
       .eq('id', id)
       .single();
@@ -74,8 +74,8 @@ export async function getTrack(
     }
 
     // Fetch recent sessions for this track
-    const { data: sessions, error: sessionsError } = await db
-      .from('sessions')
+    const { data: sessions, error: sessionsError } = await (supabase
+      .from('sessions') as any)
       .select(
         `
         id,
