@@ -38,6 +38,13 @@ export interface SessionFull {
   }>;
 }
 
+export interface SessionFilters {
+  trackId?: string;
+  driverId?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 /**
  * Get recent sessions with basic info
  */
@@ -63,6 +70,74 @@ export async function getRecentSessions(
       )
       .order('date', { ascending: false })
       .limit(limit);
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    // Get lap counts separately
+    const sessionsWithCounts = await Promise.all(
+      (sessions || []).map(async (session: any) => {
+        const { count } = await (supabase
+          .from('laps') as any)
+          .select('*', { count: 'exact', head: true })
+          .eq('session_id', session.id);
+
+        return {
+          ...session,
+          lapCount: count || 0,
+        };
+      })
+    );
+
+    return { data: sessionsWithCounts as any, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err : new Error('Unknown error'),
+    };
+  }
+}
+
+/**
+ * Get all sessions with optional filters
+ */
+export async function getAllSessions(
+  filters?: SessionFilters
+): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
+  try {
+    const supabase = createServerClient();
+    // TypeScript escape hatch for build compatibility
+    const db = supabase as any;
+
+    let query = (supabase.from('sessions') as any).select(
+      `
+        id,
+        date,
+        total_time_ms,
+        best_lap_ms,
+        driver:drivers(id, name, email),
+        track:tracks(id, name, location)
+      `
+    );
+
+    // Apply filters if provided
+    if (filters?.trackId) {
+      query = query.eq('track_id', filters.trackId);
+    }
+    if (filters?.driverId) {
+      query = query.eq('driver_id', filters.driverId);
+    }
+    if (filters?.startDate) {
+      query = query.gte('date', filters.startDate);
+    }
+    if (filters?.endDate) {
+      query = query.lte('date', filters.endDate);
+    }
+
+    const { data: sessions, error } = await query.order('date', {
+      ascending: false,
+    });
 
     if (error) {
       return { data: null, error: new Error(error.message) };

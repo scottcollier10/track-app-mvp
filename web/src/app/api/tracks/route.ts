@@ -34,7 +34,10 @@ export async function GET() {
       config: track.config,
     }));
 
-    return NextResponse.json({ tracks: tracksFormatted });
+    return NextResponse.json({
+      tracks: tracksFormatted,  // Legacy iOS app compatibility
+      data: tracks || []        // Web app compatibility
+    });
   } catch (error) {
     console.error('Tracks API error:', error);
     return NextResponse.json(
