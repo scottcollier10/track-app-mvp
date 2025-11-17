@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase/client';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
 import ProfileForm from './ProfileForm';
+import DriverStats from '@/components/profile/DriverStats';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,6 +129,9 @@ export default async function ProfilePage() {
         initialExperienceLevel={profile.experience_level}
         totalSessions={profile.total_sessions}
       />
+
+      {/* Driver Statistics */}
+      <DriverStats driverId={driver.id} />
     </div>
   );
 }
