@@ -9,8 +9,18 @@ export interface SessionFilter {
   endDate?: string;
 }
 
+export type SortBy =
+  | "date-desc"
+  | "date-asc"
+  | "best-lap-asc"
+  | "best-lap-desc"
+  | "laps-desc"
+  | "laps-asc";
+
 interface SessionFiltersProps {
   onFilterChange: (filters: SessionFilter) => void;
+  sortBy: SortBy;
+  onSortChange: (sortBy: SortBy) => void;
 }
 
 interface Track {
@@ -24,7 +34,11 @@ interface Driver {
   name: string;
 }
 
-export default function SessionFilters({ onFilterChange }: SessionFiltersProps) {
+export default function SessionFilters({
+  onFilterChange,
+  sortBy,
+  onSortChange,
+}: SessionFiltersProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +95,7 @@ export default function SessionFilters({ onFilterChange }: SessionFiltersProps) 
     setStartDate("");
     setEndDate("");
     onFilterChange({});
+    onSortChange("date-desc"); // Reset sort to default
   };
 
   const hasFilters = trackId || driverId || startDate || endDate;
@@ -91,7 +106,7 @@ export default function SessionFilters({ onFilterChange }: SessionFiltersProps) 
         Filter Sessions
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         {/* Track Filter */}
         <div>
           <label
@@ -173,6 +188,29 @@ export default function SessionFilters({ onFilterChange }: SessionFiltersProps) 
             onChange={(e) => setEndDate(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
           />
+        </div>
+
+        {/* Sort By */}
+        <div>
+          <label
+            htmlFor="sort-by"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            Sort By
+          </label>
+          <select
+            id="sort-by"
+            value={sortBy}
+            onChange={(e) => onSortChange(e.target.value as SortBy)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+          >
+            <option value="date-desc">Date (Newest First)</option>
+            <option value="date-asc">Date (Oldest First)</option>
+            <option value="best-lap-asc">Best Lap (Fastest First)</option>
+            <option value="best-lap-desc">Best Lap (Slowest First)</option>
+            <option value="laps-desc">Most Laps</option>
+            <option value="laps-asc">Fewest Laps</option>
+          </select>
         </div>
       </div>
 

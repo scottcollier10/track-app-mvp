@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import SessionFilters, { SessionFilter } from "./SessionFilters";
+import SessionFilters, { SessionFilter, SortBy } from "./SessionFilters";
 import SessionsSubtitle from "@/components/ui/SessionsSubtitle";
 import { formatDate, formatLapMs, formatDurationMs } from "@/lib/time";
 
@@ -21,6 +21,7 @@ export default function SessionsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [filters, setFilters] = useState<SessionFilter>({});
+  const [sortBy, setSortBy] = useState<SortBy>("date-desc");
 
   // Fetch sessions whenever filters change
   useEffect(() => {
@@ -61,6 +62,36 @@ export default function SessionsList() {
     setFilters(newFilters);
   };
 
+  const handleSortChange = (newSortBy: SortBy) => {
+    setSortBy(newSortBy);
+  };
+
+  // Sort sessions based on sortBy value
+  const sortedSessions = [...sessions].sort((a, b) => {
+    switch (sortBy) {
+      case "date-desc":
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      case "date-asc":
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      case "best-lap-asc":
+        // Handle null best_lap_ms - put nulls at the end
+        if (a.best_lap_ms === null) return 1;
+        if (b.best_lap_ms === null) return -1;
+        return a.best_lap_ms - b.best_lap_ms;
+      case "best-lap-desc":
+        // Handle null best_lap_ms - put nulls at the end
+        if (a.best_lap_ms === null) return 1;
+        if (b.best_lap_ms === null) return -1;
+        return b.best_lap_ms - a.best_lap_ms;
+      case "laps-desc":
+        return b.lapCount - a.lapCount;
+      case "laps-asc":
+        return a.lapCount - b.lapCount;
+      default:
+        return 0;
+    }
+  });
+
   // Derived counts for subtitle
   const totalSessions = sessions.length;
   const uniqueDrivers = new Set(
@@ -78,7 +109,11 @@ export default function SessionsList() {
           </p>
         </div>
 
-        <SessionFilters onFilterChange={handleFilterChange} />
+        <SessionFilters
+          onFilterChange={handleFilterChange}
+          sortBy={sortBy}
+          onSortChange={handleSortChange}
+        />
 
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
@@ -104,7 +139,11 @@ export default function SessionsList() {
       </div>
 
       {/* Filters */}
-      <SessionFilters onFilterChange={handleFilterChange} />
+      <SessionFilters
+        onFilterChange={handleFilterChange}
+        sortBy={sortBy}
+        onSortChange={handleSortChange}
+      />
 
       {/* Loading State */}
       {loading && (
@@ -156,7 +195,7 @@ export default function SessionsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {sessions.map((session) => (
+                {sortedSessions.map((session) => (
                   <tr
                     key={session.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
