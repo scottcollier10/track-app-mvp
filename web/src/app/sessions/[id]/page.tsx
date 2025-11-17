@@ -8,11 +8,11 @@ import Sparkline from '@/components/analytics/Sparkline';
 import Link from 'next/link';
 import {
   getSessionInsightsFromMs,
-  getScoreLabel,
   INSIGHT_HELPERS,
 } from '@/lib/insights';
 import EmptyInsights from '@/components/analytics/EmptyInsights';
 import AICoachingCard from '@/components/coaching/AICoachingCard';
+import { ScoreCard } from '@/components/ui/scores';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,8 +62,6 @@ export default async function SessionDetailPage({ params }: PageProps) {
     drivingBehaviorScore: insightsData.drivingBehaviorScore || 0,
     paceTrendLabel: insightsData.paceTrendLabel,
     paceTrendDetail: insightsData.paceTrendDetail,
-    consistencyLabel: getScoreLabel(insightsData.consistencyScore || 0).label,
-    drivingBehaviorLabel: getScoreLabel(insightsData.drivingBehaviorScore || 0).label,
   };
 
   return (
@@ -115,16 +113,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Consistency Card */}
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                <div className="text-sm text-gray-400 mb-2">Consistency</div>
-                <div className="text-3xl font-bold mb-1">{Math.round(insights.consistencyScore)}/100</div>
-                <div className={`text-sm font-medium ${insights.consistencyLabel === 'Excellent' ? 'text-emerald-400' : insights.consistencyLabel === 'Strong' ? 'text-green-400' : insights.consistencyLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
-                  {insights.consistencyLabel}
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  {INSIGHT_HELPERS.consistency}
-                </div>
-              </div>
+              <ScoreCard
+                label="Consistency"
+                score={insights.consistencyScore}
+                description={INSIGHT_HELPERS.consistency}
+              />
 
               {/* Pace Trend Card with Sparkline */}
               <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
@@ -143,16 +136,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </div>
 
               {/* Driving Behavior Card */}
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-                <div className="text-sm text-gray-400 mb-2">Driving Behavior</div>
-                <div className="text-3xl font-bold mb-1">{Math.round(insights.drivingBehaviorScore)}/100</div>
-                <div className={`text-sm font-medium ${insights.drivingBehaviorLabel === 'Excellent' ? 'text-emerald-400' : insights.drivingBehaviorLabel === 'Strong' ? 'text-green-400' : insights.drivingBehaviorLabel === 'Needs Work' ? 'text-amber-400' : 'text-red-400'}`}>
-                  {insights.drivingBehaviorLabel}
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  {INSIGHT_HELPERS.behavior}
-                </div>
-              </div>
+              <ScoreCard
+                label="Driving Behavior"
+                score={insights.drivingBehaviorScore}
+                description={INSIGHT_HELPERS.behavior}
+              />
             </div>
           )}
         </div>
