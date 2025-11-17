@@ -82,6 +82,39 @@ export async function createDriverProfile(
 }
 
 /**
+ * Update driver profile experience level
+ */
+export async function updateDriverProfile(
+  driverId: string,
+  experienceLevel: ExperienceLevel
+): Promise<{ data: DriverProfileData | null; error: Error | null }> {
+  try {
+    const supabase = createServerClient();
+
+    const { data: profile, error } = await (supabase
+      .from('driver_profiles') as any)
+      .update({
+        experience_level: experienceLevel,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('driver_id', driverId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: profile as DriverProfileData, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err : new Error('Unknown error'),
+    };
+  }
+}
+
+/**
  * Increment total sessions count for a driver
  */
 export async function updateTotalSessions(
