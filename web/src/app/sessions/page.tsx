@@ -1,7 +1,7 @@
 import { getRecentSessions } from "@/data/sessions";
 import { formatDate, formatLapMs, formatDurationMs } from "@/lib/time";
 import Link from "next/link";
-import SessionsSubtitle from "@/components/ui/SessionsSubtitle";
+import SessionsHeader from "@/components/sessions/SessionsHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -62,14 +62,12 @@ export default async function SessionsPage() {
   // Success state - render sessions table
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Sessions</h1>
-        <SessionsSubtitle
-          totalSessions={totalSessions}
-          uniqueDrivers={uniqueDrivers}
-        />
-      </div>
+      {/* Header with Export Button */}
+      <SessionsHeader
+        sessions={sessions}
+        totalSessions={totalSessions}
+        uniqueDrivers={uniqueDrivers}
+      />
 
       {/* Sessions Table */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">

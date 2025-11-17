@@ -55,3 +55,16 @@ export function formatDateTime(date: string | Date): string {
     minute: '2-digit',
   });
 }
+
+/**
+ * Format time from milliseconds to HH:MM:SS for CSV export
+ * Examples: 3661000 -> "01:01:01", 92500 -> "00:01:32"
+ */
+export function formatTimeForCSV(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
