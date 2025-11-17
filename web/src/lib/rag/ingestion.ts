@@ -162,8 +162,8 @@ export async function createDocument(
   input: CreateDocumentInput
 ): Promise<RAGDocument> {
   const { data, error } = await supabase
-    .from('rag_documents')
-    .insert({
+  .from('rag_documents')
+  .insert([{
       tenant_id: input.tenantId,
       app_id: input.appId,
       source_id: input.sourceId,
@@ -171,9 +171,9 @@ export async function createDocument(
       content_type: input.contentType,
       storage_location: input.storageLocation,
       metadata: input.metadata || {},
-    })
-    .select()
-    .single();
+    }])  // Close array brackets
+  .select()
+  .single();
 
   if (error) {
     throw new Error(`Failed to create document: ${error.message}`);

@@ -172,8 +172,8 @@ async function seedTracks(
     .in('name', tracksToSeed.map((t) => t.name));
 
   const existingTrackNames = new Set(
-    (existingTracks || []).map((t) => t.name)
-  );
+  (existingTracks || []).map((t: any) => t.name)
+);
 
   const newTracks = trackInserts.filter(
     (t) => !existingTrackNames.has(t.name)
