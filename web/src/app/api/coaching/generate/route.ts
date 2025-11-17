@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerClient } from '@/lib/supabase/client';
 import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
+import { wrapLLMCall } from '@/lib/llm-telemetry';
 
 /**
  * Format milliseconds to readable lap time (MM:SS.mmm)
@@ -164,7 +165,7 @@ Provide 1-2 concrete, measurable targets for their next track day.
 
 Keep tone encouraging but honest. Focus on what the data reveals. Be specific with numbers and lap references.`;
 
-    // 9. Call Anthropic API
+    // 9. Call Anthropic API with telemetry
     const anthropic = new Anthropic({ apiKey });
 
     console.log('[AI Coaching] Calling Anthropic API', {
@@ -172,22 +173,44 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
       model: 'claude-sonnet-4-20250514',
     });
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
+    const result = await wrapLLMCall(
+      {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+        prompt: prompt,
+        metadata: {
+          project: 'track-app',
+          feature: 'ai-coaching',
+          userId: session.driver_id,
+          sessionId: sessionId,
         },
-      ],
-    });
+      },
+      async () => {
+        const message = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        });
 
-    // Extract text from response
-    const coachingText = message.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as any).text)
-      .join('\n');
+        // Extract text from response
+        const output = message.content
+          .filter((block) => block.type === 'text')
+          .map((block) => (block as any).text)
+          .join('\n');
+
+        return {
+          output: output,
+          usage: message.usage,
+        };
+      }
+    );
+
+    const coachingText = result.output;
 
     if (!coachingText) {
       console.error('[AI Coaching] Empty response from API', { sessionId });
@@ -196,6 +219,15 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
         { status: 500 }
       );
     }
+
+    // Log telemetry metrics
+    console.log('[AI Coaching] LLM Telemetry', {
+      sessionId,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      cost: `$${result.cost.toFixed(4)}`,
+      latencyMs: result.latencyMs,
+    });
 
     // 10. Store in database
     const { error: updateError } = await (supabase
@@ -223,6 +255,12 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
       {
         success: true,
         coaching: coachingText,
+        metrics: {
+          tokensIn: result.tokensIn,
+          tokensOut: result.tokensOut,
+          cost: result.cost,
+          latencyMs: result.latencyMs,
+        },
       },
       { status: 200 }
     );
