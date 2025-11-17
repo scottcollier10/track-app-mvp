@@ -210,9 +210,18 @@ export default function SessionsList() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium">
-                          {session.track?.name || "Unknown Track"}
-                        </span>
+                        {session.track?.id ? (
+                          <Link
+                            href={`/tracks/${session.track.id}`}
+                            className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            {session.track.name || "Unknown Track"}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">
+                            {session.track?.name || "Unknown Track"}
+                          </span>
+                        )}
                         {session.track?.location && (
                           <span className="text-sm text-gray-500">
                             {session.track.location}
