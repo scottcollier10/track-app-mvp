@@ -159,27 +159,29 @@ function getOverlapText(text: string, overlapSize: number): string {
  * ```
  */
 export async function createDocument(
-  input: CreateDocumentInput
+  input: Omit<RAGDocument, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<RAGDocument> {
-  const { data, error } = await supabase
-  .from('rag_documents')
-  .insert([{
-      tenant_id: input.tenantId,
-      app_id: input.appId,
-      source_id: input.sourceId,
-      title: input.title,
-      content_type: input.contentType,
-      storage_location: input.storageLocation,
-      metadata: input.metadata || {},
-    }])  // Close array brackets
-  .select()
-  .single();
+  const { data, error } = await (supabase
+    .from('rag_documents')
+    .insert([
+      {
+        tenant_id: input.tenantId,
+        app_id: input.appId,
+        source_id: input.sourceId,
+        title: input.title,
+        content_type: input.contentType,
+        storage_location: input.storageLocation,
+        metadata: input.metadata,
+      }
+    ])
+    .select()
+    .single() as any); // Cast the whole thing
 
   if (error) {
     throw new Error(`Failed to create document: ${error.message}`);
   }
 
-  return rowToDocument(data as RAGDocumentRow);
+  return rowToDocument(data);
 }
 
 /**
