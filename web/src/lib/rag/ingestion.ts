@@ -161,7 +161,7 @@ function getOverlapText(text: string, overlapSize: number): string {
 export async function createDocument(
   input: Omit<RAGDocument, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<RAGDocument> {
-  const { data, error } = await (supabase
+  const { data, error } = await ((supabase as any)
     .from('rag_documents')
     .insert([
       {
@@ -171,11 +171,11 @@ export async function createDocument(
         title: input.title,
         content_type: input.contentType,
         storage_location: input.storageLocation,
-        metadata: input.metadata,
+        metadata: input.metadata || {},
       }
     ])
     .select()
-    .single() as any); // Cast the whole thing
+    .single());
 
   if (error) {
     throw new Error(`Failed to create document: ${error.message}`);
@@ -209,7 +209,7 @@ export async function createChunks(
   chunks: CreateChunkInput[]
 ): Promise<CreateChunksResult> {
   // Get document to extract tenant_id and app_id
-  const { data: docData, error: docError } = await supabase
+  const { data: docData, error: docError } = await (supabase as any)
     .from('rag_documents')
     .select('tenant_id, app_id')
     .eq('id', documentId)
@@ -239,7 +239,7 @@ export async function createChunks(
   for (let i = 0; i < chunkRows.length; i += BATCH_SIZE) {
     const batch = chunkRows.slice(i, i + BATCH_SIZE);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('rag_chunks')
       .insert(batch)
       .select();
@@ -275,7 +275,7 @@ export async function updateChunkEmbedding(
     );
   }
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('rag_chunks')
     .update({ embedding })
     .eq('id', chunkId);
@@ -310,7 +310,7 @@ export async function batchUpdateEmbeddings(
     // Use Promise.all for parallel updates within batch
     await Promise.all(
       batch.map((update) =>
-        supabase
+        (supabase as any)
           .from('rag_chunks')
           .update({ embedding: update.embedding })
           .eq('id', update.chunkId)
@@ -354,8 +354,12 @@ export async function ingestDocument(
   chunkingOptions?: ChunkingOptions
 ): Promise<IngestionResult> {
   try {
-    // 1. Create document
-    const document = await createDocument(input);
+    // 1. Create document - ensure metadata is present
+    const documentInput = {
+      ...input,
+      metadata: input.metadata || {},
+    };
+    const document = await createDocument(documentInput);
 
     // 2. Chunk text
     const textChunks = chunkText(text, chunkingOptions);
@@ -396,7 +400,7 @@ export async function ingestDocument(
  * @param documentId - UUID of the document
  */
 export async function deleteDocumentChunks(documentId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('rag_chunks')
     .delete()
     .eq('document_id', documentId);
@@ -449,7 +453,7 @@ export async function updateDocumentMetadata(
   metadata: Record<string, any>
 ): Promise<void> {
   // Get current metadata
-  const { data: docData, error: fetchError } = await supabase
+  const { data: docData, error: fetchError } = await (supabase as any)
     .from('rag_documents')
     .select('metadata')
     .eq('id', documentId)
@@ -466,7 +470,7 @@ export async function updateDocumentMetadata(
   };
 
   // Update document
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('rag_documents')
     .update({ metadata: updatedMetadata })
     .eq('id', documentId);

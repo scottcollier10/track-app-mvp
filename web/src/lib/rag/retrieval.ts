@@ -70,7 +70,7 @@ export async function searchChunks(
   }
 
   // Call Supabase RPC function for vector search
-  const { data, error } = await supabase.rpc('search_rag_chunks', {
+  const { data, error } = await (supabase as any).rpc('search_rag_chunks', {
     query_embedding: queryEmbedding,
     query_tenant_id: tenantId,
     query_app_id: appId,
@@ -123,7 +123,7 @@ export async function searchChunks(
 export async function getDocument(
   documentId: string
 ): Promise<RAGDocument | null> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('rag_documents')
     .select('*')
     .eq('id', documentId)
@@ -149,7 +149,7 @@ export async function getDocument(
 export async function getDocumentChunks(
   documentId: string
 ): Promise<RAGChunk[]> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('rag_chunks')
     .select('*')
     .eq('document_id', documentId)
@@ -175,7 +175,7 @@ export async function listDocuments(
   appId: string,
   limit: number = 100
 ): Promise<RAGDocument[]> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('rag_documents')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -203,7 +203,7 @@ export async function getDocumentsBySourceIds(
   tenantId: string,
   appId: string
 ): Promise<RAGDocument[]> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('rag_documents')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -224,7 +224,7 @@ export async function getDocumentsBySourceIds(
  */
 export async function deleteDocument(documentId: string): Promise<void> {
   // Chunks will be deleted automatically via CASCADE
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('rag_documents')
     .delete()
     .eq('id', documentId);
@@ -276,7 +276,7 @@ export async function buildRAGContext(
  * @returns Number of chunks
  */
 export async function getChunkCount(documentId: string): Promise<number> {
-  const { count, error } = await supabase
+  const { count, error } = await (supabase as any)
     .from('rag_chunks')
     .select('*', { count: 'exact', head: true })
     .eq('document_id', documentId);
@@ -301,7 +301,7 @@ export async function sourceExists(
   tenantId: string,
   appId: string
 ): Promise<boolean> {
-  const { count, error } = await supabase
+  const { count, error } = await (supabase as any)
     .from('rag_documents')
     .select('*', { count: 'exact', head: true })
     .eq('source_id', sourceId)
