@@ -22,6 +22,7 @@ export default function SessionsList() {
   const [error, setError] = useState<Error | null>(null);
   const [filters, setFilters] = useState<SessionFilter>({});
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Fetch sessions whenever filters change
   useEffect(() => {
@@ -66,8 +67,28 @@ export default function SessionsList() {
     setSortBy(newSortBy);
   };
 
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  // Filter sessions by search query first
+  const searchFiltered = sessions.filter((session) => {
+    if (!searchQuery) return true;
+
+    const query = searchQuery.toLowerCase();
+    const trackName = session.track?.name?.toLowerCase() || "";
+    const driverName = session.driver?.name?.toLowerCase() || "";
+    const dateStr = new Date(session.date).toLocaleDateString().toLowerCase();
+
+    return (
+      trackName.includes(query) ||
+      driverName.includes(query) ||
+      dateStr.includes(query)
+    );
+  });
+
   // Sort sessions based on sortBy value
-  const sortedSessions = [...sessions].sort((a, b) => {
+  const sortedSessions = [...searchFiltered].sort((a, b) => {
     switch (sortBy) {
       case "date-desc":
         return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -113,6 +134,8 @@ export default function SessionsList() {
           onFilterChange={handleFilterChange}
           sortBy={sortBy}
           onSortChange={handleSortChange}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
         />
 
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
@@ -143,6 +166,8 @@ export default function SessionsList() {
         onFilterChange={handleFilterChange}
         sortBy={sortBy}
         onSortChange={handleSortChange}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
       />
 
       {/* Loading State */}
@@ -155,12 +180,14 @@ export default function SessionsList() {
       )}
 
       {/* Empty State */}
-      {!loading && sessions.length === 0 && (
+      {!loading && sortedSessions.length === 0 && (
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
           <div className="text-5xl mb-4">🏁</div>
           <h3 className="text-xl font-semibold mb-2">No Sessions Found</h3>
           <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-            {Object.keys(filters).length > 0
+            {searchQuery
+              ? `No sessions found for '${searchQuery}'. Try different keywords.`
+              : Object.keys(filters).length > 0
               ? "No sessions match your filters. Try adjusting your search criteria."
               : "Demo data unavailable. Import a session from the iOS app or add sample data to your database."}
           </p>
@@ -168,7 +195,7 @@ export default function SessionsList() {
       )}
 
       {/* Sessions Table */}
-      {!loading && sessions.length > 0 && (
+      {!loading && sortedSessions.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">

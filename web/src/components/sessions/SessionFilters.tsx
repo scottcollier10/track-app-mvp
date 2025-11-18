@@ -21,6 +21,8 @@ interface SessionFiltersProps {
   onFilterChange: (filters: SessionFilter) => void;
   sortBy: SortBy;
   onSortChange: (sortBy: SortBy) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 interface Track {
@@ -38,6 +40,8 @@ export default function SessionFilters({
   onFilterChange,
   sortBy,
   onSortChange,
+  searchQuery,
+  onSearchChange,
 }: SessionFiltersProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -94,17 +98,36 @@ export default function SessionFilters({
     setDriverId("");
     setStartDate("");
     setEndDate("");
+    onSearchChange("");
     onFilterChange({});
     onSortChange("date-desc"); // Reset sort to default
   };
 
-  const hasFilters = trackId || driverId || startDate || endDate;
+  const hasFilters = trackId || driverId || startDate || endDate || searchQuery;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
         Filter Sessions
       </h2>
+
+      {/* Search Input */}
+      <div className="mb-4">
+        <label
+          htmlFor="search-input"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+        >
+          Search
+        </label>
+        <input
+          type="text"
+          id="search-input"
+          placeholder="Search by track, driver, or date..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         {/* Track Filter */}
