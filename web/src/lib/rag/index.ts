@@ -9,15 +9,15 @@ export * from './types';
 
 // Retrieval functions
 export {
-  searchChunks,
-  getDocument,
-  getDocumentChunks,
-  listDocuments,
-  getDocumentsBySourceIds,
-  deleteDocument,
-  buildRAGContext,
-  getChunkCount,
-  sourceExists,
+  // searchChunks,  // TODO: Implement
+  // getDocument,
+  // getDocumentChunks,
+  // listDocuments,
+  // getDocumentsBySourceIds,
+  // deleteDocument,
+  // buildRAGContext,
+  // getChunkCount,
+  // sourceExists,
 } from './retrieval';
 
 // Ingestion functions
