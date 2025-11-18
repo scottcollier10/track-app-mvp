@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import SessionFilters, { SessionFilter, SortBy } from "./SessionFilters";
-import SessionsSubtitle from "@/components/ui/SessionsSubtitle";
+import SessionsHeader from "./SessionsHeader";
 import { formatDate, formatLapMs, formatDurationMs } from "@/lib/time";
 
 interface Session {
@@ -102,12 +102,11 @@ export default function SessionsList() {
   if (error && !loading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Sessions</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Browse all track sessions
-          </p>
-        </div>
+        <SessionsHeader
+          sessions={sortedSessions}
+          totalSessions={totalSessions}
+          uniqueDrivers={uniqueDrivers}
+        />
 
         <SessionFilters
           onFilterChange={handleFilterChange}
@@ -130,13 +129,11 @@ export default function SessionsList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Sessions</h1>
-        <SessionsSubtitle
-          totalSessions={totalSessions}
-          uniqueDrivers={uniqueDrivers}
-        />
-      </div>
+      <SessionsHeader
+        sessions={sortedSessions}
+        totalSessions={totalSessions}
+        uniqueDrivers={uniqueDrivers}
+      />
 
       {/* Filters */}
       <SessionFilters
