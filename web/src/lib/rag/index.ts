@@ -7,28 +7,32 @@
 // Types
 export * from './types';
 
-// Retrieval functions
-export {
-  // searchChunks,  // TODO: Implement
-  // getDocument,
-  // getDocumentChunks,
-  // listDocuments,
-  // getDocumentsBySourceIds,
-  // deleteDocument,
-  // buildRAGContext,
-  // getChunkCount,
-  // sourceExists,
-} from './retrieval';
-
-// Ingestion functions
+// Ingestion functions that exist
 export {
   chunkText,
   createDocument,
   createChunks,
-  updateChunkEmbedding,
-  batchUpdateEmbeddings,
-  ingestDocument,
-  deleteDocumentChunks,
-  rechunkDocument,
-  updateDocumentMetadata,
 } from './ingestion';
+
+// Retrieval functions - commented out until implemented
+// export {
+//   searchChunks,
+//   getDocument,
+//   getDocumentChunks,
+//   listDocuments,
+//   getDocumentsBySourceIds,
+//   deleteDocument,
+//   buildRAGContext,
+//   getChunkCount,
+//   sourceExists,
+// } from './retrieval';
+
+// More ingestion functions - commented out until implemented
+// export {
+//   updateChunkEmbedding,
+//   batchUpdateEmbeddings,
+//   ingestDocument,
+//   deleteDocumentChunks,
+//   rechunkDocument,
+//   updateDocumentMetadata,
+// } from './ingestion';
