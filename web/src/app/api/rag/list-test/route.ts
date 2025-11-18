@@ -1,45 +1,31 @@
 import { NextResponse } from 'next/server';
-import { listDocuments, getChunkCount } from '@/lib/rag/retrieval';
+import { supabase } from '@/lib/supabase/client';
 
 export async function GET() {
   try {
-    // List all documents for Track App
-    const documents = await listDocuments({
-      tenantId: 'track-app',
-      appId: 'track-app-mvp',
-      limit: 50,
-    });
+    const { data: documents, error } = await (supabase as any)
+      .from('rag_documents')
+      .select('*')
+      .eq('tenant_id', 'track-app')
+      .eq('app_id', 'track-app-mvp')
+      .order('created_at', { ascending: false })
+      .limit(10);
 
-    // Get chunk counts for each document
-    const documentsWithStats = await Promise.all(
-      documents.map(async (doc) => {
-        const chunkCount = await getChunkCount(doc.id);
-        return {
-          id: doc.id,
-          title: doc.title,
-          sourceId: doc.sourceId,
-          contentType: doc.contentType,
-          chunkCount,
-          metadata: doc.metadata,
-          createdAt: doc.createdAt,
-        };
-      })
-    );
+    if (error) throw error;
 
     return NextResponse.json({
       success: true,
-      message: `Found ${documents.length} document(s)`,
       count: documents.length,
-      documents: documentsWithStats,
+      documents: documents.map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        sourceId: d.source_id,
+        createdAt: d.created_at,
+      })),
     });
   } catch (error: any) {
-    console.error('RAG list test error:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        stack: error.stack,
-      },
+      { success: false, error: error.message },
       { status: 500 }
     );
   }
