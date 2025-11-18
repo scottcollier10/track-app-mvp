@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import CoachViewToggle from "@/components/ui/CoachViewToggle";
 import { CoachViewProvider } from "@/context/coach-view";
 
-const inter = Inter({ subsets: ["latin"] });
+// Using system font stack due to network restrictions
+const fontClass = "font-sans";
 
 export const metadata: Metadata = {
   title: "Track App - Coaching Dashboard",
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={fontClass}>
         <CoachViewProvider>
           <div className="min-h-screen flex flex-col">
             {/* Header */}
