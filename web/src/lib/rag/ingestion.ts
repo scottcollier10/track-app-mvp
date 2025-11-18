@@ -1,478 +1,350 @@
 /**
- * RAG Ingestion Utilities
+ * RAG Document Ingestion
  *
- * Functions for processing and storing documents in the RAG system
+ * Functions for ingesting documents into the RAG system.
+ * Handles document creation, chunking, and embedding generation.
  */
 
-import { supabase as supabaseRaw } from '@/lib/supabase/client';
-const supabase = supabaseRaw as any;
+import { supabase } from '../supabase/client';
 import {
-  RAGDocument,
-  RAGChunk,
   CreateDocumentInput,
   CreateChunkInput,
-  CreateChunksResult,
-  ChunkingOptions,
+  RagDocument,
+  RagChunk,
   IngestionResult,
-  RAGDocumentRow,
-  RAGChunkRow,
-  rowToDocument,
-  rowToChunk,
+  ChunkingOptions,
 } from './types';
 
+const DEFAULT_CHUNK_SIZE = 1000;
+const DEFAULT_CHUNK_OVERLAP = 200;
+
 /**
- * Chunk text into segments with overlap
- *
- * @param text - Text to chunk
- * @param options - Chunking configuration
- * @returns Array of text chunks
- *
- * @example
- * ```typescript
- * const chunks = chunkText(documentText, {
- *   chunkSize: 500,
- *   overlap: 50,
- *   preserveParagraphs: true
- * });
- * ```
+ * Split text into chunks with overlap
  */
 export function chunkText(
   text: string,
   options: ChunkingOptions = {}
 ): string[] {
   const {
-    chunkSize = 500,
-    overlap = 50,
+    chunkSize = DEFAULT_CHUNK_SIZE,
+    chunkOverlap = DEFAULT_CHUNK_OVERLAP,
     separator = '\n\n',
-    preserveParagraphs = true,
   } = options;
 
-  // Validate inputs
-  if (chunkSize <= 0) {
-    throw new Error('chunkSize must be greater than 0');
-  }
-  if (overlap < 0 || overlap >= chunkSize) {
-    throw new Error('overlap must be between 0 and chunkSize');
-  }
-
-  // Clean text
-  const cleanedText = text.trim();
-  if (!cleanedText) {
-    return [];
-  }
+  // Split by separator first
+  const segments = text.split(separator).filter(s => s.trim());
 
   const chunks: string[] = [];
+  let currentChunk = '';
 
-  if (preserveParagraphs) {
-    // Split by paragraphs first
-    const paragraphs = cleanedText.split(separator).filter((p) => p.trim());
-    let currentChunk = '';
+  for (const segment of segments) {
+    if (currentChunk.length + segment.length + separator.length <= chunkSize) {
+      currentChunk += (currentChunk ? separator : '') + segment;
+    } else {
+      if (currentChunk) {
+        chunks.push(currentChunk);
+      }
 
-    for (const paragraph of paragraphs) {
-      const trimmedParagraph = paragraph.trim();
+      // Handle segments larger than chunk size
+      if (segment.length > chunkSize) {
+        const words = segment.split(' ');
+        currentChunk = '';
 
-      // If paragraph alone exceeds chunk size, split it
-      if (trimmedParagraph.length > chunkSize) {
-        // Save current chunk if it exists
-        if (currentChunk) {
-          chunks.push(currentChunk.trim());
-          currentChunk = '';
+        for (const word of words) {
+          if (currentChunk.length + word.length + 1 <= chunkSize) {
+            currentChunk += (currentChunk ? ' ' : '') + word;
+          } else {
+            if (currentChunk) {
+              chunks.push(currentChunk);
+            }
+            currentChunk = word;
+          }
         }
-
-        // Split large paragraph into smaller chunks
-        const subChunks = splitBySize(trimmedParagraph, chunkSize, overlap);
-        chunks.push(...subChunks);
-      }
-      // If adding paragraph would exceed chunk size, start new chunk
-      else if (currentChunk.length + trimmedParagraph.length > chunkSize) {
-        chunks.push(currentChunk.trim());
-        // Start new chunk with overlap from previous
-        const overlapText = getOverlapText(currentChunk, overlap);
-        currentChunk = overlapText + trimmedParagraph;
-      }
-      // Add to current chunk
-      else {
-        currentChunk +=
-          (currentChunk ? separator : '') + trimmedParagraph;
+      } else {
+        currentChunk = segment;
       }
     }
-
-    // Add final chunk
-    if (currentChunk) {
-      chunks.push(currentChunk.trim());
-    }
-  } else {
-    // Simple size-based chunking without paragraph preservation
-    const splitChunks = splitBySize(cleanedText, chunkSize, overlap);
-    chunks.push(...splitChunks);
   }
 
-  return chunks.filter((chunk) => chunk.length > 0);
-}
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
 
-/**
- * Split text by size with overlap
- */
-function splitBySize(
-  text: string,
-  size: number,
-  overlap: number
-): string[] {
-  const chunks: string[] = [];
-  let start = 0;
+  // Add overlap between chunks
+  if (chunkOverlap > 0 && chunks.length > 1) {
+    const overlappedChunks: string[] = [];
 
-  while (start < text.length) {
-    const end = start + size;
-    const chunk = text.slice(start, end);
-    chunks.push(chunk);
-    start = end - overlap;
+    for (let i = 0; i < chunks.length; i++) {
+      let chunk = chunks[i];
+
+      if (i > 0) {
+        const prevChunk = chunks[i - 1];
+        const overlapText = prevChunk.slice(-chunkOverlap);
+        chunk = overlapText + ' ' + chunk;
+      }
+
+      overlappedChunks.push(chunk);
+    }
+
+    return overlappedChunks;
   }
 
   return chunks;
 }
 
 /**
- * Get overlap text from end of chunk
+ * Count tokens in text (simple approximation)
  */
-function getOverlapText(text: string, overlapSize: number): string {
-  if (overlapSize === 0 || text.length === 0) return '';
-  const overlap = text.slice(-overlapSize);
-  return overlap + '\n\n';
+export function countTokens(text: string): number {
+  // Simple approximation: ~4 characters per token
+  return Math.ceil(text.length / 4);
 }
 
 /**
- * Create a document record
- *
- * @param input - Document creation input
- * @returns Created document
- *
- * @example
- * ```typescript
- * const doc = await createDocument({
- *   tenantId: 'user-123',
- *   appId: 'track-app',
- *   sourceId: 'doc-456',
- *   title: 'Track Guide',
- *   contentType: 'markdown',
- *   storageLocation: 's3://bucket/track-guide.md',
- *   metadata: { tags: ['guide', 'racing'] }
- * });
- * ```
+ * Create a new document in the RAG system
  */
 export async function createDocument(
-  input: Omit<RAGDocument, 'id' | 'createdAt' | 'updatedAt'>
-): Promise<RAGDocument> {
-  const { data, error } = (await supabase
+  input: CreateDocumentInput
+): Promise<RagDocument> {
+  const { data, error } = await (supabase as any)
     .from('rag_documents')
-    .insert([
-      {
-        tenant_id: input.tenantId,
-        app_id: input.appId,
-        source_id: input.sourceId,
-        title: input.title,
-        content_type: input.contentType,
-        storage_location: input.storageLocation,
-        metadata: input.metadata,
-      }
-    ])
+    .insert({
+      title: input.title,
+      content: input.content,
+      document_type: input.document_type,
+      metadata: input.metadata || {},
+      driver_id: input.driver_id || null,
+      track_id: input.track_id || null,
+      session_id: input.session_id || null,
+      status: 'pending',
+      chunk_count: 0,
+    })
     .select()
-    .single()) as any;  // Cast the ENTIRE result
+    .single();
 
   if (error) {
     throw new Error(`Failed to create document: ${error.message}`);
   }
 
-  return rowToDocument(data);
+  return data as RagDocument;
 }
 
 /**
  * Create chunks for a document
- *
- * @param documentId - UUID of the parent document
- * @param chunks - Array of chunk inputs
- * @returns Result with created chunks
- *
- * @example
- * ```typescript
- * const result = await createChunks(documentId, [
- *   {
- *     chunkText: 'First chunk...',
- *     chunkIndex: 0,
- *     embedding: [0.1, 0.2, ...],
- *     metadata: { tokens: 100 }
- *   },
- *   // ... more chunks
- * ]);
- * ```
  */
 export async function createChunks(
-  documentId: string,
-  chunks: CreateChunkInput[]
-): Promise<CreateChunksResult> {
-  // Get document to extract tenant_id and app_id
-  const { data: docData, error: docError } = await supabase
-    .from('rag_documents')
-    .select('tenant_id, app_id')
-    .eq('id', documentId)
-    .single();
-
-  if (docError) {
-    throw new Error(`Failed to get document: ${docError.message}`);
+  inputs: CreateChunkInput[]
+): Promise<RagChunk[]> {
+  if (inputs.length === 0) {
+    return [];
   }
 
-  const { tenant_id, app_id } = docData;
-
-  // Prepare chunk rows
-  const chunkRows = chunks.map((chunk) => ({
-    document_id: documentId,
-    tenant_id,
-    app_id,
-    chunk_text: chunk.chunkText,
-    chunk_index: chunk.chunkIndex,
-    embedding: chunk.embedding || null,
-    metadata: chunk.metadata || {},
+  const chunksToInsert = inputs.map(input => ({
+    document_id: input.document_id,
+    chunk_index: input.chunk_index,
+    content: input.content,
+    embedding: input.embedding || null,
+    token_count: input.token_count,
+    metadata: input.metadata || {},
   }));
 
-  // Insert chunks in batches (Supabase has limits)
-  const BATCH_SIZE = 100;
-  const createdChunks: RAGChunk[] = [];
-
-  for (let i = 0; i < chunkRows.length; i += BATCH_SIZE) {
-    const batch = chunkRows.slice(i, i + BATCH_SIZE);
-
-    const { data, error } = await supabase
-      .from('rag_chunks')
-      .insert(batch)
-      .select();
-
-    if (error) {
-      throw new Error(`Failed to create chunks: ${error.message}`);
-    }
-
-    createdChunks.push(...(data as RAGChunkRow[]).map(rowToChunk));
-  }
-
-  return {
-    chunks: createdChunks,
-    documentId,
-    totalChunks: createdChunks.length,
-  };
-}
-
-/**
- * Update chunk embeddings
- *
- * @param chunkId - UUID of the chunk
- * @param embedding - Vector embedding
- */
-export async function updateChunkEmbedding(
-  chunkId: string,
-  embedding: number[]
-): Promise<void> {
-  // Validate embedding dimension
-  if (embedding.length !== 1536) {
-    throw new Error(
-      `Invalid embedding dimension: expected 1536, got ${embedding.length}`
-    );
-  }
-
-  const { error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('rag_chunks')
-    .update({ embedding })
-    .eq('id', chunkId);
+    .insert(chunksToInsert)
+    .select();
 
   if (error) {
-    throw new Error(`Failed to update chunk embedding: ${error.message}`);
+    throw new Error(`Failed to create chunks: ${error.message}`);
   }
+
+  return data as RagChunk[];
 }
 
 /**
- * Batch update chunk embeddings
- *
- * @param updates - Array of { chunkId, embedding } objects
+ * Update document status and chunk count
  */
-export async function batchUpdateEmbeddings(
-  updates: Array<{ chunkId: string; embedding: number[] }>
-): Promise<void> {
-  // Validate all embeddings
-  for (const update of updates) {
-    if (update.embedding.length !== 1536) {
-      throw new Error(
-        `Invalid embedding dimension for chunk ${update.chunkId}: expected 1536, got ${update.embedding.length}`
-      );
-    }
-  }
-
-  // Update in batches
-  const BATCH_SIZE = 50;
-  for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-    const batch = updates.slice(i, i + BATCH_SIZE);
-
-    // Use Promise.all for parallel updates within batch
-    await Promise.all(
-      batch.map((update) =>
-        supabase
-          .from('rag_chunks')
-          .update({ embedding: update.embedding })
-          .eq('id', update.chunkId)
-      )
-    );
-  }
-}
-
-/**
- * Complete ingestion workflow: create document + chunks
- *
- * @param input - Document creation input
- * @param text - Full text content to chunk
- * @param chunkingOptions - Chunking configuration
- * @returns Ingestion result with document and chunks
- *
- * @example
- * ```typescript
- * const result = await ingestDocument(
- *   {
- *     tenantId: 'user-123',
- *     appId: 'track-app',
- *     sourceId: 'doc-456',
- *     title: 'Track Guide',
- *     contentType: 'markdown'
- *   },
- *   documentText,
- *   { chunkSize: 500, overlap: 50 }
- * );
- *
- * // Later: add embeddings per-app
- * for (const chunk of result.chunks) {
- *   const embedding = await generateEmbedding(chunk.chunkText);
- *   await updateChunkEmbedding(chunk.id, embedding);
- * }
- * ```
- */
-export async function ingestDocument(
-  input: CreateDocumentInput,
-  text: string,
-  chunkingOptions?: ChunkingOptions
-): Promise<IngestionResult> {
-  try {
-    // 1. Create document
-    const document = await createDocument(input);
-
-    // 2. Chunk text
-    const textChunks = chunkText(text, chunkingOptions);
-
-    // 3. Create chunk records (without embeddings initially)
-    const chunkInputs: CreateChunkInput[] = textChunks.map(
-      (chunkText, index) => ({
-        chunkText,
-        chunkIndex: index,
-        metadata: {
-          length: chunkText.length,
-        },
-      })
-    );
-
-    const { chunks } = await createChunks(document.id, chunkInputs);
-
-    return {
-      document,
-      chunks,
-      totalChunks: chunks.length,
-      success: true,
-    };
-  } catch (error) {
-    return {
-      document: null as any,
-      chunks: [],
-      totalChunks: 0,
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-}
-
-/**
- * Delete all chunks for a document
- *
- * @param documentId - UUID of the document
- */
-export async function deleteDocumentChunks(documentId: string): Promise<void> {
-  const { error } = await supabase
-    .from('rag_chunks')
-    .delete()
-    .eq('document_id', documentId);
-
-  if (error) {
-    throw new Error(`Failed to delete document chunks: ${error.message}`);
-  }
-}
-
-/**
- * Re-chunk and replace chunks for a document
- *
- * @param documentId - UUID of the document
- * @param text - New text content
- * @param chunkingOptions - Chunking configuration
- * @returns Updated chunks
- */
-export async function rechunkDocument(
+export async function updateDocumentStatus(
   documentId: string,
-  text: string,
-  chunkingOptions?: ChunkingOptions
-): Promise<RAGChunk[]> {
-  // Delete existing chunks
-  await deleteDocumentChunks(documentId);
-
-  // Create new chunks
-  const textChunks = chunkText(text, chunkingOptions);
-  const chunkInputs: CreateChunkInput[] = textChunks.map(
-    (chunkText, index) => ({
-      chunkText,
-      chunkIndex: index,
-      metadata: {
-        length: chunkText.length,
-      },
-    })
-  );
-
-  const { chunks } = await createChunks(documentId, chunkInputs);
-  return chunks;
-}
-
-/**
- * Update document metadata
- *
- * @param documentId - UUID of the document
- * @param metadata - New metadata to merge
- */
-export async function updateDocumentMetadata(
-  documentId: string,
-  metadata: Record<string, any>
+  status: 'pending' | 'processing' | 'completed' | 'failed',
+  chunkCount?: number
 ): Promise<void> {
-  // Get current metadata
-  const { data: docData, error: fetchError } = await supabase
-    .from('rag_documents')
-    .select('metadata')
-    .eq('id', documentId)
-    .single();
+  const updateData: Record<string, unknown> = { status };
 
-  if (fetchError) {
-    throw new Error(`Failed to get document: ${fetchError.message}`);
+  if (chunkCount !== undefined) {
+    updateData.chunk_count = chunkCount;
   }
 
-  // Merge metadata
-  const updatedMetadata = {
-    ...docData.metadata,
-    ...metadata,
-  };
-
-  // Update document
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('rag_documents')
-    .update({ metadata: updatedMetadata })
+    .update(updateData)
     .eq('id', documentId);
 
   if (error) {
-    throw new Error(`Failed to update document metadata: ${error.message}`);
+    throw new Error(`Failed to update document status: ${error.message}`);
   }
+}
+
+/**
+ * Ingest a document into the RAG system
+ * Creates the document, chunks it, and prepares for embedding
+ */
+export async function ingestDocument(
+  input: CreateDocumentInput,
+  chunkingOptions?: ChunkingOptions
+): Promise<IngestionResult> {
+  try {
+    // Create the document
+    const document = await createDocument(input);
+
+    // Update status to processing
+    await updateDocumentStatus(document.id, 'processing');
+
+    // Chunk the content
+    const textChunks = chunkText(input.content, chunkingOptions);
+
+    // Create chunk inputs
+    const chunkInputs: CreateChunkInput[] = textChunks.map((content, index) => ({
+      document_id: document.id,
+      chunk_index: index,
+      content,
+      token_count: countTokens(content),
+      metadata: {
+        document_title: input.title,
+        document_type: input.document_type,
+      },
+    }));
+
+    // Insert chunks
+    const chunks = await createChunks(chunkInputs);
+
+    // Update document status to completed
+    await updateDocumentStatus(document.id, 'completed', chunks.length);
+
+    return {
+      document: { ...document, status: 'completed', chunk_count: chunks.length },
+      chunks,
+      success: true,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    return {
+      document: null as unknown as RagDocument,
+      chunks: [],
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Get a document by ID
+ */
+export async function getDocument(id: string): Promise<RagDocument | null> {
+  const { data, error } = await (supabase as any)
+    .from('rag_documents')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null; // Not found
+    }
+    throw new Error(`Failed to get document: ${error.message}`);
+  }
+
+  return data as RagDocument;
+}
+
+/**
+ * Get chunks for a document
+ */
+export async function getDocumentChunks(documentId: string): Promise<RagChunk[]> {
+  const { data, error } = await (supabase as any)
+    .from('rag_chunks')
+    .select('*')
+    .eq('document_id', documentId)
+    .order('chunk_index', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to get chunks: ${error.message}`);
+  }
+
+  return data as RagChunk[];
+}
+
+/**
+ * Delete a document and its chunks
+ */
+export async function deleteDocument(id: string): Promise<void> {
+  // Delete chunks first (foreign key constraint)
+  const { error: chunksError } = await (supabase as any)
+    .from('rag_chunks')
+    .delete()
+    .eq('document_id', id);
+
+  if (chunksError) {
+    throw new Error(`Failed to delete chunks: ${chunksError.message}`);
+  }
+
+  // Delete document
+  const { error: docError } = await (supabase as any)
+    .from('rag_documents')
+    .delete()
+    .eq('id', id);
+
+  if (docError) {
+    throw new Error(`Failed to delete document: ${docError.message}`);
+  }
+}
+
+/**
+ * List all documents with optional filtering
+ */
+export async function listDocuments(options?: {
+  document_type?: string;
+  driver_id?: string;
+  track_id?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<RagDocument[]> {
+  let query = (supabase as any)
+    .from('rag_documents')
+    .select('*');
+
+  if (options?.document_type) {
+    query = query.eq('document_type', options.document_type);
+  }
+
+  if (options?.driver_id) {
+    query = query.eq('driver_id', options.driver_id);
+  }
+
+  if (options?.track_id) {
+    query = query.eq('track_id', options.track_id);
+  }
+
+  if (options?.status) {
+    query = query.eq('status', options.status);
+  }
+
+  query = query.order('created_at', { ascending: false });
+
+  if (options?.limit) {
+    query = query.limit(options.limit);
+  }
+
+  if (options?.offset) {
+    query = query.range(options.offset, options.offset + (options.limit || 10) - 1);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to list documents: ${error.message}`);
+  }
+
+  return data as RagDocument[];
 }

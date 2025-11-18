@@ -1,317 +1,336 @@
 /**
- * RAG Retrieval Functions
+ * RAG Document Retrieval
  *
- * Vector similarity search and document retrieval using Supabase pgvector
+ * Functions for retrieving and searching documents in the RAG system.
+ * Handles similarity search using embeddings.
  */
 
-import { supabase as supabaseRaw } from '@/lib/supabase/client';
-const supabase = supabaseRaw as any;
+import { supabase } from '../supabase/client';
 import {
-  RAGDocument,
-  RAGChunk,
-  RAGQueryOptions,
-  RAGSearchResult,
-  RAGSearchResultRow,
-  RAGDocumentRow,
-  RAGChunkRow,
-  rowToDocument,
-  rowToChunk,
-  RAGContext,
-  formatSearchResultsForContext,
+  RagDocument,
+  RagChunk,
+  SearchResult,
+  SearchOptions,
 } from './types';
 
 /**
- * Search chunks using vector similarity
- *
- * @param options - Query options including query string, filters, and parameters
- * @returns Array of search results with similarity scores
- *
- * @example
- * ```typescript
- * const results = await searchChunks({
- *   tenantId: 'user-123',
- *   appId: 'track-app',
- *   query: 'How to improve lap times?',
- *   topK: 5,
- *   threshold: 0.7
- * });
- * ```
+ * Search for similar chunks using vector similarity
+ * Note: This requires the pgvector extension and a similarity search function in Supabase
  */
-export async function searchChunks(
-  options: RAGQueryOptions
-): Promise<RAGSearchResult[]> {
+export async function searchSimilarChunks(
+  embedding: number[],
+  options: Omit<SearchOptions, 'query'> = {}
+): Promise<SearchResult[]> {
   const {
-    tenantId,
-    appId,
-    query,
-    queryEmbedding,
-    topK = 10,
+    limit = 5,
     threshold = 0.7,
-    filters = {},
+    document_type,
+    driver_id,
+    track_id,
   } = options;
 
-  // Validate required parameters
-  if (!tenantId || !appId) {
-    throw new Error('tenantId and appId are required for RAG search');
-  }
-
-  // IMPORTANT: queryEmbedding must be provided by the calling application
-  // This keeps the RAG system LLM-agnostic
-  if (!queryEmbedding) {
-    throw new Error(
-      'queryEmbedding is required. Please generate embeddings using your preferred provider (OpenAI, Cohere, etc.)'
-    );
-  }
-
-  // Validate embedding dimension
-  if (queryEmbedding.length !== 1536) {
-    throw new Error(
-      `Invalid embedding dimension: expected 1536, got ${queryEmbedding.length}`
-    );
-  }
-
-  // Call Supabase RPC function for vector search
-  const { data, error } = await supabase.rpc('search_rag_chunks', {
-    query_embedding: queryEmbedding,
-    query_tenant_id: tenantId,
-    query_app_id: appId,
+  // Build the RPC call for vector similarity search
+  // This assumes a function like 'match_chunks' exists in Supabase
+  const { data, error } = await (supabase as any).rpc('match_chunks', {
+    query_embedding: embedding,
     match_threshold: threshold,
-    match_count: topK,
-    filter_source_ids: filters.sourceIds || null,
+    match_count: limit,
+    filter_document_type: document_type || null,
+    filter_driver_id: driver_id || null,
+    filter_track_id: track_id || null,
   });
 
   if (error) {
-    throw new Error(`RAG search failed: ${error.message}`);
+    // If the function doesn't exist, fall back to basic retrieval
+    if (error.code === '42883') {
+      console.warn('match_chunks function not found, falling back to basic retrieval');
+      return basicSearch(options);
+    }
+    throw new Error(`Failed to search chunks: ${error.message}`);
   }
 
-  if (!data || data.length === 0) {
-    return [];
-  }
-
-  // Transform raw results into typed search results
-  return data.map((row: RAGSearchResultRow) => ({
+  return (data || []).map((result: any) => ({
     chunk: {
-      id: row.chunk_id,
-      documentId: row.document_id,
-      tenantId,
-      appId,
-      chunkText: row.chunk_text,
-      chunkIndex: row.chunk_index,
-      metadata: row.chunk_metadata,
-      createdAt: new Date(),
-    },
+      id: result.id,
+      document_id: result.document_id,
+      chunk_index: result.chunk_index,
+      content: result.content,
+      embedding: result.embedding,
+      token_count: result.token_count,
+      metadata: result.metadata,
+      created_at: result.created_at,
+    } as RagChunk,
     document: {
-      id: row.document_id,
-      tenantId,
-      appId,
-      sourceId: row.document_source_id,
-      title: row.document_title,
-      contentType: 'text', // Type will be in metadata if needed
-      metadata: row.document_metadata,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    similarity: row.similarity,
+      id: result.document_id,
+      title: result.document_title || '',
+      content: '',
+      document_type: result.document_type || 'general',
+      metadata: result.document_metadata || {},
+      status: result.document_status || 'completed',
+      driver_id: result.driver_id,
+      track_id: result.track_id,
+      session_id: result.session_id,
+      chunk_count: result.chunk_count || 0,
+      created_at: result.document_created_at || result.created_at,
+      updated_at: result.document_updated_at || result.created_at,
+    } as RagDocument,
+    similarity: result.similarity || 0,
   }));
 }
 
 /**
- * Get a document by ID
- *
- * @param documentId - UUID of the document
- * @returns Document or null if not found
+ * Basic text search without embeddings
+ * Falls back to this when vector search is not available
  */
-export async function getDocument(
+export async function basicSearch(
+  options: Omit<SearchOptions, 'query'> & { query?: string }
+): Promise<SearchResult[]> {
+  const {
+    query,
+    limit = 5,
+    document_type,
+    driver_id,
+    track_id,
+  } = options;
+
+  // Get chunks with their documents
+  let chunkQuery = (supabase as any)
+    .from('rag_chunks')
+    .select('*, rag_documents!inner(*)');
+
+  if (query) {
+    chunkQuery = chunkQuery.ilike('content', `%${query}%`);
+  }
+
+  if (document_type) {
+    chunkQuery = chunkQuery.eq('rag_documents.document_type', document_type);
+  }
+
+  if (driver_id) {
+    chunkQuery = chunkQuery.eq('rag_documents.driver_id', driver_id);
+  }
+
+  if (track_id) {
+    chunkQuery = chunkQuery.eq('rag_documents.track_id', track_id);
+  }
+
+  chunkQuery = chunkQuery
+    .limit(limit)
+    .order('created_at', { ascending: false });
+
+  const { data, error } = await chunkQuery;
+
+  if (error) {
+    throw new Error(`Failed to search: ${error.message}`);
+  }
+
+  return (data || []).map((row: any) => ({
+    chunk: {
+      id: row.id,
+      document_id: row.document_id,
+      chunk_index: row.chunk_index,
+      content: row.content,
+      embedding: row.embedding,
+      token_count: row.token_count,
+      metadata: row.metadata,
+      created_at: row.created_at,
+    } as RagChunk,
+    document: row.rag_documents as RagDocument,
+    similarity: query ? calculateTextSimilarity(query, row.content) : 1,
+  }));
+}
+
+/**
+ * Calculate simple text similarity (Jaccard index)
+ */
+function calculateTextSimilarity(query: string, text: string): number {
+  const queryWords = new Set(query.toLowerCase().split(/\s+/));
+  const textWords = new Set(text.toLowerCase().split(/\s+/));
+
+  const queryArray = Array.from(queryWords);
+  const textArray = Array.from(textWords);
+
+  const intersection = queryArray.filter(x => textWords.has(x));
+  const union = new Set(queryArray.concat(textArray));
+
+  return intersection.length / union.size;
+}
+
+/**
+ * Get relevant context for a query
+ * Returns formatted context string for use in prompts
+ */
+export async function getRelevantContext(
+  options: SearchOptions
+): Promise<string> {
+  // For now, use basic search
+  // When embeddings are implemented, this will use searchSimilarChunks
+  const results = await basicSearch({
+    ...options,
+    query: options.query,
+  });
+
+  if (results.length === 0) {
+    return '';
+  }
+
+  // Format results as context
+  const contextParts = results.map((result, index) => {
+    const { chunk, document } = result;
+    return `[Source ${index + 1}: ${document.title}]\n${chunk.content}`;
+  });
+
+  return contextParts.join('\n\n---\n\n');
+}
+
+/**
+ * Get document by ID with its chunks
+ */
+export async function getDocumentWithChunks(
   documentId: string
-): Promise<RAGDocument | null> {
-  const { data, error } = await supabase
+): Promise<{ document: RagDocument; chunks: RagChunk[] } | null> {
+  // Get document
+  const { data: document, error: docError } = await (supabase as any)
     .from('rag_documents')
     .select('*')
     .eq('id', documentId)
     .single();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // Not found
+  if (docError) {
+    if (docError.code === 'PGRST116') {
       return null;
     }
-    throw new Error(`Failed to get document: ${error.message}`);
+    throw new Error(`Failed to get document: ${docError.message}`);
   }
 
-  return rowToDocument(data as RAGDocumentRow);
-}
-
-/**
- * Get all chunks for a document
- *
- * @param documentId - UUID of the document
- * @returns Array of chunks ordered by chunk_index
- */
-export async function getDocumentChunks(
-  documentId: string
-): Promise<RAGChunk[]> {
-  const { data, error } = await supabase
+  // Get chunks
+  const { data: chunks, error: chunksError } = await (supabase as any)
     .from('rag_chunks')
     .select('*')
     .eq('document_id', documentId)
     .order('chunk_index', { ascending: true });
 
-  if (error) {
-    throw new Error(`Failed to get document chunks: ${error.message}`);
+  if (chunksError) {
+    throw new Error(`Failed to get chunks: ${chunksError.message}`);
   }
-
-  return (data as RAGChunkRow[]).map(rowToChunk);
-}
-
-/**
- * List documents for a tenant/app
- *
- * @param tenantId - Tenant identifier
- * @param appId - Application identifier
- * @param limit - Maximum number of documents to return (default: 100)
- * @returns Array of documents
- */
-export async function listDocuments(
-  tenantId: string,
-  appId: string,
-  limit: number = 100
-): Promise<RAGDocument[]> {
-  const { data, error } = await supabase
-    .from('rag_documents')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('app_id', appId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    throw new Error(`Failed to list documents: ${error.message}`);
-  }
-
-  return (data as RAGDocumentRow[]).map(rowToDocument);
-}
-
-/**
- * Get documents by source IDs
- *
- * @param sourceIds - Array of source IDs
- * @param tenantId - Tenant identifier
- * @param appId - Application identifier
- * @returns Array of matching documents
- */
-export async function getDocumentsBySourceIds(
-  sourceIds: string[],
-  tenantId: string,
-  appId: string
-): Promise<RAGDocument[]> {
-  const { data, error } = await supabase
-    .from('rag_documents')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('app_id', appId)
-    .in('source_id', sourceIds);
-
-  if (error) {
-    throw new Error(`Failed to get documents by source IDs: ${error.message}`);
-  }
-
-  return (data as RAGDocumentRow[]).map(rowToDocument);
-}
-
-/**
- * Delete a document and all its chunks
- *
- * @param documentId - UUID of the document to delete
- */
-export async function deleteDocument(documentId: string): Promise<void> {
-  // Chunks will be deleted automatically via CASCADE
-  const { error } = await supabase
-    .from('rag_documents')
-    .delete()
-    .eq('id', documentId);
-
-  if (error) {
-    throw new Error(`Failed to delete document: ${error.message}`);
-  }
-}
-
-/**
- * Build RAG context from search results
- *
- * @param options - Query options
- * @returns RAG context with formatted text for prompt injection
- *
- * @example
- * ```typescript
- * const context = await buildRAGContext({
- *   tenantId: 'user-123',
- *   appId: 'track-app',
- *   query: 'How to improve lap times?',
- *   queryEmbedding: embeddings,
- *   topK: 3
- * });
- *
- * const prompt = `Answer the question using the following context:
- *
- * ${context.formattedContext}
- *
- * Question: ${context.query}`;
- * ```
- */
-export async function buildRAGContext(
-  options: RAGQueryOptions
-): Promise<RAGContext> {
-  const results = await searchChunks(options);
 
   return {
-    query: options.query,
-    results,
-    formattedContext: formatSearchResultsForContext(results),
+    document: document as RagDocument,
+    chunks: (chunks || []) as RagChunk[],
   };
 }
 
 /**
- * Get chunk count for a document
- *
- * @param documentId - UUID of the document
- * @returns Number of chunks
+ * Get all chunks for multiple documents
  */
-export async function getChunkCount(documentId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('rag_chunks')
-    .select('*', { count: 'exact', head: true })
-    .eq('document_id', documentId);
-
-  if (error) {
-    throw new Error(`Failed to get chunk count: ${error.message}`);
+export async function getChunksForDocuments(
+  documentIds: string[]
+): Promise<Map<string, RagChunk[]>> {
+  if (documentIds.length === 0) {
+    return new Map();
   }
 
-  return count || 0;
+  const { data, error } = await (supabase as any)
+    .from('rag_chunks')
+    .select('*')
+    .in('document_id', documentIds)
+    .order('chunk_index', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to get chunks: ${error.message}`);
+  }
+
+  // Group chunks by document ID
+  const chunkMap = new Map<string, RagChunk[]>();
+
+  for (const chunk of data || []) {
+    const typedChunk = chunk as RagChunk;
+    const existing = chunkMap.get(typedChunk.document_id) || [];
+    existing.push(typedChunk);
+    chunkMap.set(typedChunk.document_id, existing);
+  }
+
+  return chunkMap;
 }
 
 /**
- * Check if a source already exists
- *
- * @param sourceId - Source identifier
- * @param tenantId - Tenant identifier
- * @param appId - Application identifier
- * @returns True if source exists
+ * Search documents by metadata
  */
-export async function sourceExists(
-  sourceId: string,
-  tenantId: string,
-  appId: string
-): Promise<boolean> {
-  const { count, error } = await supabase
+export async function searchByMetadata(
+  metadataKey: string,
+  metadataValue: unknown,
+  limit = 10
+): Promise<RagDocument[]> {
+  const { data, error } = await (supabase as any)
     .from('rag_documents')
-    .select('*', { count: 'exact', head: true })
-    .eq('source_id', sourceId)
-    .eq('tenant_id', tenantId)
-    .eq('app_id', appId);
+    .select('*')
+    .contains('metadata', { [metadataKey]: metadataValue })
+    .limit(limit);
 
   if (error) {
-    throw new Error(`Failed to check source existence: ${error.message}`);
+    throw new Error(`Failed to search by metadata: ${error.message}`);
   }
 
-  return (count || 0) > 0;
+  return (data || []) as RagDocument[];
+}
+
+/**
+ * Get documents by session ID
+ */
+export async function getDocumentsBySession(
+  sessionId: string
+): Promise<RagDocument[]> {
+  const { data, error } = await (supabase as any)
+    .from('rag_documents')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to get documents by session: ${error.message}`);
+  }
+
+  return (data || []) as RagDocument[];
+}
+
+/**
+ * Get documents by driver ID
+ */
+export async function getDocumentsByDriver(
+  driverId: string,
+  limit = 50
+): Promise<RagDocument[]> {
+  const { data, error } = await (supabase as any)
+    .from('rag_documents')
+    .select('*')
+    .eq('driver_id', driverId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to get documents by driver: ${error.message}`);
+  }
+
+  return (data || []) as RagDocument[];
+}
+
+/**
+ * Get documents by track ID
+ */
+export async function getDocumentsByTrack(
+  trackId: string,
+  limit = 50
+): Promise<RagDocument[]> {
+  const { data, error } = await (supabase as any)
+    .from('rag_documents')
+    .select('*')
+    .eq('track_id', trackId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to get documents by track: ${error.message}`);
+  }
+
+  return (data || []) as RagDocument[];
 }
