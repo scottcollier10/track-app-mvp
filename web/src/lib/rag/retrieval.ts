@@ -4,7 +4,8 @@
  * Vector similarity search and document retrieval using Supabase pgvector
  */
 
-import { supabase } from '../supabase/client';
+import { createClient } from '@/lib/supabase/client';
+const supabase = createClient() as any;
 import {
   RAGDocument,
   RAGChunk,

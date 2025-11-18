@@ -4,7 +4,7 @@
  * Functions for processing and storing documents in the RAG system
  */
 
-const supabase = createClient() as any;
+import { createClient } from '@/lib/supabase/client';  // ADD THIS LINE
 import {
   RAGDocument,
   RAGChunk,
