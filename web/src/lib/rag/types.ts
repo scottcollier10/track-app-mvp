@@ -22,29 +22,36 @@ export type AppId = 'track-app' | 'copilot' | 'jobbot' | string;
  */
 export interface RAGDocument {
   id: string;
-  tenantId: string;
-  appId: string;
-  sourceId: string;
   title: string;
-  contentType: ContentType;
-  storageLocation?: string;
+  content: string;
+  document_type: string;
   metadata: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  driver_id?: string;
+  track_id?: string;
+  session_id?: string;
+  chunk_count: number;
+  created_at: string;
+  updated_at: string;
 }
+
+// Alias for backward compatibility
+export type RagDocument = RAGDocument;
 
 /**
  * Database representation of RAG Document (snake_case)
  */
 export interface RAGDocumentRow {
   id: string;
-  tenant_id: string;
-  app_id: string;
-  source_id: string;
   title: string;
-  content_type: string;
-  storage_location?: string;
+  content: string;
+  document_type: string;
   metadata: Record<string, any>;
+  status: string;
+  driver_id?: string;
+  track_id?: string;
+  session_id?: string;
+  chunk_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -54,15 +61,17 @@ export interface RAGDocumentRow {
  */
 export interface RAGChunk {
   id: string;
-  documentId: string;
-  tenantId: string;
-  appId: string;
-  chunkText: string;
-  chunkIndex: number;
+  document_id: string;
+  chunk_index: number;
+  content: string;
   embedding?: number[];
+  token_count: number;
   metadata: Record<string, any>;
-  createdAt: Date;
+  created_at: string;
 }
+
+// Alias for backward compatibility
+export type RagChunk = RAGChunk;
 
 /**
  * Database representation of RAG Chunk (snake_case)
@@ -70,11 +79,10 @@ export interface RAGChunk {
 export interface RAGChunkRow {
   id: string;
   document_id: string;
-  tenant_id: string;
-  app_id: string;
-  chunk_text: string;
   chunk_index: number;
+  content: string;
   embedding?: number[];
+  token_count: number;
   metadata: Record<string, any>;
   created_at: string;
 }
@@ -106,6 +114,21 @@ export interface RAGSearchResult {
   similarity: number;
 }
 
+// Alias for backward compatibility
+export type SearchResult = RAGSearchResult;
+
+/**
+ * Options for search operations
+ */
+export interface SearchOptions {
+  query: string;
+  limit?: number;
+  threshold?: number;
+  document_type?: string;
+  driver_id?: string;
+  track_id?: string;
+}
+
 /**
  * Raw result from Supabase RPC search function
  */
@@ -135,22 +158,24 @@ export interface ChunkingOptions {
  * Document creation input
  */
 export interface CreateDocumentInput {
-  tenantId: string;
-  appId: string;
-  sourceId: string;
   title: string;
-  contentType: ContentType;
-  storageLocation?: string;
+  content: string;
+  document_type: string;
   metadata?: Record<string, any>;
+  driver_id?: string;
+  track_id?: string;
+  session_id?: string;
 }
 
 /**
  * Chunk creation input
  */
 export interface CreateChunkInput {
-  chunkText: string;
-  chunkIndex: number;
+  document_id: string;
+  chunk_index: number;
+  content: string;
   embedding?: number[];
+  token_count: number;
   metadata?: Record<string, any>;
 }
 
@@ -169,7 +194,6 @@ export interface CreateChunksResult {
 export interface IngestionResult {
   document: RAGDocument;
   chunks: RAGChunk[];
-  totalChunks: number;
   success: boolean;
   error?: string;
 }
@@ -199,15 +223,17 @@ export interface RAGContext {
 export function rowToDocument(row: RAGDocumentRow): RAGDocument {
   return {
     id: row.id,
-    tenantId: row.tenant_id,
-    appId: row.app_id,
-    sourceId: row.source_id,
     title: row.title,
-    contentType: row.content_type as ContentType,
-    storageLocation: row.storage_location,
+    content: row.content,
+    document_type: row.document_type,
     metadata: row.metadata,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    status: row.status as RAGDocument['status'],
+    driver_id: row.driver_id,
+    track_id: row.track_id,
+    session_id: row.session_id,
+    chunk_count: row.chunk_count,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -217,14 +243,13 @@ export function rowToDocument(row: RAGDocumentRow): RAGDocument {
 export function rowToChunk(row: RAGChunkRow): RAGChunk {
   return {
     id: row.id,
-    documentId: row.document_id,
-    tenantId: row.tenant_id,
-    appId: row.app_id,
-    chunkText: row.chunk_text,
-    chunkIndex: row.chunk_index,
+    document_id: row.document_id,
+    chunk_index: row.chunk_index,
+    content: row.content,
     embedding: row.embedding,
+    token_count: row.token_count,
     metadata: row.metadata,
-    createdAt: new Date(row.created_at),
+    created_at: row.created_at,
   };
 }
 
@@ -236,7 +261,7 @@ export function formatSearchResultsForContext(results: RAGSearchResult[]): strin
     .map((result, index) => {
       const { chunk, document, similarity } = result;
       return `[Source ${index + 1}] ${document.title} (Relevance: ${(similarity * 100).toFixed(1)}%)
-${chunk.chunkText}`;
+${chunk.content}`;
     })
     .join('\n\n---\n\n');
 }
