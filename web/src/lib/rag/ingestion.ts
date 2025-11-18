@@ -9,8 +9,8 @@ import { supabase } from '../supabase/client';
 import {
   CreateDocumentInput,
   CreateChunkInput,
-  RagDocument,
-  RagChunk,
+  RAGDocument,
+  RAGChunk,
   IngestionResult,
   ChunkingOptions,
 } from './types';
@@ -105,7 +105,7 @@ export function countTokens(text: string): number {
  */
 export async function createDocument(
   input: CreateDocumentInput
-): Promise<RagDocument> {
+): Promise<RAGDocument> {
   const { data, error } = await (supabase as any)
     .from('rag_documents')
     .insert({
@@ -126,7 +126,7 @@ export async function createDocument(
     throw new Error(`Failed to create document: ${error.message}`);
   }
 
-  return data as RagDocument;
+  return data as RAGDocument;
 }
 
 /**
@@ -134,7 +134,7 @@ export async function createDocument(
  */
 export async function createChunks(
   inputs: CreateChunkInput[]
-): Promise<RagChunk[]> {
+): Promise<RAGChunk[]> {
   if (inputs.length === 0) {
     return [];
   }
@@ -157,7 +157,7 @@ export async function createChunks(
     throw new Error(`Failed to create chunks: ${error.message}`);
   }
 
-  return data as RagChunk[];
+  return data as RAGChunk[];
 }
 
 /**
@@ -229,7 +229,7 @@ export async function ingestDocument(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     return {
-      document: null as unknown as RagDocument,
+      document: null as unknown as RAGDocument,
       chunks: [],
       success: false,
       error: errorMessage,
@@ -240,7 +240,7 @@ export async function ingestDocument(
 /**
  * Get a document by ID
  */
-export async function getDocument(id: string): Promise<RagDocument | null> {
+export async function getDocument(id: string): Promise<RAGDocument | null> {
   const { data, error } = await (supabase as any)
     .from('rag_documents')
     .select('*')
@@ -254,13 +254,13 @@ export async function getDocument(id: string): Promise<RagDocument | null> {
     throw new Error(`Failed to get document: ${error.message}`);
   }
 
-  return data as RagDocument;
+  return data as RAGDocument;
 }
 
 /**
  * Get chunks for a document
  */
-export async function getDocumentChunks(documentId: string): Promise<RagChunk[]> {
+export async function getDocumentChunks(documentId: string): Promise<RAGChunk[]> {
   const { data, error } = await (supabase as any)
     .from('rag_chunks')
     .select('*')
@@ -271,7 +271,7 @@ export async function getDocumentChunks(documentId: string): Promise<RagChunk[]>
     throw new Error(`Failed to get chunks: ${error.message}`);
   }
 
-  return data as RagChunk[];
+  return data as RAGChunk[];
 }
 
 /**
@@ -309,7 +309,7 @@ export async function listDocuments(options?: {
   status?: string;
   limit?: number;
   offset?: number;
-}): Promise<RagDocument[]> {
+}): Promise<RAGDocument[]> {
   let query = (supabase as any)
     .from('rag_documents')
     .select('*');
@@ -346,5 +346,5 @@ export async function listDocuments(options?: {
     throw new Error(`Failed to list documents: ${error.message}`);
   }
 
-  return data as RagDocument[];
+  return data as RAGDocument[];
 }
