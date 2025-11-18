@@ -16,7 +16,7 @@ import {
 } from './types';
 
 const DEFAULT_CHUNK_SIZE = 1000;
-const DEFAULT_CHUNK_OVERLAP = 200;
+const DEFAULT_OVERLAP = 200;
 
 /**
  * Split text into chunks with overlap
@@ -27,7 +27,7 @@ export function chunkText(
 ): string[] {
   const {
     chunkSize = DEFAULT_CHUNK_SIZE,
-    chunkOverlap = DEFAULT_CHUNK_OVERLAP,
+    overlap = DEFAULT_OVERLAP,
     separator = '\n\n',
   } = options;
 
@@ -71,7 +71,7 @@ export function chunkText(
   }
 
   // Add overlap between chunks
-  if (chunkOverlap > 0 && chunks.length > 1) {
+  if (overlap > 0 && chunks.length > 1) {
     const overlappedChunks: string[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
@@ -79,7 +79,7 @@ export function chunkText(
 
       if (i > 0) {
         const prevChunk = chunks[i - 1];
-        const overlapText = prevChunk.slice(-chunkOverlap);
+        const overlapText = prevChunk.slice(-overlap);
         chunk = overlapText + ' ' + chunk;
       }
 
