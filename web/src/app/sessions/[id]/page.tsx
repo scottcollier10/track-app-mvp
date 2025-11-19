@@ -13,6 +13,7 @@ import {
 import EmptyInsights from '@/components/analytics/EmptyInsights';
 import AICoachingCard from '@/components/coaching/AICoachingCard';
 import { ScoreCard } from '@/components/ui/scores';
+import ShareSessionButton from '@/components/ui/ShareSessionButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,13 +69,14 @@ export default async function SessionDetailPage({ params }: PageProps) {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center justify-between mb-2">
           <Link
             href="/sessions"
             className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
           >
             ← Sessions
           </Link>
+          <ShareSessionButton />
         </div>
         <h1 className="text-3xl font-bold">
           {session.track?.name || 'Session Detail'}
