@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase/client';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
 import ProfileForm from './ProfileForm';
 import DriverStats from '@/components/profile/DriverStats';
+import { ProgressTimeline } from '@/components/profile/ProgressTimeline';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,6 +126,17 @@ export default async function ProfilePage() {
 
       {/* Driver Statistics */}
       <DriverStats driverId={driver.id} />
+
+      {/* Track Progress */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold">Track Progress</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Your performance history at each circuit
+          </p>
+        </div>
+        <ProgressTimeline driverId={driver.id} />
+      </div>
 
       {/* Profile Form */}
       <ProfileForm
