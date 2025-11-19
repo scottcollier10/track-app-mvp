@@ -129,6 +129,19 @@ class FileManagerPersistence: PersistenceService {
         }
     }
 
+    func clearAllSessions() throws {
+        let directory = try sessionsDirectory
+        let fileURLs = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: .skipsHiddenFiles
+        )
+
+        for fileURL in fileURLs where fileURL.pathExtension == "json" {
+            try fileManager.removeItem(at: fileURL)
+        }
+    }
+
     // MARK: - Helpers
     private func sessionFileURL(for id: UUID) throws -> URL {
         try sessionsDirectory.appendingPathComponent("\(id.uuidString).json")

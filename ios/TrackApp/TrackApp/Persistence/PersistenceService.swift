@@ -21,6 +21,7 @@ protocol PersistenceService {
 
     // MARK: - Batch Operations
     func saveSessions(_ sessions: [Session]) throws
+    func clearAllSessions() throws
 }
 
 enum PersistenceError: LocalizedError {
@@ -28,7 +29,8 @@ enum PersistenceError: LocalizedError {
     case encodingFailed
     case decodingFailed
     case fileNotFound
-    case deleteFailedcase unknown(Error)
+    case deleteFailed
+    case unknown(Error)
 
     var errorDescription: String? {
         switch self {

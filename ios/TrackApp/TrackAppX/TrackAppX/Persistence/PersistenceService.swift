@@ -21,6 +21,7 @@ protocol PersistenceService {
 
     // MARK: - Batch Operations
     func saveSessions(_ sessions: [Session]) throws
+    func clearAllSessions() throws
 }
 
 enum PersistenceError: LocalizedError {
