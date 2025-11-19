@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
 import CoachNotes from '@/components/ui/CoachNotes';
+import SessionNotes from '@/components/ui/SessionNotes';
 import Sparkline from '@/components/analytics/Sparkline';
 import Link from 'next/link';
 import {
@@ -247,6 +248,9 @@ export default async function SessionDetailPage({ params }: PageProps) {
           </p>
         </Card>
       )}
+
+      {/* Session Notes */}
+      <SessionNotes sessionId={session.id} initialNotes={session.notes} />
 
       {/* Coach Notes (Coach View Only) */}
       <CoachNotes sessionId={session.id} initialNotes={session.coach_notes} />

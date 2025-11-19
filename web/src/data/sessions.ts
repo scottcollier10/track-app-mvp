@@ -21,6 +21,7 @@ export interface SessionFull {
   date: string;
   total_time_ms: number;
   best_lap_ms: number | null;
+  notes: string | null;
   coach_notes: string | null;
   ai_coaching_summary: string | null;
   driver: { id: string; name: string; email: string } | null;
@@ -186,6 +187,7 @@ export async function getSessionWithLaps(
         date,
         total_time_ms,
         best_lap_ms,
+        notes,
         coach_notes,
         ai_coaching_summary,
         driver:drivers(id, name, email),

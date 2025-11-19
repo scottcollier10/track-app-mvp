@@ -1,7 +1,8 @@
 /**
- * Update inline coach notes on a session
+ * Update notes on a session
  *
- * PATCH /api/sessions/[id]/notes
+ * POST /api/sessions/[id]/notes - Update session notes
+ * PATCH /api/sessions/[id]/notes - Update coach notes
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,15 +10,39 @@ import { createServerClient } from '@/lib/supabase/client';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
+}
+
+/**
+ * Update session notes (the notes column)
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: RouteParams
+) {
+  const { id } = await params;
+  const { notes } = await request.json();
+
+  const supabase = createServerClient();
+  const { error } = await (supabase
+    .from('sessions') as any)
+    .update({ notes })
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ) {
+  const { id } = await params;
   const supabase = createServerClient();
 
   try {
@@ -28,7 +53,7 @@ export async function PATCH(
     const coach_notes = rawNotes.trim();
 
     console.log('[Coach Notes] Update started', {
-      sessionId: params.id,
+      sessionId: id,
       notesLength: coach_notes?.length || 0,
     });
 
@@ -40,13 +65,13 @@ export async function PATCH(
     const { data, error } = await (supabase
       .from('sessions') as any)
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
     if (error) {
       console.error('[Coach Notes] Update failed', {
-        sessionId: params.id,
+        sessionId: id,
         error: error.message,
       });
       return NextResponse.json(
@@ -56,13 +81,13 @@ export async function PATCH(
     }
 
     console.log('[Coach Notes] Success', {
-      sessionId: params.id,
+      sessionId: id,
     });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('[Coach Notes] Error', {
-      sessionId: params.id,
+      sessionId: id,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
     return NextResponse.json(
