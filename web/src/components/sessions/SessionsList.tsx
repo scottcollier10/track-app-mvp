@@ -5,6 +5,8 @@ import Link from "next/link";
 import SessionFilters, { SessionFilter, SortBy } from "./SessionFilters";
 import SessionsHeader from "./SessionsHeader";
 import { formatDate, formatLapMs, formatDurationMs } from "@/lib/time";
+import { Card } from "@/components/ui/Card";
+import { Flag } from "lucide-react";
 
 interface Session {
   id: string;
@@ -129,22 +131,24 @@ export default function SessionsList() {
           uniqueDrivers={uniqueDrivers}
         />
 
-        <SessionFilters
-          onFilterChange={handleFilterChange}
-          sortBy={sortBy}
-          onSortChange={handleSortChange}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-        />
+        <Card>
+          <SessionFilters
+            onFilterChange={handleFilterChange}
+            sortBy={sortBy}
+            onSortChange={handleSortChange}
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+          />
+        </Card>
 
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-          <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+        <Card className="bg-status-critical/10 border-status-critical/30">
+          <h3 className="text-status-critical font-semibold mb-2">
             Error Loading Sessions
           </h3>
-          <p className="text-red-700 dark:text-red-300 text-sm">
+          <p className="text-status-critical/80 text-sm">
             {error.message || "Failed to load sessions. Please try again later."}
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -159,112 +163,114 @@ export default function SessionsList() {
       />
 
       {/* Filters */}
-      <SessionFilters
-        onFilterChange={handleFilterChange}
-        sortBy={sortBy}
-        onSortChange={handleSortChange}
-        searchQuery={searchQuery}
-        onSearchChange={handleSearchChange}
-      />
+      <Card>
+        <SessionFilters
+          onFilterChange={handleFilterChange}
+          sortBy={sortBy}
+          onSortChange={handleSortChange}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+        />
+      </Card>
 
       {/* Loading State */}
       {loading && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <div className="text-gray-600 dark:text-gray-400">
+        <Card className="py-12 text-center">
+          <div className="text-muted">
             Loading sessions...
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Empty State */}
       {!loading && sortedSessions.length === 0 && (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
-          <div className="text-5xl mb-4">🏁</div>
-          <h3 className="text-xl font-semibold mb-2">No Sessions Found</h3>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <Card className="py-12 text-center">
+          <Flag className="w-12 h-12 text-muted mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-primary mb-2">No Sessions Found</h3>
+          <p className="text-muted max-w-md mx-auto text-sm">
             {searchQuery
               ? `No sessions found for '${searchQuery}'. Try different keywords.`
               : Object.keys(filters).length > 0
               ? "No sessions match your filters. Try adjusting your search criteria."
               : "Demo data unavailable. Import a session from the iOS app or add sample data to your database."}
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Sessions Table */}
       {!loading && sortedSessions.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <Card noPadding className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <thead className="bg-surfaceAlt border-b border-subtle">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wide">
                     Date
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wide">
                     Track
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wide">
                     Driver
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wide">
                     Laps
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wide">
                     Best Lap
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 md:px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wide">
                     Total Time
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-subtle">
                 {sortedSessions.map((session) => (
                   <tr
                     key={session.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+                    className="hover:bg-surfaceAlt/50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                       <Link
                         href={`/sessions/${session.id}`}
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                        className="text-accent-primary hover:text-accent-primary/80 text-sm"
                       >
                         {formatDate(session.date)}
                       </Link>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 md:px-6 py-4">
                       <div className="flex flex-col">
                         {session.track?.id ? (
                           <Link
                             href={`/tracks/${session.track.id}`}
-                            className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                            className="font-medium text-primary hover:text-accent-primary text-sm"
                           >
                             {session.track.name || "Unknown Track"}
                           </Link>
                         ) : (
-                          <span className="font-medium">
+                          <span className="font-medium text-primary text-sm">
                             {session.track?.name || "Unknown Track"}
                           </span>
                         )}
                         {session.track?.location && (
-                          <span className="text-sm text-gray-500">
+                          <span className="text-xs text-text-subtle">
                             {session.track.location}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-muted text-sm">
                       {session.driver?.name || "Unknown"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right font-mono text-sm text-muted">
                       {session.lapCount}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-green-600 dark:text-green-400 font-semibold">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right font-mono text-sm text-status-success font-semibold">
                       {session.best_lap_ms
                         ? formatLapMs(session.best_lap_ms)
                         : "—"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-gray-600 dark:text-gray-400">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right font-mono text-sm text-muted">
                       {formatDurationMs(session.total_time_ms)}
                     </td>
                   </tr>
@@ -272,7 +278,7 @@ export default function SessionsList() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

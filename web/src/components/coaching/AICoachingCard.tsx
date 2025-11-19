@@ -10,6 +10,9 @@
 
 import { useState } from "react";
 import { useCoachView } from "@/context/coach-view";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Bot, ThumbsUp, Target, Gift, AlertTriangle } from "lucide-react";
 
 interface AICoachingCardProps {
   sessionId: string;
@@ -20,7 +23,7 @@ interface CoachingSection {
   title: string;
   content: string[];
   color: string;
-  emoji: string;
+  icon: typeof ThumbsUp;
 }
 
 /**
@@ -41,21 +44,21 @@ function parseCoaching(text: string): CoachingSection[] {
 
       // Create new section
       const title = line.replace('## ', '').trim();
-      let color = 'text-gray-300';
-      let emoji = '📝';
+      let color = 'text-muted';
+      let icon = Target;
 
       if (title.includes('Strength')) {
-        color = 'text-green-400';
-        emoji = '💪';
+        color = 'text-status-success';
+        icon = ThumbsUp;
       } else if (title.includes('Improvement')) {
-        color = 'text-amber-400';
-        emoji = '🎯';
+        color = 'text-status-warn';
+        icon = AlertTriangle;
       } else if (title.includes('Goal')) {
-        color = 'text-blue-400';
-        emoji = '🎁';
+        color = 'text-status-info';
+        icon = Gift;
       }
 
-      currentSection = { title, content: [], color, emoji };
+      currentSection = { title, content: [], color, icon };
     } else if (line.trim() && currentSection) {
       // Add content to current section (skip empty lines)
       currentSection.content.push(line.trim());
@@ -79,7 +82,7 @@ export default function AICoachingCard({
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔒 Hide completely when Coach View is OFF
+  // Hide completely when Coach View is OFF
   if (!coachView) return null;
 
   const handleGenerate = async () => {
@@ -121,40 +124,40 @@ export default function AICoachingCard({
   const sections = coaching ? parseCoaching(coaching) : [];
 
   return (
-    <div className="bg-purple-900/20 rounded-lg shadow-sm p-6 border-2 border-purple-800/50">
+    <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/30 rounded-xl p-4 md:p-6 border border-purple-700/50">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          <span>🤖</span>
+        <h2 className="text-xl font-semibold text-primary flex items-center gap-2">
+          <Bot className="w-5 h-5 text-purple-400" />
           AI Coaching
         </h2>
-        <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full">
+        <Badge variant="neutral" className="bg-purple-600/50 text-purple-200 border-purple-500/50">
           COACH VIEW
-        </span>
+        </Badge>
       </div>
 
       {/* State 1: NOT GENERATED */}
       {!coaching && !isGenerating && (
         <div className="space-y-4">
-          <p className="text-gray-400 text-sm">
+          <p className="text-muted text-sm">
             Generate personalized coaching feedback powered by Anthropic Claude.
             AI analysis includes strengths, areas for improvement, and actionable goals based on session data.
           </p>
-          <button
+          <Button
             onClick={handleGenerate}
-            className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+            className="w-full bg-purple-600 hover:bg-purple-700 border-purple-500"
           >
             Generate AI Coaching
-          </button>
+          </Button>
         </div>
       )}
 
       {/* State 2: GENERATING */}
       {isGenerating && (
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
-          <p className="text-gray-400 font-medium">Analyzing session data...</p>
-          <p className="text-gray-500 text-sm">This may take 5-10 seconds</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400"></div>
+          <p className="text-muted font-medium">Analyzing session data...</p>
+          <p className="text-text-subtle text-sm">This may take 5-10 seconds</p>
         </div>
       )}
 
@@ -162,53 +165,58 @@ export default function AICoachingCard({
       {coaching && !isGenerating && (
         <div className="space-y-6">
           {/* Coaching Sections */}
-          {sections.map((section, idx) => (
-            <div key={idx} className="space-y-3">
-              <h3 className={`text-lg font-bold ${section.color} flex items-center gap-2`}>
-                <span>{section.emoji}</span>
-                {section.title}
-              </h3>
-              <div className="space-y-2 pl-6">
-                {section.content.map((line, lineIdx) => (
-                  <p key={lineIdx} className="text-gray-300 text-sm leading-relaxed">
-                    {line.startsWith('-') || line.startsWith('•') ? (
-                      <span className="flex gap-2">
-                        <span className="text-gray-500">•</span>
-                        <span>{line.replace(/^[-•]\s*/, '')}</span>
-                      </span>
-                    ) : (
-                      line
-                    )}
-                  </p>
-                ))}
+          {sections.map((section, idx) => {
+            const SectionIcon = section.icon;
+            return (
+              <div key={idx} className="space-y-3">
+                <h3 className={`text-lg font-semibold ${section.color} flex items-center gap-2`}>
+                  <SectionIcon className="w-5 h-5" />
+                  {section.title}
+                </h3>
+                <div className="space-y-2 pl-7">
+                  {section.content.map((line, lineIdx) => (
+                    <p key={lineIdx} className="text-primary/90 text-sm leading-relaxed">
+                      {line.startsWith('-') || line.startsWith('•') ? (
+                        <span className="flex gap-2">
+                          <span className="text-text-subtle">•</span>
+                          <span>{line.replace(/^[-•]\s*/, '')}</span>
+                        </span>
+                      ) : (
+                        line
+                      )}
+                    </p>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Regenerate Button */}
-          <div className="pt-4 border-t border-gray-700">
-            <button
+          <div className="pt-4 border-t border-purple-700/50">
+            <Button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="secondary"
+              className="border-purple-600/50 hover:bg-purple-800/30"
             >
               Regenerate Coaching
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="mt-4 bg-red-900/20 border border-red-800 rounded-lg p-4">
-          <p className="text-red-400 text-sm font-medium mb-1">Error</p>
-          <p className="text-red-300 text-sm">{error}</p>
-          <button
+        <div className="mt-4 bg-status-critical/20 border border-status-critical/30 rounded-lg p-4">
+          <p className="text-status-critical text-sm font-medium mb-1">Error</p>
+          <p className="text-status-critical/80 text-sm">{error}</p>
+          <Button
             onClick={handleGenerate}
-            className="mt-3 px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors"
+            size="sm"
+            className="mt-3 bg-status-critical hover:bg-status-critical/90"
           >
             Try Again
-          </button>
+          </Button>
         </div>
       )}
     </div>

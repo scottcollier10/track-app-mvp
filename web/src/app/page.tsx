@@ -1,6 +1,10 @@
 import { createServerClient } from '@/lib/supabase/client';
 import { formatDate, formatLapTime } from '@/lib/utils/formatters';
 import Link from 'next/link';
+import { Gauge, BarChart3, Flag, RefreshCcw, ArrowRight, MapPin } from 'lucide-react';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,137 +54,137 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <h1 className="text-2xl md:text-3xl font-semibold text-primary">Dashboard</h1>
+        <p className="text-muted mt-2 text-sm md:text-base">
           Welcome to Track App coaching dashboard
         </p>
       </div>
 
       {/* Last Session Card */}
       {lastSession ? (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg shadow-md p-8 border-2 border-blue-200 dark:border-blue-900">
-          <div className="flex justify-between items-start mb-4">
+        <Card className="bg-gradient-to-br from-accent-primarySoft to-surface border-accent-primary/30">
+          <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-4">
             <div>
-              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
-                LAST SESSION
+              <p className="text-xs md:text-sm font-medium text-accent-primary mb-2 uppercase tracking-wide">
+                Last Session
               </p>
-              <h2 className="text-2xl font-bold mb-2">
+              <h2 className="text-xl font-semibold text-primary mb-2">
                 {lastSession.track?.name || 'Unknown Track'}
               </h2>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-muted text-sm">
                 {lastSession.driver?.name || 'Unknown Driver'} • {formatDate(lastSession.date)}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-left md:text-right">
               {lastSession.best_lap_ms && (
-                <div className="text-3xl font-mono font-bold text-green-600 dark:text-green-400">
+                <div className="text-2xl md:text-3xl font-mono font-semibold text-status-success">
                   {formatLapTime(lastSession.best_lap_ms)}
                 </div>
               )}
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-xs md:text-sm text-muted mt-1">
                 Best Lap
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+              <p className="text-xs text-text-subtle mt-1">
                 {lastSessionLapCount} laps
               </p>
             </div>
           </div>
-          <Link
-            href={`/sessions/${lastSession.id}`}
-            className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-lg transition-colors"
-          >
-            View Session →
+          <Link href={`/sessions/${lastSession.id}`}>
+            <Button icon={ArrowRight} iconPosition="right">
+              View Session
+            </Button>
           </Link>
-        </div>
+        </Card>
       ) : (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
-          <div className="text-5xl mb-4">🏁</div>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
+        <Card className="text-center py-8 md:py-12">
+          <Flag className="w-12 h-12 text-muted mx-auto mb-4" />
+          <p className="text-muted text-sm md:text-base">
             No sessions yet. Import your first session from the iOS app.
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Best Lap"
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <MetricCard
+          icon={Gauge}
+          label="Best Lap"
           value={bestLapMs ? formatLapTime(bestLapMs) : '--'}
-          icon="⚡"
-          isTime
+          highlight
         />
-        <StatCard
-          title="Total Sessions"
+        <MetricCard
+          icon={BarChart3}
+          label="Total Sessions"
           value={sessions.length}
-          icon="📊"
         />
-        <StatCard
-          title="Tracks Visited"
+        <MetricCard
+          icon={Flag}
+          label="Tracks Visited"
           value={totalTracks || 0}
-          icon="🏁"
         />
-        <StatCard
-          title="Total Laps"
+        <MetricCard
+          icon={RefreshCcw}
+          label="Total Laps"
           value={totalLaps || 0}
-          icon="🔄"
         />
       </div>
 
       {/* Recent Sessions Table */}
       <div>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">Recent Sessions</h2>
+          <h2 className="text-xl font-semibold text-primary">Recent Sessions</h2>
           <Link
             href="/sessions"
-            className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
+            className="text-accent-primary hover:text-accent-primary/80 text-sm font-medium flex items-center gap-1"
           >
-            View all →
+            View all
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
         {recentSessions.length > 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <Card noPadding className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900">
+                <thead className="bg-surfaceAlt">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wide">
                       Date
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 md:px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wide">
                       Track
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 md:px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wide">
                       Best Lap
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 md:px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wide">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-subtle">
                   {recentSessions.map((session: any) => (
-                    <tr key={session.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <tr key={session.id} className="hover:bg-surfaceAlt/50 transition-colors">
+                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-muted">
                         {formatDate(session.date)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium">
+                      <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-primary">
                           {session.track?.name || 'Unknown Track'}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className="text-xs text-text-subtle">
                           {session.driver?.name || 'Unknown Driver'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-sm font-semibold text-green-600 dark:text-green-400">
+                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right font-mono text-sm font-semibold text-status-success">
                         {session.best_lap_ms ? formatLapTime(session.best_lap_ms) : '--'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right">
                         <Link
                           href={`/sessions/${session.id}`}
-                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
+                          className="text-accent-primary hover:text-accent-primary/80 text-sm font-medium"
                         >
-                          View →
+                          View
                         </Link>
                       </td>
                     </tr>
@@ -188,40 +192,14 @@ export default async function DashboardPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         ) : (
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
-            <p className="text-gray-600 dark:text-gray-400">
+          <Card className="text-center py-8 md:py-12">
+            <p className="text-muted text-sm md:text-base">
               No sessions yet. Import a session from the iOS app to get started.
             </p>
-          </div>
+          </Card>
         )}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  icon,
-  isTime = false,
-}: {
-  title: string;
-  value: number | string;
-  icon: string;
-  isTime?: boolean;
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-      <div className="flex items-center gap-4">
-        <div className="text-4xl">{icon}</div>
-        <div className="flex-1">
-          <div className={`text-2xl font-bold ${isTime ? 'font-mono' : ''}`}>
-            {value}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">{title}</div>
-        </div>
       </div>
     </div>
   );

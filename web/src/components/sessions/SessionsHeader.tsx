@@ -2,6 +2,8 @@
 
 import SessionsSubtitle from '@/components/ui/SessionsSubtitle';
 import { exportSessionsToCSV } from '@/lib/csv-export';
+import { Button } from '@/components/ui/Button';
+import { Download } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -31,19 +33,20 @@ export default function SessionsHeader({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-bold">Sessions</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-primary">Sessions</h1>
         <SessionsSubtitle
           totalSessions={totalSessions}
           uniqueDrivers={uniqueDrivers}
         />
       </div>
-      <button
+      <Button
         onClick={handleExport}
         disabled={sessions.length === 0}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors text-white font-medium"
+        icon={Download}
+        variant="primary"
       >
         Export to CSV
-      </button>
+      </Button>
     </div>
   );
 }

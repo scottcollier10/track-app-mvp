@@ -4,6 +4,7 @@ import "./globals.css";
 import Link from "next/link";
 import CoachViewToggle from "@/components/ui/CoachViewToggle";
 import { CoachViewProvider } from "@/context/coach-view";
+import { Flag } from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,31 +22,32 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <CoachViewProvider>
-          <div className="min-h-screen flex flex-col">
+          <div className="min-h-screen flex flex-col bg-app">
             {/* Header */}
-            <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950">
-              <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <header className="sticky top-0 z-40 border-b border-subtle bg-surface">
+              <nav className="max-w-6xl mx-auto px-4 md:px-8">
                 <div className="flex justify-between h-16 items-center">
                   <div className="flex items-center gap-8">
-                    <Link href="/" className="text-xl font-bold">
-                      🏁 Track App
+                    <Link href="/" className="text-xl font-semibold text-primary flex items-center gap-2">
+                      <Flag className="w-5 h-5 text-accent-primary" />
+                      <span>Track App</span>
                     </Link>
                     <div className="hidden md:flex gap-6">
                       <Link
                         href="/sessions"
-                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                        className="text-muted hover:text-primary transition-colors"
                       >
                         Sessions
                       </Link>
                       <Link
                         href="/tracks"
-                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                        className="text-muted hover:text-primary transition-colors"
                       >
                         Tracks
                       </Link>
                       <Link
                         href="/profile"
-                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                        className="text-muted hover:text-primary transition-colors"
                       >
                         Profile
                       </Link>
@@ -59,14 +61,14 @@ export default function RootLayout({
             </header>
 
             {/* Main */}
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-8 py-6 md:py-8">
               {children}
             </main>
 
             {/* Footer */}
-            <footer className="border-t border-gray-200 dark:border-gray-800 mt-auto">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                <p className="text-center text-sm text-gray-500">
+            <footer className="border-t border-subtle mt-auto">
+              <div className="max-w-6xl mx-auto px-4 md:px-8 py-6">
+                <p className="text-center text-sm text-text-subtle">
                   Track App MVP - Coaching Dashboard
                 </p>
               </div>
