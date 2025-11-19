@@ -8,6 +8,28 @@
 import SwiftUI
 
 struct HomeView: View {
+    var body: some View {
+        TabView {
+            HomeTabView()
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+
+            SessionsListView()
+                .tabItem {
+                    Label("Sessions", systemImage: "list.bullet")
+                }
+
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person.fill")
+                }
+        }
+    }
+}
+
+// MARK: - Home Tab View
+struct HomeTabView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingTrackSelection = false
     @State private var selectedSession: Session?
