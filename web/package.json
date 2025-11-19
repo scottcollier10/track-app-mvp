@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "seed": "tsx scripts/seed.ts",
+    "seed:small": "tsx scripts/seed.ts --size=small",
+    "seed:medium": "tsx scripts/seed.ts --size=medium --clear",
+    "seed:large": "tsx scripts/seed.ts --size=large --clear"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
@@ -34,6 +38,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.20.6",
     "typescript": "^5.3.3"
   }
 }
