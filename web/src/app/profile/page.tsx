@@ -123,15 +123,15 @@ export default async function ProfilePage() {
         </div>
       </div>
 
+      {/* Driver Statistics */}
+      <DriverStats driverId={driver.id} />
+
       {/* Profile Form */}
       <ProfileForm
         driverId={driver.id}
         initialExperienceLevel={profile.experience_level}
         totalSessions={profile.total_sessions}
       />
-
-      {/* Driver Statistics */}
-      <DriverStats driverId={driver.id} />
     </div>
   );
 }
