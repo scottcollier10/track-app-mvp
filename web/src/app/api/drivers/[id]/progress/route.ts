@@ -32,6 +32,23 @@ interface ProgressResponse {
   overallStats: OverallStats;
 }
 
+// Supabase query result types
+interface SessionWithTrack {
+  id: string;
+  track_id: string;
+  date: string;
+  best_lap_ms: number | null;
+  tracks: {
+    id: string;
+    name: string;
+    location: string | null;
+  } | null;
+}
+
+interface LapRecord {
+  session_id: string;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -41,7 +58,7 @@ export async function GET(
     const supabase = createServerClient();
 
     // Fetch all sessions for this driver with track info
-    const { data: sessions, error: sessionsError } = await supabase
+    const { data: sessions, error: sessionsError } = (await supabase
       .from('sessions')
       .select(`
         id,
@@ -55,7 +72,10 @@ export async function GET(
         )
       `)
       .eq('driver_id', driverId)
-      .order('date', { ascending: true });
+      .order('date', { ascending: true })) as {
+      data: SessionWithTrack[] | null;
+      error: { message: string } | null;
+    };
 
     if (sessionsError) {
       return NextResponse.json(
@@ -77,15 +97,14 @@ export async function GET(
     }
 
     // Get lap counts for all sessions
-    // Get lap counts for all sessions
     const sessionIds = sessions.map((s) => s.id);
-    const lapQuery = await supabase
+    const { data: lapCounts, error: lapError } = (await supabase
       .from('laps')
       .select('session_id')
-      .in('session_id', sessionIds);
-    
-    const lapCounts = lapQuery.data as { session_id: string }[] | null;
-    const lapError = lapQuery.error;
+      .in('session_id', sessionIds)) as {
+      data: LapRecord[] | null;
+      error: { message: string } | null;
+    };
 
     if (lapError) {
       return NextResponse.json({ error: lapError.message }, { status: 500 });
@@ -113,11 +132,9 @@ export async function GET(
 
     sessions.forEach((session) => {
       const trackId = session.track_id;
-      const track = session.tracks as unknown as {
-        id: string;
-        name: string;
-        location: string | null;
-      };
+      const track = session.tracks;
+
+      if (!track) return; // Skip if track info is missing
 
       if (!trackSessionsMap[trackId]) {
         trackSessionsMap[trackId] = {
