@@ -2,6 +2,8 @@ import { createServerClient } from '@/lib/supabase/client';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
 import ProfileForm from './ProfileForm';
 import DriverStats from '@/components/profile/DriverStats';
+import { Card } from '@/components/ui/Card';
+import { User, Mail } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,19 +22,19 @@ export default async function ProfilePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Driver Profile</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <h1 className="text-3xl font-bold text-slate-100">Driver Profile</h1>
+          <p className="text-slate-400 mt-2 leading-relaxed">
             Manage your driver profile and preferences
           </p>
         </div>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-          <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+        <Card className="bg-red-900/20 border-red-800/50">
+          <h3 className="text-red-200 font-semibold mb-2">
             Error Loading Profile
           </h3>
-          <p className="text-red-700 dark:text-red-300 text-sm">
+          <p className="text-red-300 text-sm leading-relaxed">
             {driversError?.message || 'No drivers found in database.'}
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -60,19 +62,19 @@ export default async function ProfilePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Driver Profile</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <h1 className="text-3xl font-bold text-slate-100">Driver Profile</h1>
+          <p className="text-slate-400 mt-2 leading-relaxed">
             Manage your driver profile and preferences
           </p>
         </div>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-          <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+        <Card className="bg-red-900/20 border-red-800/50">
+          <h3 className="text-red-200 font-semibold mb-2">
             Error Loading Profile
           </h3>
-          <p className="text-red-700 dark:text-red-300 text-sm">
+          <p className="text-red-300 text-sm leading-relaxed">
             {profileError.message}
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -81,19 +83,19 @@ export default async function ProfilePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Driver Profile</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <h1 className="text-3xl font-bold text-slate-100">Driver Profile</h1>
+          <p className="text-slate-400 mt-2 leading-relaxed">
             Manage your driver profile and preferences
           </p>
         </div>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-          <h3 className="text-yellow-900 dark:text-yellow-200 font-semibold mb-2">
+        <Card className="bg-amber-900/20 border-amber-800/50">
+          <h3 className="text-amber-200 font-semibold mb-2">
             Profile Not Found
           </h3>
-          <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+          <p className="text-amber-300 text-sm leading-relaxed">
             Unable to load or create driver profile.
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -102,26 +104,32 @@ export default async function ProfilePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Driver Profile</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <h1 className="text-3xl font-bold text-slate-100">Driver Profile</h1>
+        <p className="text-slate-400 mt-2 leading-relaxed">
           Manage your driver profile and preferences
         </p>
       </div>
 
       {/* Driver Info Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-xl font-semibold mb-4">Driver Information</h2>
-        <div className="space-y-3">
-          <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Name</span>
-            <p className="text-lg font-medium">{driver.name}</p>
+      <Card>
+        <h2 className="text-xl font-semibold text-slate-100 mb-4">Driver Information</h2>
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <User className="w-5 h-5 text-blue-500 mt-0.5" />
+            <div>
+              <span className="text-xs uppercase tracking-wide text-slate-400 font-medium">Name</span>
+              <p className="text-lg font-medium text-slate-100">{driver.name}</p>
+            </div>
           </div>
-          <div>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Email</span>
-            <p className="text-lg">{driver.email}</p>
+          <div className="flex items-start gap-3">
+            <Mail className="w-5 h-5 text-blue-500 mt-0.5" />
+            <div>
+              <span className="text-xs uppercase tracking-wide text-slate-400 font-medium">Email</span>
+              <p className="text-lg text-slate-200">{driver.email}</p>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Driver Statistics */}
       <DriverStats driverId={driver.id} />

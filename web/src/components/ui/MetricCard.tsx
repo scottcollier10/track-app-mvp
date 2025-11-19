@@ -16,9 +16,9 @@ interface MetricCardProps {
 }
 
 const trendConfig: Record<TrendDirection, { icon: LucideIcon; color: string }> = {
-  up: { icon: TrendingUp, color: 'text-status-success' },
-  down: { icon: TrendingDown, color: 'text-status-critical' },
-  neutral: { icon: Minus, color: 'text-muted' },
+  up: { icon: TrendingUp, color: 'text-emerald-500' },
+  down: { icon: TrendingDown, color: 'text-red-500' },
+  neutral: { icon: Minus, color: 'text-slate-400' },
 };
 
 function MetricCard({
@@ -32,18 +32,18 @@ function MetricCard({
   const TrendIcon = trend ? trendConfig[trend.direction].icon : null;
 
   return (
-    <div className="bg-surface border border-subtle rounded-xl p-4 md:p-6">
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4 md:p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-accent-secondary" />
-        <span className="text-xs md:text-sm uppercase tracking-wide text-muted">
+        <Icon className="w-4 h-4 text-blue-500" />
+        <span className="text-xs md:text-sm uppercase tracking-wide text-slate-400 font-medium">
           {label}
         </span>
       </div>
 
       <div className="flex items-baseline gap-2">
         <span
-          className={`text-2xl md:text-3xl font-semibold font-mono ${
-            highlight ? 'text-status-success' : 'text-primary'
+          className={`text-2xl md:text-3xl font-semibold tabular-nums ${
+            highlight ? 'text-emerald-500' : 'text-slate-100'
           }`}
         >
           {value}
@@ -58,7 +58,7 @@ function MetricCard({
       </div>
 
       {description && (
-        <p className="mt-2 text-xs md:text-sm text-muted">
+        <p className="mt-2 text-xs md:text-sm text-slate-400 leading-relaxed">
           {description}
         </p>
       )}

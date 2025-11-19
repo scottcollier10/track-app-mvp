@@ -7,16 +7,16 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  info: 'bg-status-info/20 text-status-info border-status-info/30',
-  success: 'bg-status-success/20 text-status-success border-status-success/30',
-  warn: 'bg-status-warn/20 text-status-warn border-status-warn/30',
-  critical: 'bg-status-critical/20 text-status-critical border-status-critical/30',
-  neutral: 'bg-subtle text-muted border-strong',
+  info: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  success: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  warn: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+  neutral: 'bg-slate-700/50 text-slate-300 border-slate-600/50',
 };
 
 const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
   ({ variant = 'neutral', className = '', children, ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border';
+    const baseStyles = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border';
 
     return (
       <span

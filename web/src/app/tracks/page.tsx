@@ -1,6 +1,8 @@
 import { getTracks } from '@/data/tracks';
 import { getAllSessions } from '@/data/sessions';
 import Link from 'next/link';
+import { Card } from '@/components/ui/Card';
+import { Flag, MapPin, Ruler } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,15 +14,15 @@ export default async function TracksPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Tracks</h1>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-          <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+        <h1 className="text-3xl font-bold text-slate-100">Tracks</h1>
+        <Card className="bg-red-900/20 border-red-800/50">
+          <h3 className="text-red-200 font-semibold mb-2">
             Error Loading Tracks
           </h3>
-          <p className="text-red-700 dark:text-red-300 text-sm">
+          <p className="text-red-300 text-sm leading-relaxed">
             {error.message || 'Failed to load tracks.'}
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -37,8 +39,8 @@ export default async function TracksPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">Tracks</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <h1 className="text-3xl font-bold text-slate-100">Tracks</h1>
+        <p className="text-slate-400 mt-2 leading-relaxed">
           Racing circuits and configurations
         </p>
       </div>
@@ -52,49 +54,53 @@ export default async function TracksPage() {
               <Link
                 key={track.id}
                 href={`/tracks/${track.id}`}
-                className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                className="block"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{track.name}</h3>
-                    {track.config && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {track.config}
-                      </p>
-                    )}
+                <Card hover className="h-full">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-slate-100">{track.name}</h3>
+                      {track.config && (
+                        <p className="text-sm text-slate-400 mt-1">
+                          {track.config}
+                        </p>
+                      )}
+                    </div>
+                    <Flag className="w-5 h-5 text-blue-500 ml-2 flex-shrink-0" />
                   </div>
-                  <span className="text-2xl ml-2">🏁</span>
-                </div>
 
-                {track.location && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    📍 {track.location}
-                  </p>
-                )}
+                  {track.location && (
+                    <p className="text-sm text-slate-400 mb-2 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      {track.location}
+                    </p>
+                  )}
 
-                {track.length_meters && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    📏 {(track.length_meters / 1000).toFixed(2)} km
-                  </p>
-                )}
+                  {track.length_meters && (
+                    <p className="text-sm text-slate-400 mb-2 flex items-center gap-2">
+                      <Ruler className="w-4 h-4" />
+                      {(track.length_meters / 1000).toFixed(2)} km
+                    </p>
+                  )}
 
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
-                  </p>
-                </div>
+                  <div className="mt-3 pt-3 border-t border-slate-700/50">
+                    <p className="text-sm font-medium text-slate-300">
+                      {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
+                    </p>
+                  </div>
+                </Card>
               </Link>
             );
           })}
         </div>
       ) : (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
-          <div className="text-5xl mb-4">🏁</div>
-          <h3 className="text-lg font-semibold mb-2">No Tracks Available</h3>
-          <p className="text-gray-600 dark:text-gray-400">
+        <Card className="text-center py-12">
+          <Flag className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-100 mb-2">No Tracks Available</h3>
+          <p className="text-slate-400 leading-relaxed">
             Demo data unavailable. Add tracks via the database to get started.
           </p>
-        </div>
+        </Card>
       )}
     </div>
   );

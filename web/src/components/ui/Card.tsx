@@ -3,14 +3,16 @@ import { LucideIcon } from 'lucide-react';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   noPadding?: boolean;
+  hover?: boolean;
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className = '', noPadding = false, children, ...props }, ref) => {
+  ({ className = '', noPadding = false, hover = false, children, ...props }, ref) => {
+    const hoverStyles = hover ? 'hover:border-slate-600 hover:shadow-md cursor-pointer' : '';
     return (
       <div
         ref={ref}
-        className={`bg-surface border border-subtle rounded-xl ${noPadding ? '' : 'p-4 md:p-6'} ${className}`}
+        className={`bg-slate-800/50 border border-slate-700/50 rounded-lg shadow-sm transition-all duration-200 ${noPadding ? '' : 'p-4 md:p-6'} ${hoverStyles} ${className}`}
         {...props}
       >
         {children}
@@ -28,7 +30,7 @@ interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
-  ({ className = '', icon: Icon, iconColor = 'text-accent-primary', action, children, ...props }, ref) => {
+  ({ className = '', icon: Icon, iconColor = 'text-blue-500', action, children, ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -54,7 +56,7 @@ const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(
     return (
       <h3
         ref={ref}
-        className={`text-base font-medium text-primary ${className}`}
+        className={`text-base font-semibold text-slate-100 ${className}`}
         {...props}
       >
         {children}
@@ -72,7 +74,7 @@ const CardDescription = forwardRef<HTMLParagraphElement, CardDescriptionProps>(
     return (
       <p
         ref={ref}
-        className={`text-sm text-muted ${className}`}
+        className={`text-sm text-slate-400 leading-relaxed ${className}`}
         {...props}
       >
         {children}
@@ -108,7 +110,7 @@ const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
     return (
       <div
         ref={ref}
-        className={`mt-4 pt-4 border-t border-subtle ${className}`}
+        className={`mt-4 pt-4 border-t border-slate-700/50 ${className}`}
         {...props}
       >
         {children}

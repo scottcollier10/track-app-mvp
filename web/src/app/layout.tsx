@@ -22,32 +22,32 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <CoachViewProvider>
-          <div className="min-h-screen flex flex-col bg-app">
+          <div className="min-h-screen flex flex-col bg-slate-900">
             {/* Header */}
-            <header className="sticky top-0 z-40 border-b border-subtle bg-surface">
+            <header className="sticky top-0 z-40 border-b border-slate-700/50 bg-slate-800/95 backdrop-blur-sm">
               <nav className="max-w-6xl mx-auto px-4 md:px-8">
                 <div className="flex justify-between h-16 items-center">
                   <div className="flex items-center gap-8">
-                    <Link href="/" className="text-xl font-semibold text-primary flex items-center gap-2">
-                      <Flag className="w-5 h-5 text-accent-primary" />
+                    <Link href="/" className="text-xl font-semibold text-slate-100 flex items-center gap-2">
+                      <Flag className="w-5 h-5 text-blue-500" />
                       <span>Track App</span>
                     </Link>
                     <div className="hidden md:flex gap-6">
                       <Link
                         href="/sessions"
-                        className="text-muted hover:text-primary transition-colors"
+                        className="text-slate-400 hover:text-slate-100 transition-colors duration-200"
                       >
                         Sessions
                       </Link>
                       <Link
                         href="/tracks"
-                        className="text-muted hover:text-primary transition-colors"
+                        className="text-slate-400 hover:text-slate-100 transition-colors duration-200"
                       >
                         Tracks
                       </Link>
                       <Link
                         href="/profile"
-                        className="text-muted hover:text-primary transition-colors"
+                        className="text-slate-400 hover:text-slate-100 transition-colors duration-200"
                       >
                         Profile
                       </Link>
@@ -66,9 +66,9 @@ export default function RootLayout({
             </main>
 
             {/* Footer */}
-            <footer className="border-t border-subtle mt-auto">
+            <footer className="border-t border-slate-700/50 mt-auto">
               <div className="max-w-6xl mx-auto px-4 md:px-8 py-6">
-                <p className="text-center text-sm text-text-subtle">
+                <p className="text-center text-sm text-slate-500">
                   Track App MVP - Coaching Dashboard
                 </p>
               </div>

@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { LucideIcon } from 'lucide-react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,9 +13,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-accent-primary hover:bg-accent-primary/90 text-white border-transparent',
-  secondary: 'bg-transparent hover:bg-surface border-subtle hover:border-strong text-primary',
-  ghost: 'bg-transparent hover:bg-surface border-transparent text-muted hover:text-primary',
+  primary: 'bg-blue-600 hover:bg-blue-700 text-white border-transparent shadow-sm',
+  secondary: 'bg-slate-700 hover:bg-slate-600 border-slate-600 hover:border-slate-500 text-slate-100',
+  ghost: 'bg-transparent hover:bg-slate-700/50 border-transparent text-slate-300 hover:text-slate-100',
+  destructive: 'bg-red-600 hover:bg-red-700 text-white border-transparent shadow-sm',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -45,7 +46,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary/50 disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed';
 
     return (
       <button
