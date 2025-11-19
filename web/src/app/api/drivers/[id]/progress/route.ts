@@ -77,13 +77,15 @@ export async function GET(
     }
 
     // Get lap counts for all sessions
-    const { data: lapCounts, error: lapError } = await supabase
+    // Get lap counts for all sessions
+    const sessionIds = sessions.map((s) => s.id);
+    const lapQuery = await supabase
       .from('laps')
       .select('session_id')
-      .in('session_id', sessionIds) as { 
-        data: { session_id: string }[] | null; 
-        error: any 
-      };
+      .in('session_id', sessionIds);
+    
+    const lapCounts = lapQuery.data as { session_id: string }[] | null;
+    const lapError = lapQuery.error;
 
     if (lapError) {
       return NextResponse.json({ error: lapError.message }, { status: 500 });
