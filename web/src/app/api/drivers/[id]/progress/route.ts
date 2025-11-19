@@ -32,6 +32,18 @@ interface ProgressResponse {
   overallStats: OverallStats;
 }
 
+interface SessionWithTrack {
+  id: string;
+  track_id: string;
+  date: string;
+  best_lap_ms: number | null;
+  tracks: {
+    id: string;
+    name: string;
+    location: string | null;
+  } | null;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
