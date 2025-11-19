@@ -41,21 +41,24 @@ export async function GET(
     const supabase = createServerClient();
 
     // Fetch all sessions for this driver with track info
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('sessions')
-      .select(`
-        id,
-        track_id,
-        date,
-        best_lap_ms,
-        tracks (
-          id,
-          name,
-          location
-        )
-      `)
-      .eq('driver_id', driverId)
-      .order('date', { ascending: true });
+    const sessionsQuery = await supabase
+  .from('sessions')
+  .select(`
+    id,
+    track_id,
+    date,
+    best_lap_ms,
+    tracks (
+      id,
+      name,
+      location
+    )
+  `)
+  .eq('driver_id', driverId)
+  .order('date', { ascending: true });
+
+const sessions = sessionsQuery.data as SessionWithTrack[] | null;
+const sessionsError = sessionsQuery.error;
 
     if (sessionsError) {
       return NextResponse.json(
