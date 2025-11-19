@@ -4,8 +4,12 @@
  * Generates realistic demo data for Track App
  * Idempotent - can be run multiple times without creating duplicates
  */
-
+import { config } from 'dotenv';
+import { resolve } from 'path';
+// Load .env.local from web directory
+config({ path: resolve(__dirname, '../../../.env.local') });
 import { createServerClient } from '@/lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/types/database';
 import {
   SEED_TRACKS,
@@ -76,7 +80,10 @@ export async function seedDatabase(options: SeedOptions): Promise<SeedResult> {
 
   console.log(`\n🌱 Starting database seed (${size} dataset)...`);
 
-  const supabase = createServerClient();
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
   // Clear existing data if requested
   if (clearExisting) {
