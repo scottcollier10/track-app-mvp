@@ -13,12 +13,10 @@ struct SessionSummaryView: View {
     @State private var driverEmail = ""
     @Environment(\.dismiss) private var dismiss
 
-    var onDone: (() -> Void)?   // keep this
-
-    init(session: Session, track: Track?, onDone: (() -> Void)? = nil) {
+    init(session: Session, track: Track?) {
         _viewModel = State(initialValue: SessionSummaryViewModel(session: session, track: track))
-        self.onDone = onDone
     }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -194,9 +192,38 @@ struct SessionSummaryView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Shareable Text
+    private var shareableText: String {
+        var text = ""
+        text += "\(viewModel.track?.name ?? "Track") Session\n"
+        text += "\(TimeFormatter.formatSessionDate(viewModel.session.date))\n\n"
+        text += "Summary:\n"
+        text += "Total Time: \(viewModel.session.formattedTotalTime)\n"
+        text += "Best Lap: \(viewModel.session.formattedBestLap ?? "--:--")\n"
+        text += "Laps: \(viewModel.session.lapCount)\n\n"
+        text += "Lap Times:\n"
+        for lap in viewModel.session.laps.sorted(by: { $0.lapNumber < $1.lapNumber }) {
+            text += "Lap \(lap.lapNumber): \(lap.formattedTime)\n"
+        }
+        return text
+    }
+
     // MARK: - Actions Section
     private var actionsSection: some View {
         VStack(spacing: 12) {
+            ShareLink(item: shareableText) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Share Session")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.trackBlue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+            }
+
             Button {
                 showingUploadSheet = true
             } label: {
@@ -215,6 +242,7 @@ struct SessionSummaryView: View {
 
             Button {
                 viewModel.saveLocal()
+                dismiss()
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle")

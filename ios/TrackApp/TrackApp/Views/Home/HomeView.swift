@@ -54,7 +54,10 @@ struct HomeTabView: View {
             }
             .navigationTitle("Track App")
             .navigationDestination(item: $selectedTrack) { track in
-                LiveSessionView(track: track)
+                LiveSessionView(track: track) { session in
+                    selectedTrack = nil
+                    selectedSession = session
+                }
             }
             .navigationDestination(item: $selectedSession) { session in
                 SessionSummaryView(session: session, track: viewModel.track(for: session))

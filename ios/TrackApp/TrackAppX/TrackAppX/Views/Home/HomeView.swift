@@ -8,57 +8,87 @@
 import SwiftUI
 
 struct HomeView: View {
+    var body: some View {
+        TabView {
+            HomeTabView()
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+
+            SessionsListView()
+                .tabItem {
+                    Label("Sessions", systemImage: "list.bullet")
+                }
+
+            ProfileView()
+                .tabItem {
+                    Label("Profile", systemImage: "person.fill")
+                }
+        }
+    }
+}
+
+// MARK: - Home Tab View
+struct HomeTabView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showingTrackSelection = false
-    @State private var selectedTrackForNewSession: Track?   // <- used to push Live
-    @State private var selectedSession: Session?            // <- used to push Summary
+    @State private var selectedSession: Session?
+    @State private var selectedTrack: Track?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // Header
                     headerSection
+
+                    // Start Session Button
                     startSessionButton
-                    if !viewModel.recentSessions.isEmpty { recentSessionsSection }
+
+                    // Recent Sessions
+                    if !viewModel.recentSessions.isEmpty {
+                        recentSessionsSection
+                    }
                 }
                 .padding()
             }
             .navigationTitle("Track App")
-            .onAppear { viewModel.loadData() }
-
-            // 1) Select track in a sheet
-            .sheet(isPresented: $showingTrackSelection) {
-                TrackSelectionView { track in
-                    // set and let the destination push
-                    selectedTrackForNewSession = track
-                    showingTrackSelection = false
+            .navigationDestination(item: $selectedTrack) { track in
+                LiveSessionView(track: track) { session in
+                    selectedTrack = nil
+                    selectedSession = session
                 }
             }
-
-            // 2) Destination when a track was picked
-            .navigationDestination(item: $selectedTrackForNewSession) { track in
-                LiveSessionView(track: track)
-            }
-
-            // 3) Destination for tapping a recent session
             .navigationDestination(item: $selectedSession) { session in
-                SessionSummaryView(
-                    session: session,
-                    track: viewModel.track(for: session)
-                )
+                SessionSummaryView(session: session, track: viewModel.track(for: session))
             }
-
-            // 4) Error surface (uses clearError() you added)
-            .alert(
-                "Error",
-                isPresented: Binding(
-                    get: { viewModel.errorMessage != nil },
-                    set: { if !$0 { viewModel.clearError() } }
-                )
-            ) {
-                Button("OK") { viewModel.clearError() }
+            .onAppear {
+                viewModel.loadData()
+            }
+            .onChange(of: selectedTrack) { _, newValue in
+                if newValue == nil {
+                    viewModel.loadData()
+                }
+            }
+            .onChange(of: selectedSession) { _, newValue in
+                if newValue == nil {
+                    viewModel.loadData()
+                }
+            }
+            .sheet(isPresented: $showingTrackSelection) {
+                TrackSelectionView { track in
+                    showingTrackSelection = false
+                    selectedTrack = track
+                }
+            }
+            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("OK") {
+                    // Clear error
+                }
             } message: {
-                Text(viewModel.errorMessage ?? "")
+                if let error = viewModel.errorMessage {
+                    Text(error)
+                }
             }
         }
     }
@@ -84,8 +114,10 @@ struct HomeView: View {
             showingTrackSelection = true
         } label: {
             HStack {
-                Image(systemName: "play.circle.fill").font(.title2)
-                Text("Start Session").font(.headline)
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                Text("Start Session")
+                    .font(.headline)
             }
             .frame(maxWidth: .infinity)
             .padding()
