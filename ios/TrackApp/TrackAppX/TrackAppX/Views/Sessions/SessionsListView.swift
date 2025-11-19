@@ -136,40 +136,28 @@ class SessionsListViewModel {
     var errorMessage: String?
 
     private let persistence: PersistenceService
-    private let apiService: APIService
 
-    init(
-        persistence: PersistenceService = FileManagerPersistence(),
-        apiService: APIService = APIService()
-    ) {
+    init(persistence: PersistenceService = FileManagerPersistence()) {
         self.persistence = persistence
-        self.apiService = apiService
     }
 
     func loadData() {
         isLoading = true
         errorMessage = nil
 
-        Task {
-            do {
-                // Fetch tracks from API or cache
-                let fetchedTracks = try? await apiService.fetchTracks()
-                let tracksToUse = fetchedTracks ?? (try? persistence.loadTracks()) ?? []
+        do {
+            // Load tracks from local storage
+            let loadedTracks = try persistence.loadTracks()
 
-                // Load all sessions
-                let allSessions = try persistence.loadSessions()
+            // Load all sessions
+            let allSessions = try persistence.loadSessions()
 
-                await MainActor.run {
-                    self.tracks = tracksToUse
-                    self.sessions = allSessions.sorted { $0.date > $1.date }
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = "Failed to load sessions: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
-            }
+            self.tracks = loadedTracks
+            self.sessions = allSessions.sorted { $0.date > $1.date }
+            self.isLoading = false
+        } catch {
+            self.errorMessage = "Failed to load sessions: \(error.localizedDescription)"
+            self.isLoading = false
         }
     }
 
