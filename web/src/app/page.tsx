@@ -62,7 +62,7 @@ export default async function DashboardPage() {
 
       {/* Last Session Card */}
       {lastSession ? (
-        <Card className="bg-gradient-to-br from-accent-primarySoft to-surface border-accent-primary/30">
+        <Card className="bg-gradient-to-r from-[#7f6f8f] via-[#2e2e78] to-[#1d2328] border-accent-primary/30">
           <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-4">
             <div>
               <p className="text-xs md:text-sm font-medium text-accent-primary mb-2 uppercase tracking-wide">
