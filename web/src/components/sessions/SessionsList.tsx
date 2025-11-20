@@ -18,11 +18,15 @@ interface Session {
   lapCount: number;
 }
 
-export default function SessionsList() {
+interface SessionsListProps {
+  initialFilters?: SessionFilter;
+}
+
+export default function SessionsList({ initialFilters = {} }: SessionsListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [filters, setFilters] = useState<SessionFilter>({});
+  const [filters, setFilters] = useState<SessionFilter>(initialFilters);
   const [sortBy, setSortBy] = useState<SortBy>("date-desc");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
