@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+type SessionWithTrack = {
+  id: string;
+  track_id: string;
+  date: string;
+  best_lap_ms: number | null;
+  tracks: {
+    id: string;
+    name: string;
+    location: string | null;
+  };
+};
+
 interface SessionData {
   sessionId: string;
   date: string;
