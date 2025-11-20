@@ -16,7 +16,36 @@ const config: Config = {
           yellow: "rgb(255, 204, 0)",
           blue: "rgb(51, 153, 255)",
         },
-        // Style guide colors
+        // Winster Hub Design System - Background layers
+        background: {
+          darkest: "#0a0b0f",
+          sidebar: "#13141a",
+          card: "#1a1b23",
+          elevated: "#252633",
+        },
+        // Winster Hub Design System - Primary blue
+        blue: {
+          default: "#5b8af5",
+          dark: "#4a7af7",
+          light: "#6b9aff",
+        },
+        // Winster Hub Design System - Success green
+        green: {
+          default: "#14e092",
+          dark: "#10b981",
+        },
+        // Winster Hub Design System - Error red
+        red: {
+          default: "#ef4444",
+          dark: "#dc2626",
+        },
+        // Winster Hub Design System - Text colors
+        text: {
+          primary: "#ffffff",
+          secondary: "#9ca3af",
+          muted: "#6b7280",
+        },
+        // Legacy style guide colors (kept for backward compatibility)
         app: "#020617",
         surface: "#0B1120",
         surfaceAlt: "#111827",
@@ -37,6 +66,9 @@ const config: Config = {
           warn: "#FACC15",
           critical: "#FB7185",
         },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
     },
   },

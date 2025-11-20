@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import CoachViewToggle from "@/components/ui/CoachViewToggle";
 import { CoachViewProvider } from "@/context/coach-view";
 import { Flag } from "lucide-react";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Track App - Coaching Dashboard",
@@ -20,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className="font-sans">
         <CoachViewProvider>
           <div className="min-h-screen flex flex-col bg-app">
             {/* Header */}
