@@ -65,7 +65,7 @@ export default async function DashboardPage() {
         <Card className="bg-gradient-to-br from-accent-primarySoft to-surface border-accent-primary/30">
           <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-4">
             <div>
-              <p className="text-xs md:text-sm font-medium text-accent-primary mb-2 uppercase tracking-wide">
+              <p className="text-xs md:text-sm font-medium mb-2 uppercase tracking-wide" style={{ color: '#829bfd' }}>
                 Last Session
               </p>
               <h2 className="text-xl font-semibold text-primary mb-2">
@@ -90,7 +90,7 @@ export default async function DashboardPage() {
             </div>
           </div>
           <Link href={`/sessions/${lastSession.id}`}>
-            <Button icon={ArrowRight} iconPosition="right">
+            <Button icon={ArrowRight} iconPosition="right" className="bg-blue-600 hover:bg-blue-700">
               View Session
             </Button>
           </Link>
@@ -135,7 +135,8 @@ export default async function DashboardPage() {
           <h2 className="text-xl font-semibold text-primary">Recent Sessions</h2>
           <Link
             href="/sessions"
-            className="text-accent-primary hover:text-accent-primary/80 text-sm font-medium flex items-center gap-1"
+            className="text-sm font-medium flex items-center gap-1 hover:opacity-80"
+            style={{ color: '#829bfd' }}
           >
             View all
             <ArrowRight className="w-4 h-4" />
@@ -182,7 +183,8 @@ export default async function DashboardPage() {
                       <td className="px-4 md:px-6 py-4 whitespace-nowrap text-right">
                         <Link
                           href={`/sessions/${session.id}`}
-                          className="text-accent-primary hover:text-accent-primary/80 text-sm font-medium"
+                          className="text-sm font-medium hover:opacity-80"
+                          style={{ color: '#829bfd' }}
                         >
                           View
                         </Link>
