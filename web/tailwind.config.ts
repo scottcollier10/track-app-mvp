@@ -37,6 +37,15 @@ const config: Config = {
           warn: "#FACC15",
           critical: "#FB7185",
         },
+        // Landing page colors
+        landing: {
+          bg: "#0a0a0a",
+          text: "#fafafa",
+          green: "#22c55e",
+          blue: "#3b82f6",
+          border: "#27272a",
+          cardBg: "#18181b",
+        },
       },
     },
   },
