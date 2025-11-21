@@ -19,7 +19,22 @@ struct TrackAppXApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            TabView {
+                HomeView()
+                    .tabItem {
+                        Label("Home", systemImage: "house.fill")
+                    }
+
+                SessionsListView()
+                    .tabItem {
+                        Label("Sessions", systemImage: "list.bullet")
+                    }
+
+                ProfileView()
+                    .tabItem {
+                        Label("Profile", systemImage: "person.fill")
+                    }
+            }
         }
     }
 }

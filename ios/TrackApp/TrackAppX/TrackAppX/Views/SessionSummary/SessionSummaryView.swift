@@ -194,9 +194,44 @@ struct SessionSummaryView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Shareable Text
+    private var shareableText: String {
+        var text = ""
+        if let track = viewModel.track {
+            text += "\(track.displayName) Session\n"
+        } else {
+            text += "Track Session\n"
+        }
+        text += "\(TimeFormatter.formatSessionDate(viewModel.session.date))\n\n"
+        text += "Summary:\n"
+        text += "Total Time: \(viewModel.session.formattedTotalTime)\n"
+        text += "Best Lap: \(viewModel.session.formattedBestLap ?? "--:--")\n"
+        text += "Laps: \(viewModel.session.lapCount)\n\n"
+        text += "Lap Times:\n"
+        for lap in viewModel.session.laps.sorted(by: { $0.lapNumber < $1.lapNumber }) {
+            text += "Lap \(lap.lapNumber): \(lap.formattedTime)\n"
+        }
+        return text
+    }
+
     // MARK: - Actions Section
     private var actionsSection: some View {
         VStack(spacing: 12) {
+            // Share Session Button
+            ShareLink(item: shareableText) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Share Session")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.trackBlue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+            }
+
+            // Upload to Dashboard Button
             Button {
                 showingUploadSheet = true
             } label: {
@@ -213,6 +248,7 @@ struct SessionSummaryView: View {
             }
             .disabled(viewModel.isUploading)
 
+            // Done Button
             Button {
                 viewModel.saveLocal()
             } label: {
