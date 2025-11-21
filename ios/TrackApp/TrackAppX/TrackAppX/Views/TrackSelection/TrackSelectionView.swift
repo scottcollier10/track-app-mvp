@@ -65,10 +65,12 @@ struct TrackSelectionView: View {
     // MARK: - Track List
     private var trackList: some View {
         List(viewModel.filteredTracks) { track in
-            TrackRow(track: track)
-                .onTapGesture {
-                    onTrackSelected(track)
-                }
+            Button {
+                onTrackSelected(track)
+            } label: {
+                TrackRow(track: track)
+            }
+            .buttonStyle(.plain)
         }
         .listStyle(.plain)
     }
@@ -118,6 +120,7 @@ struct TrackRow: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle()) // Make entire row tappable
     }
 }
 

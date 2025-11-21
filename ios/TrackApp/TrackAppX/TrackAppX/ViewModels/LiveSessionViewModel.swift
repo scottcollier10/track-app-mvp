@@ -118,6 +118,16 @@ class LiveSessionViewModel {
     func simulateEnterPitLane()   { stateMachine.handle(.enterPitLane) }
     func simulateExitPitLane()    { stateMachine.handle(.exitPitLane) }
 
+    /// End session - saves all data and transitions to End state
+    func endSession() {
+        stateMachine.handle(.manualStop)
+    }
+
+    /// Cancel session - discards data and returns to disarmed state
+    func cancelSession() {
+        stateMachine.handle(.cancel)
+    }
+
     func updateSimulatedSpeed(_ speed: Double) {
         simulatedSpeed = speed
         if speed >= Config.autoStartSpeedThreshold {

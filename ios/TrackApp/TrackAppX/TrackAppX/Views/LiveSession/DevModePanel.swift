@@ -58,8 +58,9 @@ struct DevModePanel: View {
 
                 // Geofence Buttons
                 VStack(spacing: 12) {
+                    // Lap marking button - only marks laps, doesn't end session
                     devButton(
-                        title: "Cross Start/Finish",
+                        title: "Cross Start/Finish (Mark Lap)",
                         systemImage: "flag.checkered",
                         color: .trackGreen
                     ) {
@@ -81,6 +82,30 @@ struct DevModePanel: View {
                             color: .trackBlue
                         ) {
                             viewModel.simulateExitPitLane()
+                        }
+                    }
+
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    // Session control buttons
+                    VStack(spacing: 12) {
+                        // End Session button - saves data and shows summary
+                        devButton(
+                            title: "End Session",
+                            systemImage: "checkmark.circle.fill",
+                            color: .green
+                        ) {
+                            viewModel.endSession()
+                        }
+
+                        // Cancel button - discards data and returns to home
+                        devButton(
+                            title: "Cancel Session",
+                            systemImage: "xmark.circle.fill",
+                            color: .red
+                        ) {
+                            viewModel.cancelSession()
                         }
                     }
                 }

@@ -9,8 +9,11 @@ import Foundation
 
 struct Config {
     // MARK: - API
-    /// Base URL for web API (change for production)
-    static let apiBaseURL = "http://localhost:3000"
+    /// Base URL for web API
+    static let apiBaseURL = "https://trackapp-portal.vercel.app"
+
+    /// Tracks API endpoint
+    static let tracksAPIURL = "\(apiBaseURL)/api/tracks"
 
     // MARK: - Session State Machine
     /// Speed threshold (mph) to auto-start recording
