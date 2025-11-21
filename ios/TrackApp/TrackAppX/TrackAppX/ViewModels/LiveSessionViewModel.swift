@@ -22,6 +22,7 @@ class LiveSessionViewModel {
     // Dev Mode
     var isDevModeEnabled = false
     var simulatedSpeed: Double = 0
+    var shouldDismiss = false
 
     private var timer: Timer?
     private var lapTimer: Timer?
@@ -125,6 +126,24 @@ class LiveSessionViewModel {
         } else if speed < Config.autoStopSpeedThreshold {
             stateMachine.handle(.speedBelowThreshold(mph: speed, duration: 31.0))
         }
+    }
+
+    /// Dev mode: End the session and save data (transition to Ended state)
+    func devModeEndSession() {
+        // Save current session data before ending
+        if case .recording(let session, _, _) = stateMachine.state {
+            try? persistence.saveSession(session)
+        }
+        // Trigger manual stop to end the session
+        stateMachine.handle(.manualStop)
+    }
+
+    /// Dev mode: Cancel the session and discard data (return to disarmed state)
+    func devModeCancelSession() {
+        // Trigger cancel event to discard session and return to disarmed state
+        stateMachine.handle(.cancel)
+        // Signal that the view should dismiss
+        shouldDismiss = true
     }
 
     // MARK: - Computed

@@ -56,10 +56,15 @@ struct DevModePanel: View {
 
                 Divider()
 
-                // Geofence Buttons
-                VStack(spacing: 12) {
+                // Geofence Simulation Buttons
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Geofence Events")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
                     devButton(
-                        title: "Cross Start/Finish",
+                        title: "Cross Start/Finish (Mark Lap)",
                         systemImage: "flag.checkered",
                         color: .trackGreen
                     ) {
@@ -82,6 +87,32 @@ struct DevModePanel: View {
                         ) {
                             viewModel.simulateExitPitLane()
                         }
+                    }
+                }
+
+                Divider()
+
+                // Session Control Buttons
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Session Controls")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    devButton(
+                        title: "End Session (Save & Show Summary)",
+                        systemImage: "checkmark.circle.fill",
+                        color: .green
+                    ) {
+                        viewModel.devModeEndSession()
+                    }
+
+                    devButton(
+                        title: "Cancel Session (Discard & Exit)",
+                        systemImage: "xmark.circle.fill",
+                        color: .red
+                    ) {
+                        viewModel.devModeCancelSession()
                     }
                 }
 

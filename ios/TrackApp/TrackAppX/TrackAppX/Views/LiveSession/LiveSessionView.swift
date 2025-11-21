@@ -71,6 +71,11 @@ struct LiveSessionView: View {
             // Automatically arm the session
             viewModel.stateMachine.handle(.arm(track: track))
         }
+        .onChange(of: viewModel.shouldDismiss) { _, shouldDismiss in
+            if shouldDismiss {
+                dismiss()
+            }
+        }
     }
 
     // MARK: - State Header
