@@ -48,7 +48,11 @@ struct HomeView: View {
             .navigationDestination(item: $completedSession) { session in
                 SessionSummaryView(
                     session: session,
-                    track: viewModel.track(for: session)
+                    track: viewModel.track(for: session),
+                    onDone: {
+                        // Clear the completedSession to allow returning to Home
+                        completedSession = nil
+                    }
                 )
             }
 
@@ -56,7 +60,11 @@ struct HomeView: View {
             .navigationDestination(item: $selectedSession) { session in
                 SessionSummaryView(
                     session: session,
-                    track: viewModel.track(for: session)
+                    track: viewModel.track(for: session),
+                    onDone: {
+                        // Clear the selectedSession to allow returning to Home
+                        selectedSession = nil
+                    }
                 )
             }
 

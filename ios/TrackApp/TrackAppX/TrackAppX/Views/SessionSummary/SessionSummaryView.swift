@@ -228,6 +228,10 @@ struct SessionSummaryView: View {
 
             Button {
                 viewModel.saveLocal()
+                // Call onDone callback if provided (for navigation cleanup)
+                onDone?()
+                // Dismiss the view to return to Home
+                dismiss()
             } label: {
                 HStack {
                     Image(systemName: "checkmark.circle")
