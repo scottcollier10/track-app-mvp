@@ -197,6 +197,19 @@ struct SessionSummaryView: View {
     // MARK: - Actions Section
     private var actionsSection: some View {
         VStack(spacing: 12) {
+            ShareLink(item: shareText) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Share Session")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.trackBlue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+            }
+
             Button {
                 showingUploadSheet = true
             } label: {
@@ -227,6 +240,40 @@ struct SessionSummaryView: View {
                 .cornerRadius(12)
             }
         }
+    }
+
+    // MARK: - Share Content
+    private var shareText: String {
+        var text = ""
+
+        // Header
+        if let track = viewModel.track {
+            text += "\(track.name)\n"
+            if let location = track.location {
+                text += "\(location)\n"
+            }
+        }
+        text += "\(TimeFormatter.formatSessionDateTime(viewModel.session.date))\n\n"
+
+        // Summary Stats
+        text += "📊 Summary\n"
+        text += "Total Time: \(viewModel.session.formattedTotalTime)\n"
+        text += "Best Lap: \(viewModel.session.formattedBestLap ?? "--:--")\n"
+        text += "Laps: \(viewModel.session.lapCount)\n\n"
+
+        // Lap Times
+        text += "🏁 Lap Times\n"
+        for item in viewModel.lapsWithDeltas {
+            let lap = item.lap
+            let delta = item.delta ?? ""
+            text += "Lap \(lap.lapNumber): \(lap.formattedTime)"
+            if !delta.isEmpty {
+                text += " (\(delta))"
+            }
+            text += "\n"
+        }
+
+        return text
     }
 
     // MARK: - Upload Sheet
