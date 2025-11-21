@@ -43,7 +43,9 @@ struct Track: Codable, Identifiable, Hashable {
     }
 }
 
-// MARK: - Sample Data
+// MARK: - Sample Data (Preview Only)
+// NOTE: These samples are ONLY used for SwiftUI previews and testing.
+// Production data is fetched from API: https://trackapp-portal.vercel.app/api/tracks
 extension Track {
     static let samples = [
         Track(

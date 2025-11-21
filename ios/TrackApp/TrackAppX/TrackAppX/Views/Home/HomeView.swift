@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var showingTrackSelection = false
     @State private var selectedTrackForNewSession: Track?   // <- used to push Live
     @State private var selectedSession: Session?            // <- used to push Summary
+    @State private var finishedSession: Session?            // <- used for completed session from LiveSessionView
 
     var body: some View {
         NavigationStack {
@@ -37,10 +38,23 @@ struct HomeView: View {
 
             // 2) Destination when a track was picked
             .navigationDestination(item: $selectedTrackForNewSession) { track in
-                LiveSessionView(track: track)
+                LiveSessionView(track: track) { finishedSession in
+                    // When session ends, navigate to summary
+                    self.finishedSession = finishedSession
+                    // Clear the track selection to allow navigation
+                    selectedTrackForNewSession = nil
+                }
             }
 
-            // 3) Destination for tapping a recent session
+            // 3) Destination for viewing completed session from LiveSessionView
+            .navigationDestination(item: $finishedSession) { session in
+                SessionSummaryView(
+                    session: session,
+                    track: viewModel.track(for: session)
+                )
+            }
+
+            // 4) Destination for tapping a recent session
             .navigationDestination(item: $selectedSession) { session in
                 SessionSummaryView(
                     session: session,
@@ -48,7 +62,7 @@ struct HomeView: View {
                 )
             }
 
-            // 4) Error surface (uses clearError() you added)
+            // 5) Error surface (uses clearError() you added)
             .alert(
                 "Error",
                 isPresented: Binding(

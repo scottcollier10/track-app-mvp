@@ -67,10 +67,8 @@ class FileManagerPersistence: PersistenceService {
         let fileURL = try appDirectory.appendingPathComponent(Config.tracksFilename)
 
         guard fileManager.fileExists(atPath: fileURL.path) else {
-            // If file doesn't exist, initialize with sample tracks
-            let samples = Track.samples
-            try saveTracks(samples)
-            return samples
+            // Return empty array - tracks will be fetched from API
+            return []
         }
 
         let data = try Data(contentsOf: fileURL)
@@ -141,6 +139,15 @@ extension FileManagerPersistence {
     func printAppDirectoryPath() {
         if let path = try? appDirectory.path {
             print("📁 TrackApp data directory: \(path)")
+        }
+    }
+
+    /// Clear cached tracks to force refresh from API
+    func clearTracksCache() throws {
+        let fileURL = try appDirectory.appendingPathComponent(Config.tracksFilename)
+        if fileManager.fileExists(atPath: fileURL.path) {
+            try fileManager.removeItem(at: fileURL)
+            print("🗑️ Cleared tracks cache - will refresh from API on next load")
         }
     }
 
