@@ -67,14 +67,20 @@ class FileManagerPersistence: PersistenceService {
         let fileURL = try appDirectory.appendingPathComponent(Config.tracksFilename)
 
         guard fileManager.fileExists(atPath: fileURL.path) else {
-            // If file doesn't exist, initialize with sample tracks
-            let samples = Track.samples
-            try saveTracks(samples)
-            return samples
+            // If file doesn't exist, return empty array
+            // The view model will fetch from API
+            return []
         }
 
         let data = try Data(contentsOf: fileURL)
         return try decoder.decode([Track].self, from: data)
+    }
+
+    func clearTracksCache() throws {
+        let fileURL = try appDirectory.appendingPathComponent(Config.tracksFilename)
+        if fileManager.fileExists(atPath: fileURL.path) {
+            try fileManager.removeItem(at: fileURL)
+        }
     }
 
     // MARK: - Sessions

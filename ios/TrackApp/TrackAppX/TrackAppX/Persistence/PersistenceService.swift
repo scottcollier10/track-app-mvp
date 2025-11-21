@@ -12,6 +12,7 @@ protocol PersistenceService {
     // MARK: - Tracks
     func saveTracks(_ tracks: [Track]) throws
     func loadTracks() throws -> [Track]
+    func clearTracksCache() throws
 
     // MARK: - Sessions
     func saveSession(_ session: Session) throws
