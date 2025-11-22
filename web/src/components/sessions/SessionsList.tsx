@@ -133,6 +133,7 @@ export default function SessionsList({ initialFilters = {} }: SessionsListProps)
           sessions={sortedSessions}
           totalSessions={totalSessions}
           uniqueDrivers={uniqueDrivers}
+          driverId={filters.driverId}
         />
 
         <Card>
@@ -164,6 +165,7 @@ export default function SessionsList({ initialFilters = {} }: SessionsListProps)
         sessions={sortedSessions}
         totalSessions={totalSessions}
         uniqueDrivers={uniqueDrivers}
+        driverId={filters.driverId}
       />
 
       {/* Filters */}
