@@ -16,7 +16,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      drivers: {
+      coaches: {
         Row: {
           id: string;
           name: string;
@@ -33,6 +33,29 @@ export type Database = {
           id?: string;
           name?: string;
           email?: string;
+          created_at?: string;
+        };
+      };
+      drivers: {
+        Row: {
+          id: string;
+          name: string;
+          email: string;
+          coach_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          email: string;
+          coach_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          email?: string;
+          coach_id?: string | null;
           created_at?: string;
         };
       };
