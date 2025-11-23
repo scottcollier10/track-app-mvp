@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 
 type SessionWithTrack = {
   id: string;
@@ -50,7 +50,7 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const { id: driverId } = await params;
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Fetch all sessions for this driver with track info
     const sessionsQuery = await supabase

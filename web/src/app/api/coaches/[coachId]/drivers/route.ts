@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface DriverWithStats {
   id: string;
@@ -35,7 +35,7 @@ export async function GET(
 ) {
   try {
     const coachId = params.coachId;
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Get coach info
     const { data: coach, error: coachError } = await (supabase

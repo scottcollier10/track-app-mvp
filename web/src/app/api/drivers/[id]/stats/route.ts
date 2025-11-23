@@ -11,7 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface SessionListItem {
   id: string;
@@ -46,7 +46,7 @@ export async function GET(
 ) {
   try {
     const driverId = params.id;
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Get all sessions for this driver
     const { data: sessions, error: sessionsError } = await (supabase

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 import { ImportSessionPayload } from '@/lib/types';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     // Bypass Supabase's strict TS typing for this MVP endpoint
     const db = supabase as any;
 

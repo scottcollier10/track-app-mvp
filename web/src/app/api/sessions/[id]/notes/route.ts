@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {
@@ -18,7 +18,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
 
   try {
     // Accept either coach_notes or notes in the body

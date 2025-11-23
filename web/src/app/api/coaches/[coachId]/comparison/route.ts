@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 
 interface DriverTrackStats {
   driverId: string;
@@ -44,7 +44,7 @@ export async function GET(
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // Verify coach exists
     const { data: coach, error: coachError } = await (supabase

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       sessionId,
     });
 
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
 
     // 3. Fetch session data
     const { data: session, error: sessionError } = await (supabase
