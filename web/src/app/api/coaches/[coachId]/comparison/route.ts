@@ -13,6 +13,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// Disable caching to ensure fresh data on every request
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface DriverTrackStats {
   driverId: string;
   driverName: string;
@@ -105,96 +109,102 @@ export async function GET(
 
     // Build comparison data for each driver-track combination
     for (const driver of drivers) {
-      // Build query for sessions
-      let sessionsQuery = (supabase
-        .from('sessions') as any)
-        .select(`
-          id,
-          date,
-          best_lap_ms,
-          track_id,
-          track:tracks(id, name)
-        `)
-        .eq('driver_id', driver.id);
+      try {
+        // Build query for sessions
+        let sessionsQuery = (supabase
+          .from('sessions') as any)
+          .select(`
+            id,
+            date,
+            best_lap_ms,
+            track_id,
+            track:tracks(id, name)
+          `)
+          .eq('driver_id', driver.id);
 
-      // Apply filters
-      if (trackId) {
-        sessionsQuery = sessionsQuery.eq('track_id', trackId);
-      }
-      if (startDate) {
-        sessionsQuery = sessionsQuery.gte('date', startDate);
-      }
-      if (endDate) {
-        sessionsQuery = sessionsQuery.lte('date', endDate);
-      }
-
-      const { data: sessions, error: sessionsError } = await sessionsQuery
-        .order('date', { ascending: false });
-
-      if (sessionsError) {
-        console.error('Error fetching sessions:', sessionsError);
-        continue;
-      }
-
-      // Group sessions by track
-      const trackGroups: Record<string, any[]> = {};
-
-      for (const session of sessions || []) {
-        const tId = session.track_id;
-        if (!trackGroups[tId]) {
-          trackGroups[tId] = [];
+        // Apply filters
+        if (trackId) {
+          sessionsQuery = sessionsQuery.eq('track_id', trackId);
         }
-        trackGroups[tId].push(session);
-      }
+        if (startDate) {
+          sessionsQuery = sessionsQuery.gte('date', startDate);
+        }
+        if (endDate) {
+          sessionsQuery = sessionsQuery.lte('date', endDate);
+        }
 
-      // Calculate stats for each track
-      for (const [tId, trackSessions] of Object.entries(trackGroups)) {
-        const trackInfo = (trackSessions[0] as any).track;
+        const { data: sessions, error: sessionsError } = await sessionsQuery
+          .order('date', { ascending: false });
 
-        // Best lap for this driver on this track
-        let bestLapMs: number | null = null;
-        let totalBestLaps = 0;
-        let bestLapCount = 0;
+        if (sessionsError) {
+          console.error(`Error fetching sessions for driver ${driver.id}:`, sessionsError);
+          continue;
+        }
 
-        for (const session of trackSessions) {
-          if (session.best_lap_ms) {
-            if (bestLapMs === null || session.best_lap_ms < bestLapMs) {
-              bestLapMs = session.best_lap_ms;
-            }
-            totalBestLaps += session.best_lap_ms;
-            bestLapCount++;
+        // Group sessions by track
+        const trackGroups: Record<string, any[]> = {};
+
+        for (const session of sessions || []) {
+          const tId = session.track_id;
+          if (!trackGroups[tId]) {
+            trackGroups[tId] = [];
           }
+          trackGroups[tId].push(session);
         }
 
-        const avgBestLapMs = bestLapCount > 0
-          ? Math.round(totalBestLaps / bestLapCount)
-          : null;
+        // Calculate stats for each track
+        for (const [tId, trackSessions] of Object.entries(trackGroups)) {
+          const trackInfo = (trackSessions[0] as any).track;
 
-        // Get total laps for these sessions
-        let totalLaps = 0;
-        for (const session of trackSessions) {
-          const { count } = await (supabase
-            .from('laps') as any)
-            .select('*', { count: 'exact', head: true })
-            .eq('session_id', session.id);
+          // Best lap for this driver on this track
+          let bestLapMs: number | null = null;
+          let totalBestLaps = 0;
+          let bestLapCount = 0;
 
-          totalLaps += count || 0;
+          for (const session of trackSessions) {
+            if (session.best_lap_ms) {
+              if (bestLapMs === null || session.best_lap_ms < bestLapMs) {
+                bestLapMs = session.best_lap_ms;
+              }
+              totalBestLaps += session.best_lap_ms;
+              bestLapCount++;
+            }
+          }
+
+          const avgBestLapMs = bestLapCount > 0
+            ? Math.round(totalBestLaps / bestLapCount)
+            : null;
+
+          // Get total laps for these sessions
+          let totalLaps = 0;
+          for (const session of trackSessions) {
+            const { count } = await (supabase
+              .from('laps') as any)
+              .select('*', { count: 'exact', head: true })
+              .eq('session_id', session.id);
+
+            totalLaps += count || 0;
+          }
+
+          // Last session date for this track
+          const lastSessionDate = trackSessions[0]?.date || null;
+
+          comparison.push({
+            driverId: driver.id,
+            driverName: driver.name,
+            trackId: tId,
+            trackName: trackInfo?.name || 'Unknown',
+            sessionCount: trackSessions.length,
+            bestLapMs,
+            avgBestLapMs,
+            totalLaps,
+            lastSessionDate,
+          });
         }
-
-        // Last session date for this track
-        const lastSessionDate = trackSessions[0]?.date || null;
-
-        comparison.push({
-          driverId: driver.id,
-          driverName: driver.name,
-          trackId: tId,
-          trackName: trackInfo?.name || 'Unknown',
-          sessionCount: trackSessions.length,
-          bestLapMs,
-          avgBestLapMs,
-          totalLaps,
-          lastSessionDate,
-        });
+      } catch (error) {
+        console.error(`Error processing driver ${driver.id} (${driver.name}):`, error);
+        // Continue to next driver on error
+        continue;
       }
     }
 

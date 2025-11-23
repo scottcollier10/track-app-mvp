@@ -47,7 +47,13 @@ export default function CoachDashboardPage() {
   useEffect(() => {
     async function fetchDrivers() {
       try {
-        const response = await fetch(`/api/coaches/${DEMO_COACH_ID}/drivers`);
+        const response = await fetch(`/api/coaches/${DEMO_COACH_ID}/drivers`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error || "Failed to fetch drivers");
@@ -81,7 +87,13 @@ export default function CoachDashboardPage() {
           queryString ? `?${queryString}` : ""
         }`;
 
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        });
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error || "Failed to fetch comparison data");
