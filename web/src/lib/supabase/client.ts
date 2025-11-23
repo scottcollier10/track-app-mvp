@@ -1,11 +1,12 @@
 /**
- * Supabase Client
+ * Supabase Browser Client
  *
- * Creates and exports Supabase client instances for browser and server use
+ * Browser-side Supabase client with auth session management
+ * Use this in Client Components
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../types/database';
+import { createBrowserClient } from '@supabase/ssr';
+import type { Database } from '../types/database';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -17,15 +18,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
- * Browser-side Supabase client
- * Use this in Client Components and API routes
+ * Browser-side Supabase client with cookie-based auth
+ * Automatically handles auth sessions via cookies
  */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export function createClient() {
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+}
 
 /**
- * Create a new Supabase client for server-side usage
- * Use this in Server Components, API routes, and server actions
+ * Legacy export for backwards compatibility
+ * @deprecated Use createClient() instead
  */
-export function createServerClient(): SupabaseClient<Database> {
-  return createClient<Database>(supabaseUrl, supabaseAnonKey);
-}
+export const supabase = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);

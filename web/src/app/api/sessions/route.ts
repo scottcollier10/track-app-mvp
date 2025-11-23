@@ -2,27 +2,54 @@
  * Sessions API Route
  *
  * GET /api/sessions
- * Returns all sessions with optional filtering
- * Query params: trackId, driverId, startDate, endDate
+ * Returns sessions for the authenticated user with optional filtering
+ * Query params: trackId, startDate, endDate
+ *
+ * Requires authentication
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient, getUser } from '@/lib/supabase/server';
 import { getAllSessions, SessionFilters } from '@/data/sessions';
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
 
-    // Build filters from query params
-    const filters: SessionFilters = {};
+    // Get the driver ID for the current user
+    const supabase = await createServerClient();
+    const { data: driver } = await supabase
+      .from('drivers')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (!driver) {
+      return NextResponse.json(
+        { error: 'Driver profile not found' },
+        { status: 404 }
+      );
+    }
+
+    // Build filters from query params (always filter by current user's driver ID)
+    const filters: SessionFilters = {
+      driverId: driver.id,
+    };
 
     const trackId = searchParams.get('trackId');
-    const driverId = searchParams.get('driverId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
     if (trackId) filters.trackId = trackId;
-    if (driverId) filters.driverId = driverId;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
 
