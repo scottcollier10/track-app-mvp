@@ -6,10 +6,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, getUser } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
     const { sessionId, author, body } = await request.json();
 
     // Validate payload
@@ -22,10 +31,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerClient();
 
-    // Verify session exists
+    // Verify session exists and belongs to user
     const { data: session } = await (supabase
       .from('sessions') as any)
-      .select('id')
+      .select('id, driver_id')
       .eq('id', sessionId)
       .single();
 
@@ -33,6 +42,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Session not found' },
         { status: 404 }
+      );
+    }
+
+    // Verify user owns the session
+    if (session.driver_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden - you can only add notes to your own sessions' },
+        { status: 403 }
       );
     }
 

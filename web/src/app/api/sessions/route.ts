@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, getUser } from '@/lib/supabase/server';
+import { getUser } from '@/lib/supabase/server';
 import { getAllSessions, SessionFilters } from '@/data/sessions';
 
 export async function GET(request: NextRequest) {
@@ -25,24 +25,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
 
-    // Get the driver ID for the current user
-    const supabase = await createServerClient();
-    const { data: driver } = await supabase
-      .from('drivers')
-      .select('id')
-      .eq('id', user.id)
-      .single();
-
-    if (!driver) {
-      return NextResponse.json(
-        { error: 'Driver profile not found' },
-        { status: 404 }
-      );
-    }
-
     // Build filters from query params (always filter by current user's driver ID)
+    // Note: drivers.id = auth.users.id, so we can use user.id directly
     const filters: SessionFilters = {
-      driverId: driver.id,
+      driverId: user.id,
     };
 
     const trackId = searchParams.get('trackId');

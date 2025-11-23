@@ -6,16 +6,35 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getUser } from '@/lib/supabase/server';
 import { updateDriverProfile } from '@/data/driverProfiles';
 import { ExperienceLevel } from '@/types/driver';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Parse request body
+    // 1. Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Parse request body
     const body = await request.json();
     const { driverId, experienceLevel } = body;
 
-    // 2. Validate required fields
+    // 3. Verify user can only update their own profile
+    // Note: drivers.id = auth.users.id
+    if (user.id !== driverId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - you can only update your own profile' },
+        { status: 403 }
+      );
+    }
+
+    // 4. Validate required fields
     if (!driverId) {
       return NextResponse.json(
         { success: false, error: 'driverId is required' },
@@ -30,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Validate experience level value
+    // 5. Validate experience level value
     const validLevels: ExperienceLevel[] = ['beginner', 'intermediate', 'advanced'];
     if (!validLevels.includes(experienceLevel as ExperienceLevel)) {
       return NextResponse.json(
@@ -42,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Update profile
+    // 6. Update profile
     const { data: profile, error } = await updateDriverProfile(
       driverId,
       experienceLevel as ExperienceLevel
@@ -66,7 +85,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Return success
+    // 7. Return success
     console.log('[Profile Update] Success', {
       driverId,
       experienceLevel,

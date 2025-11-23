@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, getUser } from '@/lib/supabase/server';
 
 type SessionWithTrack = {
   id: string;
@@ -50,6 +50,25 @@ export async function GET(
 ): Promise<NextResponse> {
   try {
     const { id: driverId } = await params;
+
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user can only access their own progress
+    // Note: drivers.id = auth.users.id
+    if (user.id !== driverId) {
+      return NextResponse.json(
+        { error: 'Forbidden - you can only access your own progress' },
+        { status: 403 }
+      );
+    }
+
     const supabase = await createServerClient();
 
     // Fetch all sessions for this driver with track info

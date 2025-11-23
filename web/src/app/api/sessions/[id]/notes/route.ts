@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, getUser } from '@/lib/supabase/server';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {
@@ -18,9 +18,40 @@ export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  const supabase = await createServerClient();
-
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = await createServerClient();
+
+    // Verify session exists and belongs to user
+    const { data: session } = await (supabase
+      .from('sessions') as any)
+      .select('id, driver_id')
+      .eq('id', params.id)
+      .single();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Session not found' },
+        { status: 404 }
+      );
+    }
+
+    // Verify user owns the session
+    if (session.driver_id !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden - you can only update notes on your own sessions' },
+        { status: 403 }
+      );
+    }
+
     // Accept either coach_notes or notes in the body
     const body = await request.json();
     const rawNotes =

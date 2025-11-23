@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServerClient, getUser } from '@/lib/supabase/server';
 import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
@@ -28,7 +28,16 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Check for API key
+    // 1. Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized - authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Check for API key
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey || apiKey.includes('placeholder')) {
       console.error('[AI Coaching] Missing or invalid API key');
@@ -41,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Parse request body
+    // 3. Parse request body
     const body = await request.json();
     const { sessionId } = body;
 
@@ -59,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerClient();
 
-    // 3. Fetch session data
+    // 4. Fetch session data
     const { data: session, error: sessionError } = await (supabase
       .from('sessions') as any)
       .select('*, tracks(name), drivers(name, email)')
@@ -77,7 +86,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Fetch laps
+    // 5. Verify user owns the session
+    if (session.driver_id !== user.id) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - you can only generate coaching for your own sessions' },
+        { status: 403 }
+      );
+    }
+
+    // 6. Fetch laps
     const { data: laps, error: lapsError } = await (supabase
       .from('laps') as any)
       .select('*')
