@@ -120,7 +120,17 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {/* Session Insights */}
       {laps.length > 0 && (
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-primary">Session Insights</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-primary">Session Insights</h2>
+            {laps.length >= 5 && (
+              <Link
+                href={`/sessions/${session.id}/analysis`}
+                className="text-sm text-accent-primary hover:text-accent-primary/80 flex items-center gap-1 font-medium"
+              >
+                View Detailed Analysis →
+              </Link>
+            )}
+          </div>
 
           {laps.length < 6 ? (
             <EmptyInsights lapCount={laps.length} />
