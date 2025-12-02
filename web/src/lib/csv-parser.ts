@@ -121,16 +121,19 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
             // Generate email (temporary until we have track lookup)
             const driverEmail = `${driverName.toLowerCase().replace(/\s+/g, '.')}@trackapp.local`;
 
+            // Convert session_date to ISO timestamp at noon local time to avoid timezone issues
+            // This ensures the session stays on the correct day regardless of timezone
+            const sessionDate = new Date(date + 'T12:00:00').toISOString();
+
             sessions.push({
               driverEmail,
               driverName,
               trackName,
-              date,
+              date: sessionDate,  // Use the converted timestamp
               totalTimeMs,
               bestLapMs,
               laps,
             });
-          });
 
           // Add warnings if needed
           if (sessions.length === 0) {
