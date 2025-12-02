@@ -83,7 +83,8 @@ export default function CsvImport() {
           continue;
         }
 
-        const tracks = await trackResponse.json();
+        const result = await trackResponse.json();
+	const tracks = result.tracks || result.data || result;
         if (!tracks || tracks.length === 0) {
           failed.push(`${session.trackName} (track not found)`);
           continue;
