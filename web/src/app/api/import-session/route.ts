@@ -10,6 +10,8 @@ import { createServerClient } from '@/lib/supabase/client';
 import { ImportSessionPayload } from '@/lib/types';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
+const DEMO_COACH_ID = "c1111111-1111-1111-1111-111111111111";
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
@@ -43,9 +45,10 @@ export async function POST(request: NextRequest) {
       const name = payload.driverEmail.split('@')[0];
 
       const driverInsert: TablesInsert<'drivers'> = {
-        email: payload.driverEmail,
-        name,
-      };
+  email: payload.driverEmail,
+  name,
+  coach_id: DEMO_COACH_ID, // ← ADD THIS LINE
+};
 
       const { data: newDriver, error: driverError } = await (supabase
         .from('drivers') as any)
