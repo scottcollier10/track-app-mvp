@@ -92,9 +92,15 @@ export default function CsvImport() {
 
         const track = tracks[0];
 
+        // Generate email from driver name (CSV has driver_name, not driver_email)
+        const driverEmail = session.driverName
+          .toLowerCase()
+          .replace(/\s+/g, '.')
+          + '@trackapp.demo';
+
         // Build import payload
         const payload: ImportSessionPayload = {
-          driverEmail: session.driverEmail,
+          driverEmail: driverEmail,
           trackId: track.id,
           date: session.date,
           totalTimeMs: session.totalTimeMs,
