@@ -93,7 +93,7 @@ export default function CsvImport() {
         }
 
         const result = await trackResponse.json();
-		const tracks = result.tracks || result.data || result;
+        const tracks = result.tracks || result.data || result;
         if (!tracks || tracks.length === 0) {
           failed.push(`${session.trackName} (track not found)`);
           continue;
@@ -182,10 +182,11 @@ export default function CsvImport() {
     <div className="space-y-6">
       {/* Upload State */}
       {(state === 'idle' || state === 'parsing' || state === 'error') && (
-        <CsvUploader 
-  	onFileSelect={handleFileSelect}
-  	isUploading={state === 'parsing'}  // ← Correct prop name
-	/>
+        <Card>
+          <CsvUploader 
+            onFileSelect={handleFileSelect}
+            isUploading={state === 'parsing'}
+          />
 
           {state === 'parsing' && (
             <div className="mt-6 flex items-center justify-center space-x-3 py-8">
