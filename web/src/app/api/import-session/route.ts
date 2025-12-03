@@ -2,7 +2,7 @@
  * Import Session API Route
  *
  * POST /api/import-session
- * Accepts a session from the iOS app and imports it into Supabase
+ * Accepts a session from the iOS app or CSV import and imports it into Supabase
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +10,7 @@ import { createServerClient } from '@/lib/supabase/client';
 import { ImportSessionPayload } from '@/lib/types';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
+// Demo coach ID for MVP
 const DEMO_COACH_ID = "c1111111-1111-1111-1111-111111111111";
 
 export async function POST(request: NextRequest) {
@@ -45,10 +46,10 @@ export async function POST(request: NextRequest) {
       const name = payload.driverEmail.split('@')[0];
 
       const driverInsert: any = {
-  email: payload.driverEmail,
-  name,
-  coach_id: DEMO_COACH_ID,
-};
+        email: payload.driverEmail,
+        name,
+        coach_id: DEMO_COACH_ID, // Auto-assign to demo coach
+      };
 
       const { data: newDriver, error: driverError } = await (supabase
         .from('drivers') as any)
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
       driverEmail: payload.driverEmail,
       trackName: track.name,
       lapCount: payload.laps?.length || 0,
+      source: payload.source || 'csv_import',
     });
 
     // 3. Create session
@@ -100,7 +102,7 @@ export async function POST(request: NextRequest) {
       date: payload.date,
       total_time_ms: payload.totalTimeMs,
       best_lap_ms: payload.bestLapMs,
-      source: 'ios_app',
+      source: payload.source || 'csv_import', // Use source from payload
     };
 
     const { data: sessionData, error: sessionError } = await (supabase
@@ -158,6 +160,7 @@ export async function POST(request: NextRequest) {
       sessionId: session.id,
       durationMs: duration,
       lapsCreated: lapsToInsert.length,
+      source: session.source,
     });
 
     return NextResponse.json(

@@ -1,0 +1,9 @@
+session_date,track_name,driver_name,lap_number,lap_time_ms,timestamp,source
+2025-12-03,Laguna Seca,Jamie Rodriguez,1,95420,2025-12-03T18:15:23Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,2,94180,2025-12-03T18:17:08Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,3,93560,2025-12-03T18:18:42Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,4,92890,2025-12-03T18:20:15Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,5,92150,2025-12-03T18:21:47Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,6,91820,2025-12-03T18:23:18Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,7,91450,2025-12-03T18:24:50Z,RaceChrono
+2025-12-03,Laguna Seca,Jamie Rodriguez,8,91280,2025-12-03T18:26:21Z,RaceChrono

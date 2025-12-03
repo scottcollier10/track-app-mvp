@@ -17,6 +17,7 @@ import ShareSessionButton from '@/components/ui/ShareSessionButton';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card } from '@/components/ui/Card';
 import { Timer, Gauge, Hash, MapPin, ArrowLeft } from 'lucide-react';
+import { SourceBadge } from '@/components/ui/SourceBadge';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,9 +84,12 @@ export default async function SessionDetailPage({ params }: PageProps) {
           </Link>
           <ShareSessionButton />
         </div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-primary">
-          {session.track?.name || 'Session Detail'}
-        </h1>
+        <div className="flex items-center gap-3 mb-2">
+          <h1 className="text-2xl md:text-3xl font-semibold text-primary">
+            {session.track?.name || 'Session Detail'}
+          </h1>
+          {session.source && <SourceBadge source={session.source} size="md" />}
+        </div>
         <p className="text-muted mt-2 text-sm md:text-base">
           {session.driver?.name || 'Unknown Driver'} • {formatDate(session.date)}
         </p>

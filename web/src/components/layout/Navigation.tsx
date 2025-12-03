@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCoachView } from "@/context/coach-view";
-import { Flag, LayoutDashboard, Menu, X } from "lucide-react";
+import { Flag, LayoutDashboard, Menu, X, UploadCloud } from "lucide-react";
 import CoachViewToggle from "@/components/ui/CoachViewToggle";
 
 export default function Navigation() {
@@ -15,6 +15,9 @@ export default function Navigation() {
   const isActive = (path: string) => {
     if (path === "/coach") {
       return pathname?.startsWith("/coach");
+    }
+    if (path === "/import") {
+      return pathname?.startsWith("/import");
     }
     return pathname === path;
   };
@@ -60,13 +63,22 @@ export default function Navigation() {
                 Profile
               </Link>
               {coachView && (
-                <Link
-                  href="/coach"
-                  className={`${linkClass("/coach")} flex items-center gap-1.5`}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Coach Dashboard
-                </Link>
+                <>
+                  <Link
+                    href="/coach"
+                    className={`${linkClass("/coach")} flex items-center gap-1.5`}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Coach Dashboard
+                  </Link>
+                  <Link
+                    href="/import"
+                    className={`${linkClass("/import")} flex items-center gap-1.5`}
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    Import CSV
+                  </Link>
+                </>
               )}
             </div>
           </div>
@@ -115,14 +127,24 @@ export default function Navigation() {
                 Profile
               </Link>
               {coachView && (
-                <Link
-                  href="/coach"
-                  className={`${linkClass("/coach")} flex items-center gap-1.5`}
-                  onClick={closeMobileMenu}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Coach Dashboard
-                </Link>
+                <>
+                  <Link
+                    href="/coach"
+                    className={`${linkClass("/coach")} flex items-center gap-1.5`}
+                    onClick={closeMobileMenu}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Coach Dashboard
+                  </Link>
+                  <Link
+                    href="/import"
+                    className={`${linkClass("/import")} flex items-center gap-1.5`}
+                    onClick={closeMobileMenu}
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    Import CSV
+                  </Link>
+                </>
               )}
             </div>
           </div>

@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, AlertCircle, Loader2, UploadCloud } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp } from 'lucide-react';
 import CsvUploader from './CsvUploader';
 import CsvPreview from './CsvPreview';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,14 @@ import type { ImportSessionPayload } from '@/lib/types';
 
 type ImportState = 'idle' | 'parsing' | 'preview' | 'importing' | 'success' | 'error';
 
+interface ImportResults {
+  successful: number;
+  failed: number;
+  sessionIds: string[];
+  totalLaps: number;
+  uniqueDrivers: number;
+}
+
 export default function CsvImport() {
   const router = useRouter();
   const [state, setState] = useState<ImportState>('idle');
@@ -24,11 +32,7 @@ export default function CsvImport() {
   const [sessions, setSessions] = useState<ParsedSession[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [importResults, setImportResults] = useState<{
-    successful: number;
-    failed: number;
-    sessionIds: string[];
-  } | null>(null);
+  const [importResults, setImportResults] = useState<ImportResults | null>(null);
 
   /**
    * Handle file selection and parse CSV
@@ -69,10 +73,15 @@ export default function CsvImport() {
 
     const successful: string[] = [];
     const failed: string[] = [];
+    const uniqueDriverEmails = new Set<string>();
+    let totalLaps = 0;
 
     // Import each session sequentially
     for (const session of sessions) {
       try {
+        // Track driver
+        uniqueDriverEmails.add(session.driverEmail);
+
         // First, lookup track by name to get trackId
         const trackResponse = await fetch(
           `/api/tracks?name=${encodeURIComponent(session.trackName)}`
@@ -84,7 +93,7 @@ export default function CsvImport() {
         }
 
         const result = await trackResponse.json();
-	const tracks = result.tracks || result.data || result;
+		const tracks = result.tracks || result.data || result;
         if (!tracks || tracks.length === 0) {
           failed.push(`${session.trackName} (track not found)`);
           continue;
@@ -92,19 +101,14 @@ export default function CsvImport() {
 
         const track = tracks[0];
 
-        // Generate email from driver name (CSV has driver_name, not driver_email)
-        const driverEmail = session.driverName
-          .toLowerCase()
-          .replace(/\s+/g, '.')
-          + '@trackapp.demo';
-
         // Build import payload
         const payload: ImportSessionPayload = {
-          driverEmail: driverEmail,
+          driverEmail: session.driverEmail,
           trackId: track.id,
           date: session.date,
           totalTimeMs: session.totalTimeMs,
           bestLapMs: session.bestLapMs,
+          source: session.source, // RaceChrono, AiM, TrackAddict, etc.
           laps: session.laps.map((lap) => ({
             lapNumber: lap.lapNumber,
             lapTimeMs: lap.lapTimeMs,
@@ -128,6 +132,7 @@ export default function CsvImport() {
 
         const data = await response.json();
         successful.push(data.sessionId);
+        totalLaps += session.laps.length;
       } catch (err) {
         failed.push(
           `${session.trackName} - ${session.driverName} (${
@@ -141,6 +146,8 @@ export default function CsvImport() {
       successful: successful.length,
       failed: failed.length,
       sessionIds: successful,
+      totalLaps,
+      uniqueDrivers: uniqueDriverEmails.size,
     });
 
     if (failed.length > 0) {
@@ -265,12 +272,25 @@ export default function CsvImport() {
               <h3 className="text-2xl font-bold text-white mb-2">
                 Import Complete!
               </h3>
-              <p className="text-neutral-400">
-                Successfully imported {importResults.successful} session(s)
-              </p>
+              
+              {/* Detailed Summary */}
+              <div className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                <TrendingUp className="w-5 h-5 text-green-500" />
+                <p className="text-lg text-gray-200">
+                  Imported{' '}
+                  <span className="font-semibold text-white">{importResults.successful}</span>
+                  {' '}session{importResults.successful !== 1 ? 's' : ''},{' '}
+                  <span className="font-semibold text-white">{importResults.totalLaps}</span>
+                  {' '}lap{importResults.totalLaps !== 1 ? 's' : ''},{' '}
+                  <span className="font-semibold text-white">{importResults.uniqueDrivers}</span>
+                  {' '}driver{importResults.uniqueDrivers !== 1 ? 's' : ''}{' '}
+                  — <span className="text-green-400">{importResults.failed} errors</span>
+                </p>
+              </div>
+
               {importResults.failed > 0 && (
-                <p className="text-red-400 text-sm mt-1">
-                  {importResults.failed} session(s) failed
+                <p className="text-red-400 text-sm mt-3">
+                  {importResults.failed} session(s) failed to import
                 </p>
               )}
             </div>

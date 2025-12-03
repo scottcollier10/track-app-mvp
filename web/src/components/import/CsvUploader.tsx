@@ -1,170 +1,107 @@
-'use client';
-
-/**
- * CSV Uploader Component
- * Drag-and-drop file upload with validation
- */
-
-import { useCallback, useState } from 'react';
-import { Upload, FileText, Download } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { downloadTemplate } from '@/lib/csv-parser';
+import React, { useCallback } from 'react';
+import { Upload, Download } from 'lucide-react';
 
 interface CsvUploaderProps {
   onFileSelect: (file: File) => void;
-  isLoading?: boolean;
+  isUploading: boolean;
 }
 
-export default function CsvUploader({ onFileSelect, isLoading }: CsvUploaderProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const validateFile = (file: File): string | null => {
-    // Check file type
-    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-      return 'Please upload a CSV file';
-    }
-
-    // Check file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      return 'File size must be less than 10MB';
-    }
-
-    return null;
-  };
-
-  const handleFile = useCallback(
-    (file: File) => {
-      const validationError = validateFile(file);
-      if (validationError) {
-        setError(validationError);
-        return;
+export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderProps) {
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'text/csv') {
+        onFileSelect(file);
       }
-
-      setError(null);
-      onFileSelect(file);
     },
     [onFileSelect]
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        handleFile(files[0]);
-      }
-    },
-    [handleFile]
-  );
-
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []);
-      if (files.length > 0) {
-        handleFile(files[0]);
+      const file = e.target.files?.[0];
+      if (file) {
+        onFileSelect(file);
       }
     },
-    [handleFile]
+    [onFileSelect]
   );
 
   return (
-    <div className="space-y-4">
-      {/* Download Template Button */}
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={Download}
-          onClick={downloadTemplate}
-        >
-          Download Template
-        </Button>
-      </div>
-
+    <div className="space-y-6">
       {/* Upload Area */}
       <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`
-          relative border-2 border-dashed rounded-lg p-12
-          transition-all duration-200
-          ${
-            isDragging
-              ? 'border-orange-500 bg-orange-500/10'
-              : 'border-neutral-700 bg-neutral-800/50'
-          }
-          ${isLoading ? 'opacity-50 pointer-events-none' : 'hover:border-neutral-600'}
-        `}
+        onDragOver={(e) => e.preventDefault()}
+        className="border-2 border-dashed border-gray-600 dark:border-gray-700 rounded-lg p-12 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors cursor-pointer"
       >
         <input
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv"
           onChange={handleFileInput}
-          disabled={isLoading}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          id="csv-file-input"
+          className="hidden"
+          id="csv-upload"
+          disabled={isUploading}
         />
-
-        <div className="flex flex-col items-center justify-center space-y-4 pointer-events-none">
-          <div
-            className={`
-            rounded-full p-4
-            ${isDragging ? 'bg-orange-500/20' : 'bg-neutral-700/50'}
-            transition-colors
-          `}
-          >
-            {isDragging ? (
-              <Upload className="w-8 h-8 text-orange-500" />
-            ) : (
-              <FileText className="w-8 h-8 text-neutral-400" />
-            )}
-          </div>
-
-          <div className="text-center">
-            <p className="text-lg font-medium text-white mb-1">
-              {isDragging ? 'Drop your CSV file here' : 'Upload CSV File'}
-            </p>
-            <p className="text-sm text-neutral-400">
-              Drag and drop or click to browse
-            </p>
-            <p className="text-xs text-neutral-500 mt-2">
-              Supports RaceChrono, AiM, and custom formats
-            </p>
-          </div>
-        </div>
+        <label htmlFor="csv-upload" className="cursor-pointer">
+          <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <p className="text-lg font-medium mb-2">Drop your CSV file here</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            or click to browse your files
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+            Supports CSV files from RaceChrono, AiM, TrackAddict, and other timing systems
+          </p>
+        </label>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-          <p className="text-sm text-red-400">{error}</p>
+      {/* Template Downloads */}
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Download className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Need a template? Download a sample CSV:
+          </p>
         </div>
-      )}
+        
+        <div className="grid grid-cols-2 gap-3">
+          <a
+            href="/track-app-racechrono-template.csv"
+            download="track-app-racechrono-template.csv"
+            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
+          >
+            RaceChrono Format
+          </a>
+          
+          <a
+            href="/track-app-aim-template.csv"
+            download="track-app-aim-template.csv"
+            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
+          >
+            AiM Format
+          </a>
+          
+          <a
+            href="/track-app-trackaddict-template.csv"
+            download="track-app-trackaddict-template.csv"
+            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
+          >
+            TrackAddict Format
+          </a>
+          
+          <a
+            href="/track-app-generic-template.csv"
+            download="track-app-generic-template.csv"
+            className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
+          >
+            Generic Format
+          </a>
+        </div>
 
-      {/* Format Instructions */}
-      <div className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg">
-        <h3 className="text-sm font-medium text-white mb-2">CSV Format</h3>
-        <p className="text-xs text-neutral-400 mb-2">
-          Your CSV must include these columns:
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+          All templates use the same format for this MVP. Future versions will support native exports from each system.
         </p>
-        <code className="block text-xs text-neutral-300 bg-neutral-900/50 p-2 rounded">
-          session_date, track_name, driver_name, lap_number, lap_time_ms, timestamp
-        </code>
       </div>
     </div>
   );

@@ -13,16 +13,18 @@ export interface CsvRow {
   lap_number: string;
   lap_time_ms: string;
   timestamp: string;
+  source?: string; // Optional: RaceChrono, AiM, TrackAddict, generic
 }
 
 // Parsed and validated session data
 export interface ParsedSession {
-  driverEmail: string; // Will be generated as driver_name@trackapp.local
+  driverEmail: string; // Will be generated as driver_name@trackapp.demo
   driverName: string;
   trackName: string;
   date: string;
   totalTimeMs: number;
   bestLapMs: number;
+  source: string; // RaceChrono, AiM, TrackAddict, generic, csv_import
   laps: {
     lapNumber: number;
     lapTimeMs: number;
@@ -34,6 +36,42 @@ export interface ParseResult {
   sessions?: ParsedSession[];
   errors?: string[];
   warnings?: string[];
+}
+
+/**
+ * Validate a single CSV row
+ */
+function validateRow(row: CsvRow, rowNumber: number): string[] {
+  const errors: string[] = [];
+
+  // Required fields
+  if (!row.session_date) {
+    errors.push(`Row ${rowNumber}: Missing session_date`);
+  }
+  if (!row.track_name) {
+    errors.push(`Row ${rowNumber}: Missing track_name`);
+  }
+  if (!row.driver_name) {
+    errors.push(`Row ${rowNumber}: Missing driver_name`);
+  }
+  if (!row.lap_number) {
+    errors.push(`Row ${rowNumber}: Missing lap_number`);
+  }
+  if (!row.lap_time_ms) {
+    errors.push(`Row ${rowNumber}: Missing lap_time_ms`);
+  }
+
+  // Validate lap_number is a number
+  if (row.lap_number && isNaN(parseInt(row.lap_number))) {
+    errors.push(`Row ${rowNumber}: lap_number must be a number`);
+  }
+
+  // Validate lap_time_ms is a number
+  if (row.lap_time_ms && isNaN(parseInt(row.lap_time_ms))) {
+    errors.push(`Row ${rowNumber}: lap_time_ms must be a number`);
+  }
+
+  return errors;
 }
 
 /**
@@ -50,14 +88,13 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
       transformHeader: (header) => header.trim().toLowerCase(),
       complete: (results) => {
         try {
-          // Validate CSV structure
+          // Check for required columns
           const requiredHeaders = [
             'session_date',
             'track_name',
             'driver_name',
             'lap_number',
             'lap_time_ms',
-            'timestamp',
           ];
 
           const headers = results.meta.fields || [];
@@ -102,6 +139,9 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
           sessionMap.forEach((rows, sessionKey) => {
             const [date, trackName, driverName] = sessionKey.split('|');
 
+            // Get source from first row (all rows in session should have same source)
+            const source = rows[0].source || 'csv_import';
+
             // Sort laps by lap number
             const sortedRows = rows.sort(
               (a, b) => parseInt(a.lap_number) - parseInt(b.lap_number)
@@ -118,10 +158,11 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
             const bestLapMs = Math.min(...lapTimes);
             const totalTimeMs = lapTimes.reduce((sum, time) => sum + time, 0);
 
-            // Generate email (temporary until we have track lookup)
-            const driverEmail = `${driverName.toLowerCase().replace(/\s+/g, '.')}@trackapp.local`;
+            // Generate email with .demo domain
+            const driverEmail = `${driverName.toLowerCase().replace(/\s+/g, '.')}@trackapp.demo`;
 
-            // Convert session_date to ISO timestamp at noon local time to avoid timezone issues
+            // Convert session_date to proper ISO format with timezone handling
+            // Add T12:00:00 to force noon local time, preventing timezone date rollback
             const sessionDate = new Date(date + 'T12:00:00').toISOString();
 
             sessions.push({
@@ -131,6 +172,7 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
               date: sessionDate,
               totalTimeMs,
               bestLapMs,
+              source,
               laps,
             });
           });
@@ -153,91 +195,9 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
         }
       },
       error: (error) => {
-        errors.push(`CSV parsing failed: ${error.message}`);
+        errors.push(`CSV parsing error: ${error.message}`);
         resolve({ success: false, errors });
       },
     });
   });
-}
-
-/**
- * Validate a single CSV row
- */
-function validateRow(row: CsvRow, rowNumber: number): string[] {
-  const errors: string[] = [];
-
-  // Check required fields
-  if (!row.session_date?.trim()) {
-    errors.push(`Row ${rowNumber}: Missing session_date`);
-  }
-  if (!row.track_name?.trim()) {
-    errors.push(`Row ${rowNumber}: Missing track_name`);
-  }
-  if (!row.driver_name?.trim()) {
-    errors.push(`Row ${rowNumber}: Missing driver_name`);
-  }
-  if (!row.lap_number?.trim()) {
-    errors.push(`Row ${rowNumber}: Missing lap_number`);
-  }
-  if (!row.lap_time_ms?.trim()) {
-    errors.push(`Row ${rowNumber}: Missing lap_time_ms`);
-  }
-
-  // Validate numeric fields
-  const lapNumber = parseInt(row.lap_number);
-  if (isNaN(lapNumber) || lapNumber < 1) {
-    errors.push(`Row ${rowNumber}: Invalid lap_number (must be positive integer)`);
-  }
-
-  const lapTimeMs = parseInt(row.lap_time_ms);
-  if (isNaN(lapTimeMs) || lapTimeMs < 1) {
-    errors.push(`Row ${rowNumber}: Invalid lap_time_ms (must be positive integer)`);
-  }
-
-  // Validate date format (basic check)
-  if (row.session_date && !isValidDateString(row.session_date)) {
-    errors.push(
-      `Row ${rowNumber}: Invalid session_date format (expected YYYY-MM-DD or ISO format)`
-    );
-  }
-
-  return errors;
-}
-
-/**
- * Validate date string
- */
-function isValidDateString(dateStr: string): boolean {
-  const date = new Date(dateStr);
-  return !isNaN(date.getTime());
-}
-
-/**
- * Generate a sample CSV template
- */
-export function generateTemplateData(): string {
-  const template = [
-    'session_date,track_name,driver_name,lap_number,lap_time_ms,timestamp',
-    '2024-11-22,Laguna Seca,Scott Collier,1,92450,2024-11-22T10:15:23Z',
-    '2024-11-22,Laguna Seca,Scott Collier,2,91234,2024-11-22T10:17:01Z',
-    '2024-11-22,Laguna Seca,Scott Collier,3,90890,2024-11-22T10:18:55Z',
-  ];
-  return template.join('\n');
-}
-
-/**
- * Download template CSV file
- */
-export function downloadTemplate(): void {
-  const csv = generateTemplateData();
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', 'track-app-template.csv');
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 }
