@@ -6,6 +6,8 @@ import { Users, Timer, TrendingUp, Activity, AlertCircle } from "lucide-react";
 import DriverComparisonTable from "@/components/coach/DriverComparisonTable";
 import CoachFilters, { CoachFilter } from "@/components/coach/CoachFilters";
 import { formatLapMs } from "@/lib/time";
+import { getAllSessions, SessionWithDetails } from "@/data/sessions";
+import { getDrivers, Driver } from "@/data/drivers";
 
 // Demo coach ID - in production this would come from auth context
 const DEMO_COACH_ID = "c1111111-1111-1111-1111-111111111111";
@@ -43,64 +45,121 @@ export default function CoachDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CoachFilter>({});
 
-  // Fetch drivers data
+  // Fetch drivers and sessions data
   useEffect(() => {
-    async function fetchDrivers() {
+    async function fetchData() {
       try {
-        const response = await fetch(`/api/coaches/${DEMO_COACH_ID}/drivers`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          },
-        });
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Failed to fetch drivers");
+        setLoading(true);
+
+        // Fetch all sessions and drivers using data layer
+        const [sessionsResult, driversResult] = await Promise.all([
+          getAllSessions(),
+          getDrivers()
+        ]);
+
+        if (sessionsResult.error) {
+          throw new Error(sessionsResult.error.message);
         }
-        const data = await response.json();
-        setDrivers(data.data.drivers || []);
-        setCoachName(data.data.coachName);
+        if (driversResult.error) {
+          throw new Error(driversResult.error.message);
+        }
+
+        const sessions = sessionsResult.data || [];
+        const allDrivers = driversResult.data || [];
+
+        // Calculate driver stats from sessions
+        const driverStats = allDrivers.map(driver => {
+          const driverSessions = sessions.filter(s => s.driver?.id === driver.id);
+          const totalSessions = driverSessions.length;
+          const totalLaps = driverSessions.reduce((sum, s) => sum + s.lapCount, 0);
+
+          // Find best lap
+          const bestLapSession = driverSessions.reduce((best, current) => {
+            if (!best?.best_lap_ms || (current.best_lap_ms && current.best_lap_ms < best.best_lap_ms)) {
+              return current;
+            }
+            return best;
+          }, null as SessionWithDetails | null);
+
+          // Calculate improvement (compare first and last session best laps)
+          const sortedSessions = driverSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const firstSession = sortedSessions[0];
+          const lastSession = sortedSessions[sortedSessions.length - 1];
+          let improvementMs = null;
+          if (firstSession?.best_lap_ms && lastSession?.best_lap_ms && firstSession.id !== lastSession.id) {
+            improvementMs = lastSession.best_lap_ms - firstSession.best_lap_ms;
+          }
+
+          return {
+            ...driver,
+            totalSessions,
+            totalLaps,
+            bestLapMs: bestLapSession?.best_lap_ms || null,
+            bestLapTrack: bestLapSession?.track?.name || null,
+            improvementMs,
+            lastSessionDate: sortedSessions[sortedSessions.length - 1]?.date || null
+          };
+        });
+
+        setDrivers(driverStats);
+        setCoachName("Demo Coach"); // In production, get from auth context
       } catch (err) {
-        console.error("Error fetching drivers:", err);
+        console.error("Error fetching data:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setLoading(false);
       }
     }
 
-    fetchDrivers();
+    fetchData();
   }, []);
 
-  // Fetch comparison data
+  // Fetch comparison data based on filters
   useEffect(() => {
     async function fetchComparison() {
       try {
         setLoading(true);
 
-        // Build query params
-        const params = new URLSearchParams();
-        if (filters.trackId) params.set("trackId", filters.trackId);
-        if (filters.startDate) params.set("startDate", filters.startDate);
-        if (filters.endDate) params.set("endDate", filters.endDate);
+        // Use data layer to get filtered sessions
+        const sessionFilters = {
+          trackId: filters.trackId,
+          startDate: filters.startDate,
+          endDate: filters.endDate
+        };
 
-        const queryString = params.toString();
-        const url = `/api/coaches/${DEMO_COACH_ID}/comparison${
-          queryString ? `?${queryString}` : ""
-        }`;
-
-        const response = await fetch(url, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          },
-        });
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Failed to fetch comparison data");
+        const sessionsResult = await getAllSessions(sessionFilters);
+        if (sessionsResult.error) {
+          throw new Error(sessionsResult.error.message);
         }
-        const data = await response.json();
-        setComparison(data.data.comparison || []);
-        setTracks(data.data.tracks || []);
+
+        const sessions = sessionsResult.data || [];
+
+        // Transform sessions into comparison format
+        const comparisonData: DriverTrackStats[] = sessions.map(session => ({
+          driverId: session.driver?.id || '',
+          driverName: session.driver?.name || 'Unknown',
+          trackId: session.track?.id || '',
+          trackName: session.track?.name || 'Unknown',
+          sessionCount: 1, // Each session represents one session
+          bestLapMs: session.best_lap_ms,
+          avgBestLapMs: session.best_lap_ms, // For single session, best = avg
+          totalLaps: session.lapCount,
+          lastSessionDate: session.date
+        }));
+
+        // Get unique tracks for filter dropdown
+        const uniqueTracks = Array.from(
+          new Set(sessions.map(s => s.track?.id).filter(Boolean))
+        ).map(trackId => {
+          const session = sessions.find(s => s.track?.id === trackId);
+          return {
+            id: trackId!,
+            name: session?.track?.name || 'Unknown'
+          };
+        });
+
+        setComparison(comparisonData);
+        setTracks(uniqueTracks);
       } catch (err) {
         console.error("Error fetching comparison:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
