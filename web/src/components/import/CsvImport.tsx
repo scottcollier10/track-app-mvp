@@ -182,11 +182,10 @@ export default function CsvImport() {
     <div className="space-y-6">
       {/* Upload State */}
       {(state === 'idle' || state === 'parsing' || state === 'error') && (
-        <Card>
-          <CsvUploader
-            onFileSelect={handleFileSelect}
-            isLoading={state === 'parsing'}
-          />
+        <CsvUploader 
+  	onFileSelect={handleFileSelect}
+  	isUploading={state === 'parsing'}  // ← Correct prop name
+	/>
 
           {state === 'parsing' && (
             <div className="mt-6 flex items-center justify-center space-x-3 py-8">
