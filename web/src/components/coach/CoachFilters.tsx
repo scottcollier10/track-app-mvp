@@ -43,8 +43,8 @@ export default function CoachFilters({
   const hasFilters = trackId || startDate || endDate;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+    <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
+      <h2 className="text-lg font-semibold mb-4 text-white">
         Filter Comparison
       </h2>
 
@@ -53,7 +53,7 @@ export default function CoachFilters({
         <div>
           <label
             htmlFor="coach-track-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Track
           </label>
@@ -62,7 +62,7 @@ export default function CoachFilters({
             value={trackId}
             onChange={(e) => setTrackId(e.target.value)}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">All Tracks</option>
             {tracks.map((track) => (
@@ -77,7 +77,7 @@ export default function CoachFilters({
         <div>
           <label
             htmlFor="coach-start-date-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Start Date
           </label>
@@ -86,7 +86,7 @@ export default function CoachFilters({
             id="coach-start-date-filter"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white"
           />
         </div>
 
@@ -94,7 +94,7 @@ export default function CoachFilters({
         <div>
           <label
             htmlFor="coach-end-date-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             End Date
           </label>
@@ -103,7 +103,7 @@ export default function CoachFilters({
             id="coach-end-date-filter"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white"
           />
         </div>
 
@@ -112,14 +112,14 @@ export default function CoachFilters({
           {hasFilters && (
             <button
               onClick={handleClearFilters}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="flex-1 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 border border-gray-600 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
             >
               Clear
             </button>
           )}
           <button
             onClick={handleApplyFilters}
-            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={loading}
           >
             Apply
