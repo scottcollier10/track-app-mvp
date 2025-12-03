@@ -21,6 +21,27 @@ import { SourceBadge } from '@/components/ui/SourceBadge';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Format driver name from email format to proper case
+ * Examples:
+ *   "jamie.rodriguez" -> "Jamie Rodriguez"
+ *   "Scott Collier" -> "Scott Collier" (already formatted)
+ */
+function formatDriverName(name: string): string {
+  if (!name) return '';
+  
+  // If name already has capital letters, assume it's formatted
+  if (name !== name.toLowerCase()) {
+    return name;
+  }
+  
+  // Split on dots or spaces, capitalize each word
+  return name
+    .split(/[.\s]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 interface PageProps {
   params: {
     id: string;
@@ -91,7 +112,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
           {session.source && <SourceBadge source={session.source} size="md" />}
         </div>
         <p className="text-muted mt-2 text-sm md:text-base">
-          {session.driver?.name || 'Unknown Driver'} • {formatDate(session.date)}
+          {formatDriverName(session.driver?.name || 'Unknown Driver')} • {formatDate(session.date)}
         </p>
         {session.track?.location && (
           <p className="text-text-subtle mt-1 text-sm flex items-center gap-1">

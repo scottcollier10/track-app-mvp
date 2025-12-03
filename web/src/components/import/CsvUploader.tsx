@@ -67,7 +67,7 @@ export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderPr
         
         <div className="grid grid-cols-2 gap-3">
           <a
-            href="/track-app-racechrono-template.csv"
+            href="/api/templates/racechrono"
             download="track-app-racechrono-template.csv"
             className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
           >
@@ -75,7 +75,7 @@ export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderPr
           </a>
           
           <a
-            href="/track-app-aim-template.csv"
+            href="/api/templates/aim"
             download="track-app-aim-template.csv"
             className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
           >
@@ -83,7 +83,7 @@ export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderPr
           </a>
           
           <a
-            href="/track-app-trackaddict-template.csv"
+            href="/api/templates/trackaddict"
             download="track-app-trackaddict-template.csv"
             className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
           >
@@ -91,7 +91,7 @@ export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderPr
           </a>
           
           <a
-            href="/track-app-generic-template.csv"
+            href="/api/templates/generic"
             download="track-app-generic-template.csv"
             className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
           >
@@ -100,7 +100,7 @@ export default function CsvUploader({ onFileSelect, isUploading }: CsvUploaderPr
         </div>
 
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
-          All templates use the same format for this MVP. Future versions will support native exports from each system.
+          Each download generates unique test data to prevent duplicates during testing.
         </p>
       </div>
     </div>

@@ -28,6 +28,9 @@ interface SessionsListProps {
 
 /**
  * Format driver name from email format to proper case
+ * Examples:
+ *   "jamie.rodriguez" -> "Jamie Rodriguez"
+ *   "Scott Collier" -> "Scott Collier" (already formatted)
  */
 function formatDriverName(name: string): string {
   if (!name) return '';
@@ -53,8 +56,6 @@ export default function SessionsList({ filters, sortBy }: SessionsListProps) {
     async function fetchSessions() {
       try {
         setLoading(true);
-        setError(null);
-        
         const params = new URLSearchParams();
         if (filters?.trackId) params.set('trackId', filters.trackId);
         if (filters?.driverId) params.set('driverId', filters.driverId);
@@ -63,27 +64,13 @@ export default function SessionsList({ filters, sortBy }: SessionsListProps) {
         if (sortBy) params.set('sortBy', sortBy);
 
         const response = await fetch(`/api/sessions?${params}`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error('Failed to fetch sessions');
         
         const data = await response.json();
-        
-        // Handle both array and wrapped response formats
-        if (Array.isArray(data)) {
-          setSessions(data);
-        } else if (data.data && Array.isArray(data.data)) {
-          setSessions(data.data);
-        } else if (data.sessions && Array.isArray(data.sessions)) {
-          setSessions(data.sessions);
-        } else {
-          console.error('Unexpected API response format:', data);
-          throw new Error('API returned unexpected data format');
-        }
+        // Handle both response formats: { data: [...] } or [...]
+        setSessions(data.data || data);
       } catch (err) {
-        console.error('Fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load sessions');
-        setSessions([]); // Ensure sessions is always an array
+        setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -103,13 +90,12 @@ export default function SessionsList({ filters, sortBy }: SessionsListProps) {
   if (error) {
     return (
       <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
-        <p className="text-red-400 font-medium mb-2">Error loading sessions</p>
-        <p className="text-red-300 text-sm">{error}</p>
+        <p className="text-red-400">{error}</p>
       </div>
     );
   }
 
-  if (!sessions || sessions.length === 0) {
+  if (sessions.length === 0) {
     return (
       <div className="rounded-lg bg-gray-800/50 border border-gray-700 p-8 text-center">
         <p className="text-gray-400">No sessions found matching your filters.</p>
