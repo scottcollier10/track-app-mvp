@@ -34,6 +34,7 @@ export interface ImportSessionPayload {
   date: string;
   totalTimeMs: number;
   bestLapMs?: number;
+  source?: string;
   laps: {
     lapNumber: number;
     lapTimeMs: number;
