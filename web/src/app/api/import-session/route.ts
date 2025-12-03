@@ -44,10 +44,10 @@ export async function POST(request: NextRequest) {
       // Extract name from email (before @)
       const name = payload.driverEmail.split('@')[0];
 
-      const driverInsert: TablesInsert<'drivers'> = {
+      const driverInsert: any = {
   email: payload.driverEmail,
   name,
-  coach_id: DEMO_COACH_ID, // ← ADD THIS LINE
+  coach_id: DEMO_COACH_ID,
 };
 
       const { data: newDriver, error: driverError } = await (supabase
