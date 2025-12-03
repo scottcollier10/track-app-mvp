@@ -49,8 +49,8 @@ export default function ExportButton({ sessions, disabled = false }: ExportButto
         transition-all duration-200
         ${
           isDisabled
-            ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md active:scale-95'
+            ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-gray-700'
+            : 'bg-orange-600 hover:bg-orange-700 text-white shadow-sm hover:shadow-md active:scale-95'
         }
       `}
       aria-label="Export sessions to CSV"

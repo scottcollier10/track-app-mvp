@@ -106,35 +106,25 @@ export default function SessionFilters({
   const hasFilters = trackId || driverId || startDate || endDate || searchQuery;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-        Filter Sessions
-      </h2>
-
+    <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
       {/* Search Input */}
-      <div className="mb-4">
-        <label
-          htmlFor="search-input"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-        >
-          Search
-        </label>
+      <div className="mb-6">
         <input
           type="text"
           id="search-input"
           placeholder="Search by track, driver, or date..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+          className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-white placeholder-gray-400"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {/* Track Filter */}
         <div>
           <label
             htmlFor="track-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Track
           </label>
@@ -143,7 +133,7 @@ export default function SessionFilters({
             value={trackId}
             onChange={(e) => setTrackId(e.target.value)}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">All Tracks</option>
             {tracks.map((track) => (
@@ -159,7 +149,7 @@ export default function SessionFilters({
         <div>
           <label
             htmlFor="driver-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Driver
           </label>
@@ -168,7 +158,7 @@ export default function SessionFilters({
             value={driverId}
             onChange={(e) => setDriverId(e.target.value)}
             disabled={loading}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">All Drivers</option>
             {drivers.map((driver) => (
@@ -183,7 +173,7 @@ export default function SessionFilters({
         <div>
           <label
             htmlFor="start-date-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Start Date
           </label>
@@ -192,7 +182,7 @@ export default function SessionFilters({
             id="start-date-filter"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white"
           />
         </div>
 
@@ -200,7 +190,7 @@ export default function SessionFilters({
         <div>
           <label
             htmlFor="end-date-filter"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             End Date
           </label>
@@ -209,7 +199,7 @@ export default function SessionFilters({
             id="end-date-filter"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white"
           />
         </div>
 
@@ -217,7 +207,7 @@ export default function SessionFilters({
         <div>
           <label
             htmlFor="sort-by"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className="block text-sm font-medium text-gray-300 mb-2"
           >
             Sort By
           </label>
@@ -225,7 +215,7 @@ export default function SessionFilters({
             id="sort-by"
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as SortBy)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-gray-900 text-white"
           >
             <option value="date-desc">Date (Newest First)</option>
             <option value="date-asc">Date (Oldest First)</option>
@@ -242,14 +232,14 @@ export default function SessionFilters({
         {hasFilters && (
           <button
             onClick={handleClearFilters}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 border border-gray-600 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
           >
             Clear Filters
           </button>
         )}
         <button
           onClick={handleApplyFilters}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading}
         >
           Apply Filters

@@ -11,6 +11,7 @@ interface Session {
   date: string;
   total_time_ms: number;
   best_lap_ms: number | null;
+  source?: string;
   driver: { id: string; name: string; email: string } | null;
   track: { id: string; name: string; location: string | null } | null;
   lapCount: number;
@@ -49,10 +50,10 @@ export function exportSessionsToCSV(sessions: Session[]): void {
     'Track',
     'Location',
     'Driver',
-    'Laps',
     'Best Lap',
+    'Laps',
     'Total Time',
-    'Session ID'
+    'Source'
   ];
 
   // Convert sessions to CSV rows
@@ -62,10 +63,10 @@ export function exportSessionsToCSV(sessions: Session[]): void {
       escapeCSVField(session.track?.name || 'Unknown Track'),
       escapeCSVField(session.track?.location || ''),
       escapeCSVField(session.driver?.name || 'Unknown'),
-      escapeCSVField(session.lapCount),
       escapeCSVField(session.best_lap_ms ? formatLapMs(session.best_lap_ms) : ''),
+      escapeCSVField(session.lapCount),
       escapeCSVField(formatDurationMs(session.total_time_ms)),
-      escapeCSVField(session.id)
+      escapeCSVField(session.source || '')
     ].join(',');
   });
 
