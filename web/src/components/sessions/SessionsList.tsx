@@ -105,6 +105,71 @@ export default function SessionsList({ filters: initialFilters }: SessionsListPr
     setFilteredSessions(filtered);
   }, [sessions, searchQuery]);
 
+  // Skeleton Loading Components
+  const TableRowSkeleton = () => (
+    <tr className="hover:bg-gray-800/50 transition-colors animate-pulse">
+      <td className="py-4 text-sm">
+        <div className="h-4 bg-gray-700 rounded w-24"></div>
+      </td>
+      <td className="py-4">
+        <div className="flex items-center gap-2">
+          <div>
+            <div className="h-4 bg-gray-700 rounded w-32 mb-1"></div>
+            <div className="h-3 bg-gray-700 rounded w-20"></div>
+          </div>
+          <div className="h-5 bg-gray-700 rounded w-16"></div>
+        </div>
+      </td>
+      <td className="py-4">
+        <div className="h-4 bg-gray-700 rounded w-28"></div>
+      </td>
+      <td className="py-4 text-right">
+        <div className="h-4 bg-gray-700 rounded w-8 ml-auto"></div>
+      </td>
+      <td className="py-4 text-right">
+        <div className="h-4 bg-gray-700 rounded w-16 ml-auto"></div>
+      </td>
+      <td className="py-4 text-right">
+        <div className="h-4 bg-gray-700 rounded w-20 ml-auto"></div>
+      </td>
+      <td className="py-4 text-right">
+        <div className="h-5 bg-gray-700 rounded w-16 ml-auto"></div>
+      </td>
+    </tr>
+  );
+
+  const CardSkeleton = () => (
+    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 animate-pulse">
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex-1">
+          <div className="h-5 bg-gray-700 rounded w-32 mb-1"></div>
+          <div className="h-3 bg-gray-700 rounded w-20"></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-5 bg-gray-700 rounded w-16"></div>
+          <div className="h-3 bg-gray-700 rounded w-16"></div>
+        </div>
+      </div>
+
+      <div className="h-4 bg-gray-700 rounded w-28 mb-3"></div>
+
+      <div className="grid grid-cols-3 gap-4 text-sm">
+        <div>
+          <div className="h-3 bg-gray-700 rounded w-8 mb-1"></div>
+          <div className="h-4 bg-gray-700 rounded w-6"></div>
+        </div>
+        <div>
+          <div className="h-3 bg-gray-700 rounded w-12 mb-1"></div>
+          <div className="h-4 bg-gray-700 rounded w-16"></div>
+        </div>
+        <div>
+          <div className="h-3 bg-gray-700 rounded w-16 mb-1"></div>
+          <div className="h-4 bg-gray-700 rounded w-20"></div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Mobile Card Component
   const SessionCard = ({ session }: { session: Session }) => (
     <Link
@@ -159,9 +224,66 @@ export default function SessionsList({ filters: initialFilters }: SessionsListPr
     return (
       <div className="min-h-screen bg-gray-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-gray-400">Loading sessions...</div>
+          {/* Header Skeleton */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <div className="h-9 bg-gray-700 rounded w-32 animate-pulse"></div>
+              <div className="h-5 bg-gray-700 rounded w-48 mt-2 animate-pulse"></div>
+            </div>
+            <div className="h-10 bg-gray-700 rounded w-32 animate-pulse"></div>
           </div>
+
+          {/* Mobile Filter Toggle Skeleton */}
+          <div className="lg:hidden mb-4">
+            <div className="h-12 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+
+          {/* Filters Panel Skeleton */}
+          <div className="mb-6">
+            <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
+              <div className="h-8 bg-gray-700 rounded w-40 mb-6 animate-pulse"></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i}>
+                    <div className="h-4 bg-gray-700 rounded w-16 mb-2 animate-pulse"></div>
+                    <div className="h-10 bg-gray-700 rounded animate-pulse"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Content Skeletons */}
+          <>
+            {/* Desktop Table Skeleton */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700 text-left text-sm text-gray-400 uppercase tracking-wider">
+                    <th className="pb-3 font-medium">Date</th>
+                    <th className="pb-3 font-medium">Track</th>
+                    <th className="pb-3 font-medium">Driver</th>
+                    <th className="pb-3 font-medium text-right">Laps</th>
+                    <th className="pb-3 font-medium text-right">Best Lap</th>
+                    <th className="pb-3 font-medium text-right">Total Time</th>
+                    <th className="pb-3 font-medium text-right">Source</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <TableRowSkeleton key={i} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards Skeleton */}
+            <div className="md:hidden space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <CardSkeleton key={i} />
+              ))}
+            </div>
+          </>
         </div>
       </div>
     );

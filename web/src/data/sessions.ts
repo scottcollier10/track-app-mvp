@@ -48,16 +48,15 @@ export interface SessionFilters {
 }
 
 /**
- * Get recent sessions with basic info
+ * Get recent sessions with basic info - OPTIMIZED with aggregated lap counts
  */
 export async function getRecentSessions(
   limit: number = 10
 ): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
   try {
     const supabase = createServerClient();
-    // TypeScript escape hatch for build compatibility
-    const db = supabase as any;
 
+    // Optimized approach: Use Supabase's aggregation count feature
     const { data: sessions, error } = await (supabase
       .from('sessions') as any)
       .select(
@@ -68,7 +67,8 @@ export async function getRecentSessions(
         best_lap_ms,
         source,
         driver:drivers(id, name, email),
-        track:tracks(id, name, location)
+        track:tracks(id, name, location),
+        laps!left(count)
       `
       )
       .order('date', { ascending: false })
@@ -78,20 +78,12 @@ export async function getRecentSessions(
       return { data: null, error: new Error(error.message) };
     }
 
-    // Get lap counts separately
-    const sessionsWithCounts = await Promise.all(
-      (sessions || []).map(async (session: any) => {
-        const { count } = await (supabase
-          .from('laps') as any)
-          .select('*', { count: 'exact', head: true })
-          .eq('session_id', session.id);
-
-        return {
-          ...session,
-          lapCount: count || 0,
-        };
-      })
-    );
+    // Transform the response to include lapCount from aggregated data
+    const sessionsWithCounts = (sessions || []).map((session: any) => ({
+      ...session,
+      lapCount: session.laps?.[0]?.count || 0,
+      laps: undefined, // Remove the nested laps object
+    }));
 
     return { data: sessionsWithCounts as any, error: null };
   } catch (err) {
@@ -103,16 +95,15 @@ export async function getRecentSessions(
 }
 
 /**
- * Get all sessions with optional filters
+ * Get all sessions with optional filters - OPTIMIZED with aggregated lap counts
  */
 export async function getAllSessions(
   filters?: SessionFilters
 ): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
   try {
     const supabase = createServerClient();
-    // TypeScript escape hatch for build compatibility
-    const db = supabase as any;
 
+    // Optimized approach: Use Supabase's aggregation count feature
     let query = (supabase.from('sessions') as any).select(
       `
         id,
@@ -121,7 +112,8 @@ export async function getAllSessions(
         best_lap_ms,
         source,
         driver:drivers(id, name, email),
-        track:tracks(id, name, location)
+        track:tracks(id, name, location),
+        laps!left(count)
       `
     );
 
@@ -147,20 +139,12 @@ export async function getAllSessions(
       return { data: null, error: new Error(error.message) };
     }
 
-    // Get lap counts separately
-    const sessionsWithCounts = await Promise.all(
-      (sessions || []).map(async (session: any) => {
-        const { count } = await (supabase
-          .from('laps') as any)
-          .select('*', { count: 'exact', head: true })
-          .eq('session_id', session.id);
-
-        return {
-          ...session,
-          lapCount: count || 0,
-        };
-      })
-    );
+    // Transform the response to include lapCount from aggregated data
+    const sessionsWithCounts = (sessions || []).map((session: any) => ({
+      ...session,
+      lapCount: session.laps?.[0]?.count || 0,
+      laps: undefined, // Remove the nested laps object
+    }));
 
     return { data: sessionsWithCounts as any, error: null };
   } catch (err) {
