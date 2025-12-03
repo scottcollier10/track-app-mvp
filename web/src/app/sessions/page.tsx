@@ -22,5 +22,5 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
   if (params.startDate) initialFilters.startDate = params.startDate;
   if (params.endDate) initialFilters.endDate = params.endDate;
 
-  return <SessionsList initialFilters={initialFilters} />;
+  return <SessionsList filters={initialFilters} />;
 }
