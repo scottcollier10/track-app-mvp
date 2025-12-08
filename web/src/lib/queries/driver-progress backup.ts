@@ -89,22 +89,11 @@ export async function getDriverProgress(
 
     // Apply mode-specific filters
     if (mode === 'weekend' && dateRange) {
-      // Filter by date range - FIXED: Include entire day(s)
+      // Filter by date range
       const [startDate, endDate] = dateRange;
-      
-      // Add time to ensure we capture the full day
-      // Start at beginning of day, end at end of day
-      const startDateTime = `${startDate}T00:00:00`;
-      
-      // For end date, add one day and use < instead of <=
-      // This ensures we get all sessions on endDate
-      const endDateObj = new Date(endDate);
-      endDateObj.setDate(endDateObj.getDate() + 1);
-      const endDateTime = endDateObj.toISOString().split('T')[0] + 'T00:00:00';
-      
       query = query
-        .gte('date', startDateTime)
-        .lt('date', endDateTime);  // Use < instead of <= with next day
+        .gte('date', startDate)
+        .lte('date', endDate);
     } else if (mode === 'track' && trackId) {
       // Filter by track
       query = query.eq('track_id', trackId);
