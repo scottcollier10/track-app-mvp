@@ -12,6 +12,31 @@ import { getDrivers, Driver } from "@/data/drivers";
 // Demo coach ID - in production this would come from auth context
 const DEMO_COACH_ID = "c1111111-1111-1111-1111-111111111111";
 
+/**
+ * Formats driver names from database format to display format
+ * Examples:
+ * - "jordan.moore" → "Jordan Moore"
+ * - "Scott Collier" → "Scott Collier" (already formatted, preserve)
+ * - "alex.chen" → "Alex Chen"
+ */
+const formatDriverName = (name: string): string => {
+  // If name already has spaces (like "Scott Collier"), return as-is
+  if (name.includes(' ')) {
+    return name;
+  }
+  
+  // If name has dots (like "jordan.moore"), convert to proper case
+  if (name.includes('.')) {
+    return name
+      .split('.')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+  
+  // Fallback: capitalize first letter
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+};
+
 interface DriverWithStats {
   id: string;
   name: string;
@@ -34,6 +59,52 @@ interface DriverTrackStats {
   avgBestLapMs: number | null;
   totalLaps: number;
   lastSessionDate: string | null;
+}
+
+// ComparisonCard component for mobile view
+function ComparisonCard({ item }: { item: DriverTrackStats }) {
+  return (
+    <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="text-lg font-semibold text-white">
+            {formatDriverName(item.driverName)}
+          </h3>
+          <p className="text-sm text-gray-400">{item.trackName}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-mono font-semibold text-green-400">
+            {item.bestLapMs ? formatLapMs(item.bestLapMs) : "-"}
+          </div>
+          <p className="text-xs text-gray-500">Best Lap</p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-4 mb-3">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Sessions</p>
+          <p className="text-sm font-semibold text-white">{item.sessionCount}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Total Laps</p>
+          <p className="text-sm font-semibold text-white">{item.totalLaps}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Last Session</p>
+          <p className="text-sm font-semibold text-white">
+            {item.lastSessionDate ? formatDate(item.lastSessionDate) : "-"}
+          </p>
+        </div>
+      </div>
+
+      <Link
+        href={`/sessions?driverId=${item.driverId}&trackId=${item.trackId}`}
+        className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-2 rounded text-sm transition-colors"
+      >
+        View Sessions
+      </Link>
+    </div>
+  );
 }
 
 export default function CoachDashboardPage() {
@@ -138,18 +209,59 @@ export default function CoachDashboardPage() {
 
         const sessions = sessionsResult.data || [];
 
-        // Transform sessions into comparison format
-        const comparisonData: DriverTrackStats[] = sessions.map(session => ({
-          driverId: session.driver?.id || '',
-          driverName: session.driver?.name || 'Unknown',
-          trackId: session.track?.id || '',
-          trackName: session.track?.name || 'Unknown',
-          sessionCount: 1, // Each session represents one session
-          bestLapMs: session.best_lap_ms,
-          avgBestLapMs: session.best_lap_ms, // For single session, best = avg
-          totalLaps: session.lapCount,
-          lastSessionDate: session.date
-        }));
+        // Transform sessions into comparison format - AGGREGATE by driver-track
+        const driverTrackMap = new Map<string, DriverTrackStats>();
+        
+        sessions.forEach(session => {
+          const driverId = session.driver?.id || '';
+          const trackId = session.track?.id || '';
+          const key = `${driverId}-${trackId}`;
+          
+          const existing = driverTrackMap.get(key);
+          
+          if (existing) {
+            // Aggregate multiple sessions for same driver-track
+            existing.sessionCount += 1;
+            existing.totalLaps += session.lapCount;
+            
+            // Update best lap if this session is faster
+            if (session.best_lap_ms && (!existing.bestLapMs || session.best_lap_ms < existing.bestLapMs)) {
+              existing.bestLapMs = session.best_lap_ms;
+            }
+            
+            // Update last session date if newer
+            if (new Date(session.date) > new Date(existing.lastSessionDate || '1970-01-01')) {
+              existing.lastSessionDate = session.date;
+            }
+            
+            // Recalculate average best lap
+            // Collect all best laps for this driver-track and average them
+            const allBestLaps = sessions
+              .filter(s => s.driver?.id === driverId && s.track?.id === trackId && s.best_lap_ms)
+              .map(s => s.best_lap_ms!);
+            
+            if (allBestLaps.length > 0) {
+              existing.avgBestLapMs = Math.round(
+                allBestLaps.reduce((sum, lap) => sum + lap, 0) / allBestLaps.length
+              );
+            }
+          } else {
+            // First session for this driver-track combination
+            driverTrackMap.set(key, {
+              driverId: driverId,
+              driverName: session.driver?.name || 'Unknown',
+              trackId: trackId,
+              trackName: session.track?.name || 'Unknown',
+              sessionCount: 1,
+              bestLapMs: session.best_lap_ms,
+              avgBestLapMs: session.best_lap_ms,
+              totalLaps: session.lapCount,
+              lastSessionDate: session.date
+            });
+          }
+        });
+        
+        const comparisonData = Array.from(driverTrackMap.values());
 
         // Get unique tracks for filter dropdown
         const uniqueTracks = Array.from(
@@ -210,13 +322,10 @@ export default function CoachDashboardPage() {
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-red-200 font-semibold mb-1">
+                <h3 className="text-lg font-semibold text-red-400 mb-2">
                   Error Loading Dashboard
                 </h3>
-                <p className="text-red-300 text-sm">{error}</p>
-                <p className="text-red-400 text-xs mt-2">
-                  Make sure the coaches table exists and you have drivers assigned to the coach.
-                </p>
+                <p className="text-gray-300">{error}</p>
               </div>
             </div>
           </div>
@@ -225,177 +334,18 @@ export default function CoachDashboardPage() {
     );
   }
 
-  // Loading Skeleton Components
-  const StatCardSkeleton = () => (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6 animate-pulse">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 bg-gray-700 rounded"></div>
-        <div className="h-3 bg-gray-700 rounded w-16"></div>
-      </div>
-      <div className="h-8 bg-gray-700 rounded w-12"></div>
-    </div>
-  );
-
-  const DriverLinkSkeleton = () => (
-    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-full animate-pulse">
-      <div className="h-4 bg-gray-600 rounded w-20"></div>
-      <div className="h-3 bg-gray-600 rounded w-16"></div>
-    </div>
-  );
-
-  const ComparisonCardSkeleton = () => (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 min-h-[100px] animate-pulse">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="h-5 bg-gray-700 rounded w-32 mb-1"></div>
-          <div className="h-3 bg-gray-700 rounded w-24"></div>
-        </div>
-        <div className="h-4 bg-gray-700 rounded w-20"></div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 text-sm">
-        <div>
-          <div className="h-3 bg-gray-700 rounded w-12 mb-1"></div>
-          <div className="h-4 bg-gray-700 rounded w-16"></div>
-        </div>
-        <div>
-          <div className="h-3 bg-gray-700 rounded w-8 mb-1"></div>
-          <div className="h-4 bg-gray-700 rounded w-8"></div>
-        </div>
-        <div>
-          <div className="h-3 bg-gray-700 rounded w-16 mb-1"></div>
-          <div className="h-4 bg-gray-700 rounded w-8"></div>
-        </div>
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-gray-700">
-        <div className="h-3 bg-gray-700 rounded w-32"></div>
-      </div>
-    </div>
-  );
-
-  // Mobile Card Component for Comparison Data
-  const ComparisonCard = ({ item }: { item: DriverTrackStats }) => (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors min-h-[100px]">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="font-medium text-gray-100 mb-1">
-            {item.driverName}
-          </div>
-          <div className="text-sm text-gray-400">
-            {item.trackName}
-          </div>
-        </div>
-        <Link
-          href={`/sessions?driverId=${item.driverId}&trackId=${item.trackId}`}
-          className="text-blue-400 hover:text-blue-300 transition-colors text-sm"
-        >
-          View Sessions
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 text-sm">
-        <div>
-          <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Best Lap</div>
-          <div className="font-mono">
-            {item.bestLapMs ? (
-              <span className="text-green-400">{formatLapMs(item.bestLapMs)}</span>
-            ) : (
-              <span className="text-gray-500">—</span>
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Laps</div>
-          <div className="text-gray-300">{item.totalLaps}</div>
-        </div>
-        <div>
-          <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Sessions</div>
-          <div className="text-gray-300">{item.sessionCount}</div>
-        </div>
-      </div>
-
-      {item.lastSessionDate && (
-        <div className="mt-3 pt-3 border-t border-gray-700">
-          <div className="text-xs text-gray-400">
-            Last session: {formatDate(item.lastSessionDate)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // Loading State with Skeletons
-  if (loading) {
+  if (loading && drivers.length === 0) {
     return (
       <div className="min-h-screen bg-gray-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header Skeleton */}
-          <div className="mb-8">
-            <div className="h-9 bg-gray-700 rounded w-48 animate-pulse mb-2"></div>
-            <div className="h-5 bg-gray-700 rounded w-96 animate-pulse"></div>
-          </div>
-
-          {/* Stats Overview Skeleton */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <StatCardSkeleton key={i} />
-            ))}
-          </div>
-
-          {/* Your Drivers Section Skeleton */}
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6 mb-8">
-            <div className="h-6 bg-gray-700 rounded w-32 animate-pulse mb-4"></div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <DriverLinkSkeleton key={i} />
-              ))}
-            </div>
-          </div>
-
-          {/* Mobile Filter Toggle Skeleton */}
-          <div className="lg:hidden mb-4">
-            <div className="h-12 bg-gray-700 rounded animate-pulse"></div>
-          </div>
-
-          {/* Filters Panel Skeleton */}
-          <div className="mb-6">
-            <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
-              <div className="h-6 bg-gray-700 rounded w-40 mb-4 animate-pulse"></div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i}>
-                    <div className="h-4 bg-gray-700 rounded w-16 mb-2 animate-pulse"></div>
-                    <div className="h-10 bg-gray-700 rounded animate-pulse"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Comparison Section Skeleton */}
           <div>
-            <div className="h-6 bg-gray-700 rounded w-64 animate-pulse mb-4"></div>
-            {/* Desktop Table Skeleton */}
-            <div className="hidden md:block bg-gray-800/50 rounded-lg border border-gray-700 p-6">
-              <div className="space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-16 bg-gray-700 rounded animate-pulse"></div>
-                ))}
-              </div>
-            </div>
-
-            {/* Mobile Cards Skeleton */}
-            <div className="md:hidden space-y-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <ComparisonCardSkeleton key={i} />
-              ))}
-            </div>
+            <h1 className="text-3xl font-bold text-white">Coach Dashboard</h1>
+            <p className="text-gray-400 mt-2">
+              Loading your coaching data...
+            </p>
           </div>
-
-          {/* Total Laps Summary Skeleton */}
-          <div className="text-center mt-8">
-            <div className="h-4 bg-gray-700 rounded w-48 animate-pulse mx-auto"></div>
+          <div className="mt-8 flex justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
           </div>
         </div>
       </div>
@@ -456,7 +406,7 @@ export default function CoachDashboardPage() {
             </div>
             {overallBestDriver && (
               <p className="text-xs text-gray-500 mt-1">
-                by {overallBestDriver}
+                by {formatDriverName(overallBestDriver)}
               </p>
             )}
           </div>
@@ -480,7 +430,7 @@ export default function CoachDashboardPage() {
 
         {/* Driver Quick Links */}
         {drivers.length > 0 && (
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6">
+          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">
                 Your Drivers
@@ -508,7 +458,7 @@ export default function CoachDashboardPage() {
                   href={`/sessions?driverId=${driver.id}`}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-700 text-gray-300 rounded-full text-sm hover:bg-gray-600 transition-colors"
                 >
-                  {driver.name}
+                  {formatDriverName(driver.name)}
                   <span className="text-xs text-gray-400">
                     ({driver.totalSessions} sessions)
                   </span>
@@ -532,7 +482,7 @@ export default function CoachDashboardPage() {
                   href={`/sessions?driverId=${driver.id}`}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-700 text-gray-300 rounded-full text-sm hover:bg-gray-600 transition-colors"
                 >
-                  {driver.name}
+                  {formatDriverName(driver.name)}
                   <span className="text-xs text-gray-400">
                     ({driver.totalSessions} sessions)
                   </span>
@@ -592,7 +542,7 @@ export default function CoachDashboardPage() {
 
               {/* Mobile Cards (shown on mobile/tablet) */}
               <div className="md:hidden space-y-4">
-                {comparison.map((item) => (
+                {Array.isArray(comparison) && comparison.map((item) => (
                   <ComparisonCard key={`${item.driverId}-${item.trackId}`} item={item} />
                 ))}
               </div>
@@ -601,7 +551,7 @@ export default function CoachDashboardPage() {
         </div>
 
         {/* Total Laps Summary */}
-        <div className="text-center text-sm text-gray-500">
+        <div className="mt-8 text-center text-sm text-gray-500">
           Total laps recorded: {totalLaps.toLocaleString()}
         </div>
       </div>

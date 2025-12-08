@@ -5,6 +5,31 @@ import Link from "next/link";
 import { formatLapMs, formatDate } from "@/lib/time";
 import { ArrowDown, ArrowUp, ExternalLink } from "lucide-react";
 
+/**
+ * Formats driver names from database format to display format
+ * Examples:
+ * - "jordan.moore" → "Jordan Moore"
+ * - "Scott Collier" → "Scott Collier" (already formatted, preserve)
+ * - "alex.chen" → "Alex Chen"
+ */
+const formatDriverName = (name: string): string => {
+  // If name already has spaces (like "Scott Collier"), return as-is
+  if (name.includes(' ')) {
+    return name;
+  }
+  
+  // If name has dots (like "jordan.moore"), convert to proper case
+  if (name.includes('.')) {
+    return name
+      .split('.')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+  
+  // Fallback: capitalize first letter
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+};
+
 interface DriverTrackStats {
   driverId: string;
   driverName: string;
@@ -22,15 +47,16 @@ interface DriverComparisonTableProps {
   selectedTrackId?: string;
 }
 
-type SortField = "driverName" | "trackName" | "bestLapMs" | "sessionCount" | "totalLaps";
+type SortField = "driverName" | "trackName" | "bestLapMs" | "sessionCount" | "totalLaps" | "lastSessionDate";
 type SortDirection = "asc" | "desc";
 
 export default function DriverComparisonTable({
   comparison,
   selectedTrackId,
 }: DriverComparisonTableProps) {
-  const [sortField, setSortField] = useState<SortField>("bestLapMs");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  // Default sort: lastSessionDate descending (newest first) - matches Sessions page
+  const [sortField, setSortField] = useState<SortField>("lastSessionDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Filter by track if selected
   const filteredData = useMemo(() => {
@@ -68,6 +94,13 @@ export default function DriverComparisonTable({
           aVal = a.totalLaps;
           bVal = b.totalLaps;
           break;
+        case "lastSessionDate":
+          // Null values go to the end
+          if (a.lastSessionDate === null) return 1;
+          if (b.lastSessionDate === null) return -1;
+          aVal = new Date(a.lastSessionDate).getTime();
+          bVal = new Date(b.lastSessionDate).getTime();
+          break;
         default:
           return 0;
       }
@@ -83,8 +116,10 @@ export default function DriverComparisonTable({
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      // Default to ascending for names, descending for metrics
-      setSortDirection(field === "driverName" || field === "trackName" ? "asc" : "desc");
+      // Default to ascending for names, descending for metrics and dates
+      setSortDirection(
+        field === "driverName" || field === "trackName" ? "asc" : "desc"
+      );
     }
   };
 
@@ -176,9 +211,11 @@ export default function DriverComparisonTable({
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={() => handleSort("lastSessionDate")}
               >
                 Last Session
+                <SortIcon field="lastSessionDate" />
               </th>
               <th
                 scope="col"
@@ -196,7 +233,7 @@ export default function DriverComparisonTable({
 
               return (
                 <tr
-                  key={`${item.driverId}-${item.trackId}`}
+                  key={`${item.driverId}-${item.trackId}-${index}`}
                   className={
                     index % 2 === 0
                       ? "bg-white dark:bg-gray-800"
@@ -205,7 +242,7 @@ export default function DriverComparisonTable({
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {item.driverName}
+                      {formatDriverName(item.driverName)}
                     </div>
                   </td>
                   {!selectedTrackId && (
