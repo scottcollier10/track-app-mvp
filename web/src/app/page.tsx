@@ -3,6 +3,8 @@ import { formatDate, formatLapTime } from '@/lib/utils/formatters';
 import { formatLapMs, formatDateTime } from '@/lib/time';
 import Link from 'next/link';
 import { Gauge, BarChart3, Flag, RefreshCcw, ArrowRight, MapPin, Users, Timer, TrendingUp, Activity } from 'lucide-react';
+import { HeroBurst } from '@/components/ui/HeroBurst';
+import { TrackAppHeader } from '@/components/TrackAppHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,8 +89,10 @@ export default async function DashboardPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="relative min-h-screen text-slate-50">
+      <HeroBurst />
+      <TrackAppHeader />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-24">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Dashboard</h1>

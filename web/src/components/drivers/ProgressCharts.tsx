@@ -51,10 +51,10 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
 
     const data = payload[0].payload;
     return (
-      <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg">
-        <p className="text-sm font-semibold text-white mb-1">{data.date}</p>
+      <div className="bg-slate-950 p-3 rounded-lg border border-slate-700 shadow-lg">
+        <p className="text-sm font-semibold text-slate-50 mb-1">{data.date}</p>
         {data.lapTimeMs && (
-          <p className="text-sm text-green-400 font-mono">{formatLapMs(data.lapTimeMs)}</p>
+          <p className="text-sm text-emerald-400 font-mono">{formatLapMs(data.lapTimeMs)}</p>
         )}
       </div>
     );
@@ -66,10 +66,10 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
 
     const data = payload[0].payload;
     return (
-      <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg">
-        <p className="text-sm font-semibold text-white mb-1">{data.date}</p>
+      <div className="bg-slate-950 p-3 rounded-lg border border-slate-700 shadow-lg">
+        <p className="text-sm font-semibold text-slate-50 mb-1">{data.date}</p>
         {data.consistency !== null && (
-          <p className="text-sm text-blue-400 font-semibold">{data.consistency}/100</p>
+          <p className="text-sm text-sky-400 font-semibold">{data.consistency}/100</p>
         )}
       </div>
     );
@@ -83,26 +83,26 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
   };
 
   return (
-    <div className="space-y-8 mt-8">
+    <div className="grid gap-8 lg:grid-cols-2">
       {/* Chart 1: Best Lap by Event */}
       {lapTimeData.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Best Lap by Event - {trackName}
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+          <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Best Lap by Event • {trackName}
           </h3>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={lapTimeData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#6B7280" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 dataKey="date"
-                stroke="#9CA3AF"
-                style={{ fontSize: '14px', fontWeight: '500' }}
-                tick={{ fill: '#9CA3AF' }}
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
               />
               <YAxis
-                stroke="#9CA3AF"
-                style={{ fontSize: '14px', fontWeight: '500' }}
-                tick={{ fill: '#9CA3AF' }}
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
                 domain={['auto', 'auto']}
                 reversed={true}
                 tickFormatter={formatLapTimeAxis}
@@ -111,20 +111,20 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
               <Line
                 type="monotone"
                 dataKey="lapTime"
-                stroke="#10B981"
+                stroke="#10b981"
                 strokeWidth={2}
-                dot={{ fill: '#10B981', r: 4 }}
+                dot={{ fill: '#10b981', r: 4 }}
                 activeDot={{ r: 6 }}
               />
               {seasonTarget && (
                 <ReferenceLine
                   y={msToSeconds(seasonTarget)}
-                  stroke="#9CA3AF"
+                  stroke="#94a3b8"
                   strokeDasharray="5 5"
                   label={{
                     value: 'Season Target',
                     position: 'right',
-                    fill: '#9CA3AF',
+                    fill: '#94a3b8',
                     fontSize: 12,
                   }}
                 />
@@ -136,23 +136,23 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
 
       {/* Chart 2: Consistency Score by Event */}
       {consistencyData.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-4">
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+          <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             Consistency Score by Event
           </h3>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <LineChart data={consistencyData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#6B7280" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 dataKey="date"
-                stroke="#9CA3AF"
-                style={{ fontSize: '14px', fontWeight: '500' }}
-                tick={{ fill: '#9CA3AF' }}
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
               />
               <YAxis
-                stroke="#9CA3AF"
-                style={{ fontSize: '14px', fontWeight: '500' }}
-                tick={{ fill: '#9CA3AF' }}
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
                 domain={[70, 100]}
                 tickFormatter={(value) => `${value}`}
               />
@@ -160,9 +160,9 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
               <Line
                 type="monotone"
                 dataKey="consistency"
-                stroke="#3B82F6"
+                stroke="#0ea5e9"
                 strokeWidth={2}
-                dot={{ fill: '#3B82F6', r: 4 }}
+                dot={{ fill: '#0ea5e9', r: 4 }}
                 activeDot={{ r: 6 }}
               />
             </LineChart>
@@ -172,8 +172,8 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
 
       {/* No data message */}
       {lapTimeData.length === 0 && consistencyData.length === 0 && (
-        <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-8 text-center">
-          <p className="text-gray-400">No progression data available for charts.</p>
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+          <p className="text-slate-400">No progression data available for charts.</p>
         </div>
       )}
     </div>

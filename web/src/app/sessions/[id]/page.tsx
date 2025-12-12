@@ -1,5 +1,6 @@
 import { getSessionWithLaps } from '@/data/sessions';
 import { formatDate, formatLapMs, formatDurationMs } from '@/lib/time';
+import { formatDriverName } from '@/lib/utils/formatters';
 import { notFound } from 'next/navigation';
 import LapTimeChart from '@/components/charts/LapTimeChart';
 import AddNoteForm from '@/components/ui/AddNoteForm';
@@ -18,29 +19,10 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { Card } from '@/components/ui/Card';
 import { Timer, Gauge, Hash, MapPin, ArrowLeft } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
+import { HeroBurst } from '@/components/ui/HeroBurst';
+import { TrackAppHeader } from '@/components/TrackAppHeader';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Format driver name from email format to proper case
- * Examples:
- *   "jamie.rodriguez" -> "Jamie Rodriguez"
- *   "Scott Collier" -> "Scott Collier" (already formatted)
- */
-function formatDriverName(name: string): string {
-  if (!name) return '';
-  
-  // If name already has capital letters, assume it's formatted
-  if (name !== name.toLowerCase()) {
-    return name;
-  }
-  
-  // Split on dots or spaces, capitalize each word
-  return name
-    .split(/[.\s]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
 
 interface PageProps {
   params: {
@@ -54,23 +36,29 @@ export default async function SessionDetailPage({ params }: PageProps) {
   // Error state
   if (error) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl md:text-3xl font-semibold text-primary">Session Detail</h1>
-        <Card className="bg-status-critical/10 border-status-critical/30">
-          <h3 className="text-status-critical font-semibold mb-2">
-            Error Loading Session
-          </h3>
-          <p className="text-status-critical/80 text-sm">
-            {error.message || 'Failed to load session details.'}
-          </p>
-          <Link
-            href="/sessions"
-            className="inline-flex items-center gap-1 mt-4 text-sm text-status-critical hover:underline"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Sessions
-          </Link>
-        </Card>
+      <div className="relative min-h-screen text-slate-50">
+        <HeroBurst />
+        <TrackAppHeader />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-24">
+          <div className="space-y-6">
+            <h1 className="text-2xl md:text-3xl font-semibold text-primary">Session Detail</h1>
+            <Card className="bg-status-critical/10 border-status-critical/30">
+              <h3 className="text-status-critical font-semibold mb-2">
+                Error Loading Session
+              </h3>
+              <p className="text-status-critical/80 text-sm">
+                {error.message || 'Failed to load session details.'}
+              </p>
+              <Link
+                href="/sessions"
+                className="inline-flex items-center gap-1 mt-4 text-sm text-status-critical hover:underline"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Sessions
+              </Link>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -92,7 +80,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="relative min-h-screen text-slate-50">
+      <HeroBurst />
+      <TrackAppHeader />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-24">
+        <div className="space-y-8">
       {/* Header */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -285,6 +277,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
       {/* Coach Notes (Coach View Only) */}
       <CoachNotes sessionId={session.id} initialNotes={session.coach_notes} />
+        </div>
+      </div>
     </div>
   );
 }

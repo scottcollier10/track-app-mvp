@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { formatDate } from '@/lib/time';
+import { formatDriverName } from '@/lib/utils/formatters';
 import SessionHistoryTable from '@/components/drivers/SessionHistoryTable';
 import { getAllSessions, SessionWithDetails } from '@/data/sessions';
 import { getDrivers, Driver } from '@/data/drivers';
 import { getDriverProgressByTrack, getDriverTracks, DriverProgressData } from '@/data/driverProgress';
 import ProgressStats from '@/components/drivers/ProgressStats';
 import ProgressCharts from '@/components/drivers/ProgressCharts';
+import { HeroBurst } from '@/components/ui/HeroBurst';
+import { TrackAppHeader } from '@/components/TrackAppHeader';
 
 type DateFilter = 'last7' | 'last30' | 'last90' | 'thisYear' | 'allTime';
 
@@ -136,10 +138,32 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
       const tracks = Array.from(tracksMap.values());
       setAvailableTracks(tracks);
 
-      // Auto-select first track if none selected
+      // Auto-select track with most sessions if none selected
       if (tracks.length > 0 && !selectedTrackId) {
-        setSelectedTrackId(tracks[0].id);
-        console.log('[DriverProgressPage] Auto-selected track:', tracks[0].name);
+        // Count sessions per track
+        const sessionCounts = new Map<string, number>();
+        sessions.forEach((session) => {
+          if (session.track) {
+            const count = sessionCounts.get(session.track.id) || 0;
+            sessionCounts.set(session.track.id, count + 1);
+          }
+        });
+
+        // Find track with most sessions
+        let trackWithMostSessions = tracks[0];
+        let maxSessions = 0;
+        tracks.forEach((track) => {
+          const count = sessionCounts.get(track.id) || 0;
+          if (count > maxSessions) {
+            maxSessions = count;
+            trackWithMostSessions = track;
+          }
+        });
+
+        setSelectedTrackId(trackWithMostSessions.id);
+        console.log(
+          `[DriverProgressPage] Auto-selected track with most sessions: ${trackWithMostSessions.name} (${maxSessions} sessions)`
+        );
       }
     }
 
@@ -177,14 +201,17 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
             break;
         }
 
+        console.log(`[DriverProgressPage] Fetching with filter: ${dateFilter}, after: ${after}`);
+
         const result = await getDriverProgressByTrack(driverId, selectedTrackId, { after });
 
         if (result.error) {
           console.error('[DriverProgressPage] Progress data error:', result.error);
           setProgressData(null);
         } else {
+          console.log(`[DriverProgressPage] Loaded progress data - ${result.data?.events?.length || 0} events for ${dateFilter} filter`);
+          console.log('[DriverProgressPage] Events:', result.data?.events);
           setProgressData(result.data);
-          console.log('[DriverProgressPage] Loaded progress data:', result.data);
         }
       } catch (err) {
         console.error('[DriverProgressPage] Error fetching progress:', err);
@@ -199,10 +226,12 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative min-h-screen text-slate-50">
+        <HeroBurst />
+        <TrackAppHeader />
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-24">
           <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400"></div>
           </div>
         </div>
       </div>
@@ -211,62 +240,77 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
 
   if (error || !driver) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative min-h-screen text-slate-50">
+        <HeroBurst />
+        <TrackAppHeader />
+        <main className="relative z-10 mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-24">
           <Link
             href="/coach"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+            className="flex items-center gap-2 text-sm text-slate-300 hover:text-slate-50 transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Coach Dashboard
+            ← Back to Coach Dashboard
           </Link>
 
-          <div className="mt-8 rounded-lg bg-red-500/10 border border-red-500/20 p-6">
-            <h3 className="text-lg font-semibold text-red-400 mb-2">Error</h3>
-            <p className="text-gray-300">{error || 'Driver not found'}</p>
+          <div className="mt-8 rounded-lg bg-rose-500/10 border border-rose-500/20 p-6">
+            <h3 className="text-lg font-semibold text-rose-400 mb-2">Error</h3>
+            <p className="text-slate-300">{error || 'Driver not found'}</p>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumb */}
+    <div className="relative min-h-screen text-slate-50">
+      {/* Hero burst background */}
+      <HeroBurst />
+
+      {/* Global header */}
+      <TrackAppHeader />
+
+      <main className="relative z-10 mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-24">
+        {/* Back link */}
         <Link
           href="/coach"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
+          className="flex items-center gap-2 text-sm text-slate-300 hover:text-slate-50 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Coach Dashboard
+          ← Back to Coach Dashboard
         </Link>
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-1">{driver.name}</h1>
-          <p className="text-gray-400 text-sm">{driver.email}</p>
-        </div>
-
-        {/* Track Selector - Phase 2 */}
-        {availableTracks.length > 1 && (
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
-            <label className="text-gray-400 text-sm font-medium uppercase tracking-wide">
-              Select Track:
-            </label>
-            <select
-              value={selectedTrackId || ''}
-              onChange={(e) => setSelectedTrackId(e.target.value)}
-              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-            >
-              {availableTracks.map((track) => (
-                <option key={track.id} value={track.id}>
-                  {track.name}
-                </option>
-              ))}
-            </select>
+        {/* Page Header */}
+        <header className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400">
+            Driver Progress
+          </p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">
+              {formatDriverName(driver.name)}
+            </h1>
+            <span className="text-sm text-slate-400">
+              {driver.email}
+            </span>
           </div>
-        )}
+
+          {/* Track selector dropdown */}
+          {availableTracks.length > 0 && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">
+                Select Track:
+              </label>
+              <select
+                value={selectedTrackId || ''}
+                onChange={(e) => setSelectedTrackId(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-50 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                {availableTracks.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </header>
 
         {/* Progress Stats - Phase 2 */}
         {progressData && progressData.events.length >= 2 ? (
@@ -281,8 +325,10 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         ) : null}
 
         {/* Date Filter */}
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-slate-300">Time Period:</span>
+
+          <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-900/50 p-1">
             {[
               { value: 'last7' as DateFilter, label: 'Last 7 Days' },
               { value: 'last30' as DateFilter, label: 'Last 30 Days' },
@@ -293,10 +339,10 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
               <button
                 key={filter.value}
                 onClick={() => setDateFilter(filter.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   dateFilter === filter.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    ? 'bg-sky-500 text-white'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-slate-50'
                 }`}
               >
                 {filter.label}
@@ -305,29 +351,39 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
           </div>
         </div>
 
-        {/* Session History */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-6">Session History</h2>
-          {filteredSessions.length === 0 ? (
-            <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-8 text-center">
-              <p className="text-gray-400">
-                No sessions found for the selected time period.
-              </p>
-            </div>
-          ) : (
-            <SessionHistoryTable sessions={filteredSessions} />
-          )}
-        </div>
-
         {/* Progress Charts - Phase 2 */}
-        {progressData && progressData.events.length > 0 && (
+        {progressLoading ? (
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+            <p className="text-slate-400">Loading progress data...</p>
+          </div>
+        ) : progressData && progressData.events.length > 0 ? (
           <ProgressCharts
             events={progressData.events}
             trackName={progressData.trackName}
             seasonTarget={undefined} // Optional: Set a season target in ms, e.g., 88500 for 1:28.5
           />
+        ) : selectedTrackId ? (
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+            <p className="text-slate-400 mb-2">
+              No progress data available for the selected time period.
+            </p>
+            <p className="text-slate-500 text-sm">
+              Try selecting a different time range or track.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Session History */}
+        {filteredSessions.length === 0 ? (
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
+            <p className="text-slate-400">
+              No sessions found for the selected time period.
+            </p>
+          </div>
+        ) : (
+          <SessionHistoryTable sessions={filteredSessions} />
         )}
-      </div>
+      </main>
     </div>
   );
 }

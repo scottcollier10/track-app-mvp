@@ -37,6 +37,9 @@ const config: Config = {
           warn: "#FACC15",
           critical: "#FB7185",
         },
+        slate: {
+          850: "#1a202e", // Custom shade between 800 and 900
+        },
       },
     },
   },

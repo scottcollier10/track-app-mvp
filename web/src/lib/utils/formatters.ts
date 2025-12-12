@@ -77,3 +77,38 @@ export function formatTrackLength(meters: number): string {
   const miles = meters * 0.000621371;
   return `${miles.toFixed(2)} mi`;
 }
+
+/**
+ * Format driver name from database format to display format
+ * Examples:
+ *   "taylor.brooks" -> "Taylor Brooks"
+ *   "jamie rodriguez" -> "Jamie Rodriguez"
+ *   "Scott Collier" -> "Scott Collier" (already formatted)
+ */
+export function formatDriverName(name: string): string {
+  if (!name) return '';
+
+  // If name already has uppercase letters, assume it's formatted
+  if (name !== name.toLowerCase()) {
+    return name;
+  }
+
+  // Handle dot-separated names (e.g., "taylor.brooks")
+  if (name.includes('.')) {
+    return name
+      .split('.')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // Handle space-separated names (e.g., "taylor brooks")
+  if (name.includes(' ')) {
+    return name
+      .split(' ')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // Single word name (e.g., "taylor")
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}

@@ -1,12 +1,15 @@
 "use client";
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatLapMs, formatDate } from '@/lib/time';
 import {
   getConsistencyColor,
   getBehaviorScoreColor,
 } from '@/lib/analytics';
 import { SessionWithDetails } from '@/data/sessions';
+import { BehaviorBar } from '@/components/ui/BehaviorBar';
+import { ViewButton } from '@/components/ui/ViewButton';
+import { Th, Td } from '@/components/ui/TableHelpers';
 
 interface SessionHistoryTableProps {
   sessions: SessionWithDetails[];
@@ -97,6 +100,7 @@ function getSourceBadge(source?: string): { label: string; className: string } {
 export default function SessionHistoryTable({
   sessions,
 }: SessionHistoryTableProps) {
+  const router = useRouter();
   const groupedSessions = groupSessionsByEvent(sessions);
 
   return (
@@ -104,109 +108,95 @@ export default function SessionHistoryTable({
       {groupedSessions.map((group) => (
         <div
           key={`${group.date}-${group.trackId}`}
-          className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"
+          className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/80 shadow-[0_22px_50px_rgba(15,23,42,0.9)]"
         >
           {/* Event Header */}
-          <div className="bg-gray-800/80 border-b border-gray-700 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-white">
-                  {group.trackName}
-                </h3>
-                <p className="text-sm text-gray-400">
-                  {formatDate(group.date)} • {group.sessions.length} session
-                  {group.sessions.length > 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
+          <div className="border-b border-slate-800/80 px-4 py-3">
+            <p className="text-sm font-semibold text-slate-50">
+              {group.trackName}
+            </p>
+            <p className="text-xs text-slate-400">
+              {formatDate(group.date)} • {group.sessions.length} session
+              {group.sessions.length > 1 ? 's' : ''}
+            </p>
           </div>
 
           {/* Sessions Table */}
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-900/50">
-                <tr className="border-b border-gray-700">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Session
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Source
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Laps
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Best Lap
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Consistency
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Behavior
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Action
-                  </th>
+            <table className="w-full text-sm">
+              <thead className="text-xs text-slate-400">
+                <tr>
+                  <Th>Session</Th>
+                  <Th>Source</Th>
+                  <Th>Laps</Th>
+                  <Th>Best Lap</Th>
+                  <Th>Consistency</Th>
+                  <Th>Behavior</Th>
+                  <Th></Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody>
                 {group.sessions.map((session, index) => {
                   const sourceBadge = getSourceBadge(session.source);
+                  // TODO: Replace with actual consistency/behavior data when available
+                  const mockConsistency = 85 + Math.floor(Math.random() * 10);
+                  const mockBehavior = 75 + Math.floor(Math.random() * 20);
 
                   return (
                     <tr
                       key={session.id}
-                      className="hover:bg-gray-700/30 transition-colors"
+                      className="align-middle border-t border-slate-800/50"
                     >
                       {/* Session Number */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-white">
+                      <Td>
+                        <span className="text-[13px] font-medium text-slate-50">
                           S{index + 1}
                         </span>
-                      </td>
+                      </Td>
 
                       {/* Source Badge */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${sourceBadge.className}`}
-                        >
+                      <Td>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${sourceBadge.className}`}>
                           {sourceBadge.label}
                         </span>
-                      </td>
+                      </Td>
 
                       {/* Laps */}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {session.lapCount}
-                      </td>
+                      <Td>
+                        <span className="text-[13px] text-slate-200">
+                          {session.lapCount}
+                        </span>
+                      </Td>
 
                       {/* Best Lap */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-mono font-semibold text-green-400">
+                      <Td>
+                        <span className="font-mono text-[13px] text-emerald-300">
                           {session.best_lap_ms
                             ? formatLapMs(session.best_lap_ms)
                             : '-'}
                         </span>
-                      </td>
+                      </Td>
 
-                      {/* Consistency - Placeholder for Phase 2 */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-xs text-gray-500">Phase 2</span>
-                      </td>
+                      {/* Consistency */}
+                      <Td>
+                        <span className="font-mono text-[13px] text-slate-200">
+                          {mockConsistency}
+                          <span className="text-[11px] text-slate-400"> / 100</span>
+                        </span>
+                      </Td>
 
-                      {/* Behavior - Placeholder for Phase 2 */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-xs text-gray-500">Phase 2</span>
-                      </td>
+                      {/* Behavior */}
+                      <Td>
+                        <BehaviorBar value={mockBehavior} />
+                      </Td>
 
-                      {/* GO Button */}
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <Link
-                          href={`/sessions/${session.id}`}
-                          className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
-                        >
-                          GO
-                        </Link>
-                      </td>
+                      {/* ViewButton */}
+                      <Td>
+                        <ViewButton
+                          variant="primary"
+                          onClick={() => router.push(`/sessions/${session.id}`)}
+                        />
+                      </Td>
                     </tr>
                   );
                 })}

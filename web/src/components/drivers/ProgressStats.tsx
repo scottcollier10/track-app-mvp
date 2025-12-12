@@ -2,7 +2,6 @@
 
 import { DriverProgressData } from '@/data/driverProgress';
 import { formatLapMs, formatDelta } from '@/lib/time';
-import { getConsistencyColor } from '@/lib/analytics';
 
 interface ProgressStatsProps {
   progressData: DriverProgressData;
@@ -16,69 +15,86 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-      {/* Container 1: Best Lap Progress */}
-      <StatContainer
-        label="Best Lap Progress"
-        value={
-          firstEvent.bestLapMs && latestEvent.bestLapMs
-            ? formatDelta(deltas.bestLapDelta)
-            : 'N/A'
-        }
-        subtext={
-          firstEvent.bestLapMs && latestEvent.bestLapMs
-            ? `${formatLapMs(firstEvent.bestLapMs)} → ${formatLapMs(latestEvent.bestLapMs)}`
-            : 'Insufficient data'
-        }
-        trend={deltas.bestLapDelta < 0 ? 'improving' : deltas.bestLapDelta > 0 ? 'declining' : 'stable'}
-      />
+    <section className="grid gap-4 md:grid-cols-3">
+      {/* Card 1: Best Lap Progress */}
+      {firstEvent.bestLapMs && latestEvent.bestLapMs ? (
+        <ProgressionCard
+          label="Best Lap Progress"
+          value={formatLapMs(latestEvent.bestLapMs)}
+          previousValue={formatLapMs(firstEvent.bestLapMs)}
+          trend={deltas.bestLapDelta < 0 ? 'up' : deltas.bestLapDelta > 0 ? 'down' : 'neutral'}
+          description={
+            deltas.bestLapDelta < 0
+              ? `${formatDelta(Math.abs(deltas.bestLapDelta))} faster than first session`
+              : deltas.bestLapDelta > 0
+              ? `${formatDelta(deltas.bestLapDelta)} slower than first session`
+              : 'Same as first session'
+          }
+        />
+      ) : (
+        <ProgressionCard
+          label="Best Lap Progress"
+          value="N/A"
+          trend="neutral"
+          description="Insufficient data"
+        />
+      )}
 
-      {/* Container 2: Consistency Score */}
-      <StatContainer
-        label="Consistency Score"
-        value={
-          firstEvent.consistency !== null && latestEvent.consistency !== null
-            ? `${firstEvent.consistency} → ${latestEvent.consistency}`
-            : 'N/A'
-        }
-        subtext={getConsistencyText(deltas.consistencyDelta)}
-        consistencyScore={latestEvent.consistency}
-      />
+      {/* Card 2: Consistency Trend */}
+      {firstEvent.consistency !== null && latestEvent.consistency !== null ? (
+        <ProgressionCard
+          label="Consistency Trend"
+          value={latestEvent.consistency.toString()}
+          previousValue={firstEvent.consistency.toString()}
+          unit="/100"
+          trend={
+            deltas.consistencyDelta > 0
+              ? 'up'
+              : deltas.consistencyDelta < 0
+              ? 'down'
+              : 'neutral'
+          }
+          description={getConsistencyText(deltas.consistencyDelta)}
+        />
+      ) : (
+        <ProgressionCard
+          label="Consistency Trend"
+          value="N/A"
+          trend="neutral"
+          description="Insufficient data"
+        />
+      )}
 
-      {/* Container 3: Pace Trend */}
-      <StatContainer
-        label="Pace Trend"
-        value={
-          firstEvent.bestLapNumber && latestEvent.bestLapNumber
-            ? `Lap ${firstEvent.bestLapNumber} → Lap ${latestEvent.bestLapNumber}`
-            : 'N/A'
-        }
-        subtext={
-          firstEvent.bestLapNumber && latestEvent.bestLapNumber
-            ? deltas.lapNumberDelta < 0
-              ? 'Finding pace sooner'
+      {/* Card 3: Peak Performance Window */}
+      {firstEvent.bestLapNumber && latestEvent.bestLapNumber ? (
+        <ProgressionCard
+          label="Peak Performance Window"
+          value={`Lap ${latestEvent.bestLapNumber}`}
+          previousValue={`Lap ${firstEvent.bestLapNumber}`}
+          trend={
+            deltas.lapNumberDelta < 0
+              ? 'up'
               : deltas.lapNumberDelta > 0
-              ? 'Taking longer to warm up'
+              ? 'down'
+              : 'neutral'
+          }
+          description={
+            deltas.lapNumberDelta < 0
+              ? 'Finding peak performance earlier'
+              : deltas.lapNumberDelta > 0
+              ? 'Taking longer to reach peak'
               : 'Same warm-up pace'
-            : 'Insufficient data'
-        }
-        trend={deltas.lapNumberDelta < 0 ? 'improving' : deltas.lapNumberDelta > 0 ? 'declining' : 'stable'}
-      />
-
-      {/* Container 4: Peak Performance Window */}
-      <StatContainer
-        label="Peak Performance"
-        value={`${firstEvent.lapCount} → ${latestEvent.lapCount} laps`}
-        subtext={
-          latestEvent.lapCount > firstEvent.lapCount
-            ? 'More seat time'
-            : latestEvent.lapCount < firstEvent.lapCount
-            ? 'Fewer laps per session'
-            : 'Consistent session length'
-        }
-        trend={latestEvent.lapCount >= firstEvent.lapCount ? 'improving' : 'stable'}
-      />
-    </div>
+          }
+        />
+      ) : (
+        <ProgressionCard
+          label="Peak Performance Window"
+          value="N/A"
+          trend="neutral"
+          description="Insufficient data"
+        />
+      )}
+    </section>
   );
 }
 
@@ -91,65 +107,66 @@ function getConsistencyText(delta: number): string {
   return 'Similar consistency';
 }
 
-// Sub-component: Individual stat container
-interface StatContainerProps {
+// Progression Card Component
+interface ProgressionCardProps {
   label: string;
-  value: string;
-  subtext: string;
-  trend?: 'improving' | 'declining' | 'stable';
-  consistencyScore?: number | null;
+  value: string | number;
+  previousValue?: string | number;
+  unit?: string;
+  trend: 'up' | 'down' | 'neutral';
+  description: string;
 }
 
-function StatContainer({ label, value, subtext, trend, consistencyScore }: StatContainerProps) {
-  // Determine color based on trend or consistency score
-  let valueColor = 'text-white';
-  let borderColor = 'border-gray-700';
+function ProgressionCard({
+  label,
+  value,
+  previousValue,
+  unit = '',
+  trend,
+  description,
+}: ProgressionCardProps) {
+  const trendColors = {
+    up: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
+    down: 'text-rose-400 border-rose-400/40 bg-rose-400/10',
+    neutral: 'text-sky-400 border-sky-400/40 bg-sky-400/10',
+  };
 
-  if (consistencyScore !== undefined && consistencyScore !== null) {
-    // Use consistency color coding
-    if (consistencyScore >= 95) {
-      valueColor = 'text-green-400';
-      borderColor = 'border-green-500';
-    } else if (consistencyScore >= 85) {
-      valueColor = 'text-blue-400';
-      borderColor = 'border-blue-500';
-    } else if (consistencyScore >= 75) {
-      valueColor = 'text-yellow-400';
-      borderColor = 'border-yellow-500';
-    } else {
-      valueColor = 'text-red-400';
-      borderColor = 'border-red-500';
-    }
-  } else if (trend) {
-    // Use trend color coding
-    if (trend === 'improving') {
-      valueColor = 'text-green-400';
-      borderColor = 'border-green-500';
-    } else if (trend === 'declining') {
-      valueColor = 'text-red-400';
-      borderColor = 'border-red-500';
-    } else {
-      valueColor = 'text-blue-400';
-      borderColor = 'border-blue-500';
-    }
-  }
+  const trendBorderColors = {
+    up: 'border-emerald-400/40',
+    down: 'border-rose-400/40',
+    neutral: 'border-sky-400/40',
+  };
 
-  // Determine trend arrow
-  let trendArrow = '';
-  if (trend === 'improving') {
-    trendArrow = '↑';
-  } else if (trend === 'declining') {
-    trendArrow = '↓';
-  }
+  const trendIcons = {
+    up: '↗',
+    down: '↘',
+    neutral: '→',
+  };
 
   return (
-    <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700 border-l-4 ${borderColor}`}>
-      <p className="text-gray-400 text-sm mb-3 uppercase tracking-wide font-medium">{label}</p>
-      <div className="flex items-baseline gap-2">
-        <p className={`text-3xl font-bold mb-2 ${valueColor}`}>{value}</p>
-        {trendArrow && <span className={`text-xl ${valueColor}`}>{trendArrow}</span>}
+    <div className={`rounded-2xl border ${trendBorderColors[trend]} bg-slate-900/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]`}>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {label}
+      </p>
+
+      <div className="mb-3 flex items-baseline gap-3 flex-wrap">
+        <span className="text-4xl font-bold text-slate-50">
+          {value}
+          {unit && <span className="text-2xl text-slate-400">{unit}</span>}
+        </span>
+
+        {previousValue && (
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full border px-2 py-1 text-xs font-medium ${trendColors[trend]}`}
+            >
+              {trendIcons[trend]} {previousValue}{unit}
+            </span>
+          </div>
+        )}
       </div>
-      <p className="text-sm text-gray-500">{subtext}</p>
+
+      <p className="text-sm text-slate-300">{description}</p>
     </div>
   );
 }

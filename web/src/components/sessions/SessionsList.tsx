@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatLapMs, formatDurationMs, formatDateTime } from '@/lib/time';
+import { formatDriverName } from '@/lib/utils/formatters';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import SessionFilters, { SessionFilter, SortBy } from './SessionFilters';
 import ExportButton from './ExportButton';
@@ -20,27 +21,6 @@ interface Session {
 
 interface SessionsListProps {
   filters?: SessionFilter;
-}
-
-/**
- * Format driver name from email format to proper case
- * Examples:
- *   "jamie.rodriguez" -> "Jamie Rodriguez"
- *   "Scott Collier" -> "Scott Collier" (already formatted)
- */
-function formatDriverName(name: string): string {
-  if (!name) return '';
-  
-  // If name already has capital letters, assume it's formatted
-  if (name !== name.toLowerCase()) {
-    return name;
-  }
-  
-  // Split on dots or spaces, capitalize each word
-  return name
-    .split(/[.\s]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
 }
 
 export default function SessionsList({ filters: initialFilters }: SessionsListProps) {
@@ -222,17 +202,17 @@ export default function SessionsList({ filters: initialFilters }: SessionsListPr
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header Skeleton */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <div className="h-9 bg-gray-700 rounded w-32 animate-pulse"></div>
-              <div className="h-5 bg-gray-700 rounded w-48 mt-2 animate-pulse"></div>
-            </div>
-            <div className="h-10 bg-gray-700 rounded w-32 animate-pulse"></div>
+      <>
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <div className="h-9 bg-gray-700 rounded w-32 animate-pulse"></div>
+            <div className="h-5 bg-gray-700 rounded w-48 mt-2 animate-pulse"></div>
           </div>
+          <div className="h-10 bg-gray-700 rounded w-32 animate-pulse"></div>
+        </div>
 
+        <div className="bg-slate-900/80 rounded-lg shadow-[0_22px_50px_rgba(15,23,42,0.9)] p-6">
           {/* Mobile Filter Toggle Skeleton */}
           <div className="lg:hidden mb-4">
             <div className="h-12 bg-gray-700 rounded animate-pulse"></div>
@@ -285,42 +265,49 @@ export default function SessionsList({ filters: initialFilters }: SessionsListPr
             </div>
           </>
         </div>
-      </div>
+      </>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Sessions</h1>
+            <p className="text-gray-400 mt-1">Error loading sessions</p>
+          </div>
+        </div>
+        <div className="bg-slate-900/80 rounded-lg shadow-[0_22px_50px_rgba(15,23,42,0.9)] p-6">
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
             <p className="text-red-400">{error}</p>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header with Export Button */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Sessions</h1>
-            <p className="text-gray-400 mt-1">
-              {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
-              {filteredSessions.length !== sessions.length && ` of ${sessions.length} total`}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ExportButton
-              sessions={filteredSessions}
-              disabled={loading || filteredSessions.length === 0}
-            />
-          </div>
+    <>
+      {/* Header with Export Button - NO background, hero burst shows through */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Sessions</h1>
+          <p className="text-gray-400 mt-1">
+            {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
+            {filteredSessions.length !== sessions.length && ` of ${sessions.length} total`}
+          </p>
         </div>
+        <div className="flex items-center gap-3">
+          <ExportButton
+            sessions={filteredSessions}
+            disabled={loading || filteredSessions.length === 0}
+          />
+        </div>
+      </div>
 
+      {/* Filters + Table - Dark background container */}
+      <div className="bg-slate-900/80 rounded-lg shadow-[0_22px_50px_rgba(15,23,42,0.9)] p-6">
         {/* Mobile Filter Toggle */}
         <div className="lg:hidden mb-4">
           <button
@@ -439,6 +426,6 @@ export default function SessionsList({ filters: initialFilters }: SessionsListPr
           </>
         )}
       </div>
-    </div>
+    </>
   );
 }

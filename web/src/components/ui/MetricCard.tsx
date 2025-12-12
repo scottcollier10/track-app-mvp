@@ -1,70 +1,15 @@
-import { LucideIcon } from 'lucide-react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-
-type TrendDirection = 'up' | 'down' | 'neutral';
-
-interface MetricCardProps {
-  icon: LucideIcon;
+export function MetricCard(props: {
   label: string;
-  value: string | number;
-  description?: string;
-  trend?: {
-    direction: TrendDirection;
-    value: string;
-  };
-  highlight?: boolean;
-}
-
-const trendConfig: Record<TrendDirection, { icon: LucideIcon; color: string }> = {
-  up: { icon: TrendingUp, color: 'text-status-success' },
-  down: { icon: TrendingDown, color: 'text-status-critical' },
-  neutral: { icon: Minus, color: 'text-muted' },
-};
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  description,
-  trend,
-  highlight = false,
-}: MetricCardProps) {
-  const TrendIcon = trend ? trendConfig[trend.direction].icon : null;
-
+  value: string;
+  helper: string;
+}) {
   return (
-    <div className="bg-surface border border-subtle rounded-xl p-4 md:p-6">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-accent-secondary" />
-        <span className="text-xs md:text-sm uppercase tracking-wide text-muted">
-          {label}
-        </span>
-      </div>
-
-      <div className="flex items-baseline gap-2">
-        <span
-          className={`text-2xl md:text-3xl font-semibold font-mono ${
-            highlight ? 'text-status-success' : 'text-primary'
-          }`}
-        >
-          {value}
-        </span>
-
-        {trend && TrendIcon && (
-          <span className={`flex items-center gap-1 text-xs ${trendConfig[trend.direction].color}`}>
-            <TrendIcon className="w-3 h-3" />
-            {trend.value}
-          </span>
-        )}
-      </div>
-
-      {description && (
-        <p className="mt-2 text-xs md:text-sm text-muted">
-          {description}
-        </p>
-      )}
+    <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 px-4 py-4 shadow-[0_18px_45px_rgba(15,23,42,0.75)] backdrop-blur">
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">
+        {props.label}
+      </p>
+      <p className="text-2xl font-semibold text-slate-50">{props.value}</p>
+      <p className="mt-1 text-xs text-slate-400">{props.helper}</p>
     </div>
   );
 }
-
-export { MetricCard };
-export type { MetricCardProps, TrendDirection };

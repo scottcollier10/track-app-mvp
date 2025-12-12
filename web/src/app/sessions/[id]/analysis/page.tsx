@@ -9,6 +9,8 @@ import { calculateConsistencyScore } from '@/lib/analytics';
 import LapAnalysisChart from '@/components/charts/LapAnalysisChart';
 import LapAnalysisTable from '@/components/analytics/LapAnalysisTable';
 import SessionPatterns from '@/components/analytics/SessionPatterns';
+import { HeroBurst } from '@/components/ui/HeroBurst';
+import { TrackAppHeader } from '@/components/TrackAppHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,8 +57,10 @@ export default async function SessionAnalysisPage({ params }: PageProps) {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-app">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="relative min-h-screen text-slate-50">
+      <HeroBurst />
+      <TrackAppHeader />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-24">
         {/* Header */}
         <div className="mb-6">
           <Link
