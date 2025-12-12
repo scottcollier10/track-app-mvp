@@ -43,7 +43,7 @@ export default function CoachDashboardPage() {
   }, []);
 
   // Calculate aggregate stats
-  const totalDrivers = drivers.length; // Now one row per driver
+  const uniqueDrivers = new Set(drivers.map((d) => d.driverId)).size;
   const totalSessions = drivers.reduce((sum, d) => sum + d.sessionCount, 0);
   const totalLaps = drivers.reduce((sum, d) => sum + d.totalLaps, 0);
 
@@ -60,10 +60,17 @@ export default function CoachDashboardPage() {
     }
   }
 
-  // Count improving drivers (consistency score >= 85)
-  const improvingCount = drivers.filter(
-    (d) => d.consistencyScore !== null && d.consistencyScore >= 85
-  ).length;
+  // Calculate average consistency and behavior scores
+  const driversWithConsistency = drivers.filter(
+    (d) => d.consistencyScore !== null
+  );
+  const avgConsistency =
+    driversWithConsistency.length > 0
+      ? Math.round(
+          driversWithConsistency.reduce((sum, d) => sum + (d.consistencyScore || 0), 0) /
+            driversWithConsistency.length
+        )
+      : null;
 
   if (error) {
     return (
@@ -113,40 +120,53 @@ export default function CoachDashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Coach Dashboard</h1>
-          <p className="text-gray-400 text-base">
+          <h1 className="text-3xl font-bold text-white">Coach Dashboard</h1>
+          <p className="text-gray-400 mt-2">
             Track your drivers' progress and compare performance across tracks
           </p>
         </div>
 
-        {/* Stats Overview - Exactly 4 cards matching wireframe */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          {/* Card 1: Total Drivers */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <p className="text-gray-400 text-sm font-medium uppercase tracking-wide mb-3">
-              DRIVERS
-            </p>
-            <p className="text-3xl font-bold text-white">{totalDrivers}</p>
+        {/* Stats Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {/* Total Drivers */}
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4 text-blue-500" />
+              <span className="text-xs md:text-sm uppercase tracking-wide text-gray-400">
+                Drivers
+              </span>
+            </div>
+            <div className="text-2xl md:text-3xl font-semibold text-white">
+              {uniqueDrivers}
+            </div>
           </div>
 
-          {/* Card 2: Total Sessions */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <p className="text-gray-400 text-sm font-medium uppercase tracking-wide mb-3">
-              SESSIONS
-            </p>
-            <p className="text-3xl font-bold text-white">{totalSessions}</p>
+          {/* Total Sessions */}
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-4 h-4 text-purple-500" />
+              <span className="text-xs md:text-sm uppercase tracking-wide text-gray-400">
+                Sessions
+              </span>
+            </div>
+            <div className="text-2xl md:text-3xl font-semibold text-white">
+              {totalSessions}
+            </div>
           </div>
 
-          {/* Card 3: Best Lap */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 border-l-4 border-l-green-500">
-            <p className="text-gray-400 text-sm font-medium uppercase tracking-wide mb-3">
-              BEST LAP
-            </p>
-            <p className="text-3xl font-bold text-green-400 font-mono">
+          {/* Best Lap */}
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Timer className="w-4 h-4 text-green-500" />
+              <span className="text-xs md:text-sm uppercase tracking-wide text-gray-400">
+                Best Lap
+              </span>
+            </div>
+            <div className="text-2xl md:text-3xl font-semibold font-mono text-green-400">
               {overallBestLap ? formatLapMs(overallBestLap) : '-'}
-            </p>
+            </div>
             {overallBestDriver && (
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 mt-1">
                 by{' '}
                 {overallBestDriver.includes('.')
                   ? overallBestDriver
@@ -162,20 +182,26 @@ export default function CoachDashboardPage() {
             )}
           </div>
 
-          {/* Card 4: Improving Count */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 border-l-4 border-l-blue-500">
-            <p className="text-gray-400 text-sm font-medium uppercase tracking-wide mb-3">
-              IMPROVING
-            </p>
-            <p className="text-3xl font-bold text-white">
-              {improvingCount}/{totalDrivers}
-            </p>
-            <p className="text-sm text-gray-500 mt-2">drivers improving</p>
+          {/* Avg Consistency */}
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs md:text-sm uppercase tracking-wide text-gray-400">
+                Avg Consistency
+              </span>
+            </div>
+            <div className="text-2xl md:text-3xl font-semibold text-white">
+              {avgConsistency !== null ? avgConsistency : '-'}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">across all drivers</p>
           </div>
         </div>
 
         {/* Driver Dashboard Table */}
         <div>
+          <h2 className="text-xl font-semibold mb-4 text-white">
+            All Drivers by Track
+          </h2>
           {drivers.length === 0 ? (
             <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-8 text-center">
               <p className="text-gray-400">

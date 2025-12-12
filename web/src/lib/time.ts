@@ -68,3 +68,30 @@ export function formatTimeForCSV(ms: number): string {
 
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Format date to short format for charts
+ * Example: "2024-11-15" -> "Nov 15"
+ */
+export function formatDateShort(isoDate: string): string {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Format delta time with sign
+ * Examples: -4300 -> "-4.3s", 1200 -> "+1.2s"
+ */
+export function formatDelta(deltaMs: number): string {
+  const seconds = Math.abs(deltaMs / 1000);
+  const sign = deltaMs < 0 ? '-' : '+';
+  return `${sign}${seconds.toFixed(1)}s`;
+}
+
+/**
+ * Convert milliseconds to seconds
+ * Examples: 92500 -> 92.5
+ */
+export function msToSeconds(ms: number): number {
+  return ms / 1000;
+}

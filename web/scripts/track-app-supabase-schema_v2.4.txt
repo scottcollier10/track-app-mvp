@@ -1,0 +1,106 @@
+ -- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.coaches (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT coaches_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.coaching_notes (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  session_id uuid NOT NULL,
+  author text NOT NULL,
+  body text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT coaching_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT coaching_notes_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.sessions(id)
+);
+CREATE TABLE public.driver_profiles (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  driver_id uuid UNIQUE,
+  experience_level text CHECK (experience_level = ANY (ARRAY['beginner'::text, 'intermediate'::text, 'advanced'::text])),
+  total_sessions integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT driver_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT driver_profiles_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.drivers(id)
+);
+CREATE TABLE public.drivers (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  coach_id uuid,
+  CONSTRAINT drivers_pkey PRIMARY KEY (id),
+  CONSTRAINT drivers_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.coaches(id)
+);
+CREATE TABLE public.laps (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  session_id uuid NOT NULL,
+  lap_number integer NOT NULL,
+  lap_time_ms integer NOT NULL,
+  sector_data jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT laps_pkey PRIMARY KEY (id),
+  CONSTRAINT laps_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.sessions(id)
+);
+CREATE TABLE public.rag_chunks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  document_id uuid NOT NULL,
+  tenant_id text NOT NULL,
+  app_id text NOT NULL,
+  chunk_text text NOT NULL,
+  chunk_index integer NOT NULL,
+  embedding USER-DEFINED,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT rag_chunks_pkey PRIMARY KEY (id),
+  CONSTRAINT rag_chunks_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.rag_documents(id)
+);
+CREATE TABLE public.rag_documents (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id text NOT NULL,
+  app_id text NOT NULL,
+  source_id text NOT NULL,
+  title text NOT NULL,
+  content_type text NOT NULL CHECK (content_type = ANY (ARRAY['text'::text, 'markdown'::text, 'pdf'::text, 'url'::text])),
+  storage_location text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT rag_documents_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.sessions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  driver_id uuid NOT NULL,
+  track_id uuid NOT NULL,
+  date timestamp with time zone NOT NULL,
+  total_time_ms integer NOT NULL,
+  best_lap_ms integer,
+  source text DEFAULT 'ios_app'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  coach_notes text,
+  ai_coaching_summary text,
+  notes text,
+  CONSTRAINT sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT sessions_driver_id_fkey FOREIGN KEY (driver_id) REFERENCES public.drivers(id),
+  CONSTRAINT sessions_track_id_fkey FOREIGN KEY (track_id) REFERENCES public.tracks(id)
+);
+CREATE TABLE public.tracks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  location text,
+  length_meters integer,
+  config text,
+  created_at timestamp with time zone DEFAULT now(),
+  map_image_url text,
+  CONSTRAINT tracks_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
