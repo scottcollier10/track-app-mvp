@@ -18,12 +18,12 @@ export default async function TracksPage() {
         <TrackAppHeader />
         <div className="relative z-10 mx-auto max-w-6xl px-4 pb-16 pt-24">
           <div className="space-y-6">
-            <h1 className="text-3xl font-bold">Tracks</h1>
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-              <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+            <h1 className="text-3xl font-bold text-slate-50">Tracks</h1>
+            <div className="rounded-2xl border border-rose-500/45 bg-gradient-to-b from-rose-500/16 via-rose-500/6 to-slate-950/80 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+              <h3 className="text-rose-400 font-semibold mb-2">
                 Error Loading Tracks
               </h3>
-              <p className="text-red-700 dark:text-red-300 text-sm">
+              <p className="text-slate-300 text-sm">
                 {error.message || 'Failed to load tracks.'}
               </p>
             </div>
@@ -49,8 +49,8 @@ export default async function TracksPage() {
         <div className="space-y-6">
           {/* Header */}
           <div>
-            <h1 className="text-3xl font-bold">Tracks</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
+            <h1 className="text-3xl font-bold text-slate-50">Tracks</h1>
+            <p className="text-slate-400 mt-2">
               Racing circuits and configurations
             </p>
           </div>
@@ -64,13 +64,13 @@ export default async function TracksPage() {
                   <Link
                     key={track.id}
                     href={`/tracks/${track.id}`}
-                    className="block bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                    className="block rounded-2xl border border-slate-700/40 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90 p-6 hover:border-slate-600/50 transition-all shadow-[0_22px_50px_rgba(0,0,0,0.60)]"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{track.name}</h3>
+                        <h3 className="font-semibold text-lg text-slate-50">{track.name}</h3>
                         {track.config && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          <p className="text-sm text-slate-400 mt-1">
                             {track.config}
                           </p>
                         )}
@@ -79,19 +79,19 @@ export default async function TracksPage() {
                     </div>
 
                     {track.location && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <p className="text-sm text-slate-300 mb-2">
                         📍 {track.location}
                       </p>
                     )}
 
                     {track.length_meters && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <p className="text-sm text-slate-300 mb-2">
                         📏 {(track.length_meters / 1000).toFixed(2)} km
                       </p>
                     )}
 
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <div className="mt-3 pt-3 border-t border-slate-800/80">
+                      <p className="text-sm font-medium text-slate-200">
                         {sessionCount} {sessionCount === 1 ? 'session' : 'sessions'}
                       </p>
                     </div>
@@ -100,10 +100,10 @@ export default async function TracksPage() {
               })}
             </div>
           ) : (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+            <div className="rounded-2xl border border-slate-700/40 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90 p-12 text-center shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
               <div className="text-5xl mb-4">🏁</div>
-              <h3 className="text-lg font-semibold mb-2">No Tracks Available</h3>
-              <p className="text-gray-600 dark:text-gray-400">
+              <h3 className="text-lg font-semibold mb-2 text-slate-50">No Tracks Available</h3>
+              <p className="text-slate-400">
                 Demo data unavailable. Add tracks via the database to get started.
               </p>
             </div>

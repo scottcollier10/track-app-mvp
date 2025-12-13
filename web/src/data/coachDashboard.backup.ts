@@ -22,12 +22,10 @@ export interface CoachDashboardDriver {
   bestLapMs: number | null; // Best lap ever across ALL tracks
   avgBestLapMs: number | null; // Average of best laps across ALL sessions
   consistencyScore: number | null; // From most recent session
-  behaviorScore: number | null; // Average of per-session behavior scores
+  behaviorScore: number | null; // ✅ FIXED: Average of per-session behavior scores
   sessionCount: number; // Total sessions across all tracks
   totalLaps: number; // Total laps across all sessions
   lastSessionDate: string | null; // Date of last session
-  isImproving: boolean; // ✅ NEW: True if improving based on 3+ sessions trend
-  improvementPct: number | null; // ✅ NEW: Percentage improvement (for debugging)
 }
 
 /**
@@ -122,12 +120,10 @@ export async function getCoachDashboardData(): Promise<{
           bestLapMs: session.best_lap_ms,
           avgBestLapMs: null, // Will calculate after collecting all sessions
           consistencyScore: null, // Will calculate from most recent session
-          behaviorScore: null, // Will average per-session scores
+          behaviorScore: null, // ✅ FIXED: Will average per-session scores
           sessionCount: 1,
           totalLaps: lapTimes.length,
           lastSessionDate: session.date,
-          isImproving: false, // ✅ NEW: Will calculate from session trend
-          improvementPct: null, // ✅ NEW: For debugging
         });
       }
     });
@@ -167,7 +163,7 @@ export async function getCoachDashboardData(): Promise<{
         }
       }
 
-      // Calculate behavior score by averaging per-session scores
+      // ✅ CORRECT FIX: Calculate behavior score by averaging per-session scores
       // (Can't use all laps together because different tracks have different lap times)
       let behaviorScoreSum = 0;
       let behaviorScoreCount = 0;
@@ -193,46 +189,6 @@ export async function getCoachDashboardData(): Promise<{
         console.log(`[DEBUG] ${driver.driverName}: averaged ${behaviorScoreCount} sessions = ${driver.behaviorScore}%`);
       } else {
         console.log(`[DEBUG] ${driver.driverName}: no valid sessions for behavior score`);
-      }
-
-      // ✅ NEW: Calculate if driver is improving
-      // Requires 3+ sessions, compares first 2 avg vs last 2 avg, needs 2%+ improvement
-      if (driverSessions.length >= 3) {
-        // Sort sessions by date ascending for trend analysis
-        const sortedSessions = [...driverSessions].sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-
-        // Get best laps from sessions (filter out nulls)
-        const sessionBestLaps = sortedSessions
-          .map((s: any) => s.best_lap_ms)
-          .filter((lap: number | null) => lap !== null && lap > 0);
-
-        if (sessionBestLaps.length >= 3) {
-          // Calculate early average (first 2 sessions)
-          const earlyAvg = (sessionBestLaps[0] + sessionBestLaps[1]) / 2;
-
-          // Calculate recent average (last 2 sessions)
-          const n = sessionBestLaps.length;
-          const recentAvg = (sessionBestLaps[n - 1] + sessionBestLaps[n - 2]) / 2;
-
-          // Calculate improvement percentage
-          const improvementPct = ((earlyAvg - recentAvg) / earlyAvg) * 100;
-          driver.improvementPct = Math.round(improvementPct * 10) / 10; // Round to 1 decimal
-
-          // Driver is improving if they're 2%+ faster
-          driver.isImproving = improvementPct >= 2;
-
-          console.log(
-            `[IMPROVING] ${driver.driverName}: ${sessionBestLaps.length} sessions, ` +
-            `early=${Math.round(earlyAvg)}ms, recent=${Math.round(recentAvg)}ms, ` +
-            `improvement=${driver.improvementPct}%, improving=${driver.isImproving}`
-          );
-        } else {
-          console.log(`[IMPROVING] ${driver.driverName}: Not enough valid best laps (need 3+)`);
-        }
-      } else {
-        console.log(`[IMPROVING] ${driver.driverName}: Not enough sessions (${driverSessions.length}/3)`);
       }
     });
 

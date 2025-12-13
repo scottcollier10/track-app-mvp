@@ -32,11 +32,11 @@ export default async function ProfilePage() {
                 Manage your driver profile and preferences
               </p>
             </div>
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-              <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+            <div className="rounded-2xl border border-rose-500/45 bg-gradient-to-b from-rose-500/16 via-rose-500/6 to-slate-950/80 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+              <h3 className="text-rose-400 font-semibold mb-2">
                 Error Loading Profile
               </h3>
-              <p className="text-red-700 dark:text-red-300 text-sm">
+              <p className="text-slate-300 text-sm">
                 {driversError?.message || 'No drivers found in database.'}
               </p>
             </div>
@@ -78,11 +78,11 @@ export default async function ProfilePage() {
                 Manage your driver profile and preferences
               </p>
             </div>
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-              <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">
+            <div className="rounded-2xl border border-rose-500/45 bg-gradient-to-b from-rose-500/16 via-rose-500/6 to-slate-950/80 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+              <h3 className="text-rose-400 font-semibold mb-2">
                 Error Loading Profile
               </h3>
-              <p className="text-red-700 dark:text-red-300 text-sm">
+              <p className="text-slate-300 text-sm">
                 {profileError.message}
               </p>
             </div>
@@ -105,11 +105,11 @@ export default async function ProfilePage() {
                 Manage your driver profile and preferences
               </p>
             </div>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-              <h3 className="text-yellow-900 dark:text-yellow-200 font-semibold mb-2">
+            <div className="rounded-2xl border border-amber-500/45 bg-gradient-to-b from-amber-500/16 via-amber-500/6 to-slate-950/80 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+              <h3 className="text-amber-400 font-semibold mb-2">
                 Profile Not Found
               </h3>
-              <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+              <p className="text-slate-300 text-sm">
                 Unable to load or create driver profile.
               </p>
             </div>
@@ -127,23 +127,23 @@ export default async function ProfilePage() {
         <div className="space-y-6">
           {/* Header */}
           <div>
-            <h1 className="text-3xl font-bold">Driver Profile</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
+            <h1 className="text-3xl font-bold text-slate-50">Driver Profile</h1>
+            <p className="text-slate-400 mt-2">
               Manage your driver profile and preferences
             </p>
           </div>
 
           {/* Driver Info Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-xl font-semibold mb-4">Driver Information</h2>
+          <div className="rounded-2xl border border-slate-700/40 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+            <h2 className="text-xl font-semibold mb-4 text-slate-50">Driver Information</h2>
             <div className="space-y-3">
               <div>
-                <span className="text-sm text-gray-500 dark:text-gray-400">Name</span>
-                <p className="text-lg font-medium">{driver.name}</p>
+                <span className="text-sm text-slate-400">Name</span>
+                <p className="text-lg font-medium text-slate-50">{driver.name}</p>
               </div>
               <div>
-                <span className="text-sm text-gray-500 dark:text-gray-400">Email</span>
-                <p className="text-lg">{driver.email}</p>
+                <span className="text-sm text-slate-400">Email</span>
+                <p className="text-lg text-slate-200">{driver.email}</p>
               </div>
             </div>
           </div>
@@ -154,8 +154,8 @@ export default async function ProfilePage() {
           {/* Track Progress */}
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold">Track Progress</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <h2 className="text-xl font-semibold text-slate-50">Track Progress</h2>
+              <p className="text-sm text-slate-400 mt-1">
                 Your performance history at each circuit
               </p>
             </div>

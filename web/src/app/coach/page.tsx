@@ -166,10 +166,10 @@ export default function CoachDashboardPage() {
     }
   }
 
-  // Count improving drivers (consistency score >= 85)
-  const improvingCount = drivers.filter(
-    (d) => d.consistencyScore !== null && d.consistencyScore >= 85
-  ).length;
+  // NEW (FIXED) - Replace with this:
+  // ✅ Count drivers who are actually improving (3+ sessions, 2%+ faster)
+  const improvingCount = drivers.filter(d => d.isImproving).length;
+
 
   // Calculate Top 5 / Bottom 5 by behavior score
   const top5Drivers = [...drivers]

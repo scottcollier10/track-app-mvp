@@ -1,194 +1,68 @@
 /**
- * Analytics Functions
- *
- * Formula implementations for session analytics
+ * Track App Analytics - Session Performance Calculations
+ * Exports both naming conventions for compatibility
  */
 
-/**
- * Calculate sample standard deviation (using n-1)
- */
-function sampleStandardDeviation(values: number[]): number {
-  if (values.length < 2) return 0;
-
-  const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-  const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
-  const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / (values.length - 1);
-
-  return Math.sqrt(variance);
-}
-
-/**
- * Calculate average
- */
-function average(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, val) => sum + val, 0) / values.length;
-}
-
-/**
- * Calculate Consistency Score (0-100)
- *
- * Formula:
- * - rawScore = 1 - (std / mean)
- * - consistencyScore = clamp(rawScore * 100, 0, 100)
- *
- * Higher score = more consistent lap times
- * Skip laps with null lap_time_ms
- */
-export function calculateConsistencyScore(lapTimes: (number | null)[]): number | null {
-  // Filter out null values
-  const validLapTimes = lapTimes.filter((t): t is number => t !== null && t > 0);
-
-  if (validLapTimes.length < 2) {
-    return null; // Not enough data
-  }
-
-  const mean = average(validLapTimes);
-  const std = sampleStandardDeviation(validLapTimes);
-
+export function calculateConsistency(lapTimes: number[]): number | null {
+  if (!lapTimes || lapTimes.length < 2) return null;
+  
+  const validTimes = lapTimes.filter(t => typeof t === 'number' && t > 0 && isFinite(t));
+  if (validTimes.length < 2) return null;
+  
+  const mean = validTimes.reduce((sum, time) => sum + time, 0) / validTimes.length;
   if (mean === 0) return null;
-
-  const rawScore = 1 - (std / mean);
-  const consistencyScore = Math.max(0, Math.min(100, rawScore * 100));
-
-  return Math.round(consistencyScore);
+  
+  const squaredDiffs = validTimes.map(time => Math.pow(time - mean, 2));
+  const variance = squaredDiffs.reduce((sum, sq) => sum + sq, 0) / (validTimes.length - 1);
+  const std = Math.sqrt(variance);
+  
+  const cv = std / mean;
+  const rawScore = (1 - cv) * 100;
+  
+  return Math.round(Math.max(0, Math.min(100, rawScore)));
 }
 
-/**
- * Get color coding for consistency score
- */
-export function getConsistencyColor(score: number): {
-  text: string;
-  bg: string;
-} {
-  if (score >= 90) {
-    return {
-      text: 'text-green-700 dark:text-green-400',
-      bg: 'bg-green-50 dark:bg-green-900/20',
-    };
-  }
-  if (score >= 70) {
-    return {
-      text: 'text-yellow-700 dark:text-yellow-400',
-      bg: 'bg-yellow-50 dark:bg-yellow-900/20',
-    };
-  }
-  return {
-    text: 'text-red-700 dark:text-red-400',
-    bg: 'bg-red-50 dark:bg-red-900/20',
-  };
+// Alias for compatibility
+export const calculateConsistencyScore = calculateConsistency;
+
+export function calculateDrivingBehavior(lapTimes: number[]): number | null {
+  if (!lapTimes || lapTimes.length < 2) return null;
+  
+  const validTimes = lapTimes.filter(t => typeof t === 'number' && t > 0 && isFinite(t));
+  if (validTimes.length < 2) return null;
+  
+  const mean = validTimes.reduce((sum, time) => sum + time, 0) / validTimes.length;
+  if (mean === 0) return null;
+  
+  const squaredDiffs = validTimes.map(time => Math.pow(time - mean, 2));
+  const variance = squaredDiffs.reduce((sum, sq) => sum + sq, 0) / (validTimes.length - 1);
+  const std = Math.sqrt(variance);
+  
+  const cv = std / mean;
+  const rawScore = 100 - (cv * 100);
+  
+  return Math.round(Math.max(0, Math.min(100, rawScore)));
 }
 
-/**
- * Calculate Pace Trend
- *
- * Formula:
- * - Compare average of first 3 laps vs last 3 laps
- * - Returns "Improving ↗", "Fading ↘", or "Consistent →"
- * - Requires at least 6 laps
- *
- * Skip laps with null lap_time_ms
- */
-export function calculatePaceTrend(lapTimes: (number | null)[]): string {
-  // Filter out null values
-  const validLapTimes = lapTimes.filter((t): t is number => t !== null && t > 0);
+// Alias for compatibility
+export const calculateBehaviorScore = calculateDrivingBehavior;
 
-  if (validLapTimes.length < 6) {
-    return 'Not Enough Data';
-  }
-
-  const first3 = average(validLapTimes.slice(0, 3));
-  const last3 = average(validLapTimes.slice(-3));
-
-  // Lower time = faster = improving
-  if (last3 < first3) {
-    return 'Improving ↗';
-  }
-
-  // Higher time = slower = fading
-  if (last3 > first3) {
-    return 'Fading ↘';
-  }
-
-  return 'Consistent →';
-}
-
-/**
- * Get color for pace trend
- */
-export function getPaceTrendColor(trend: string): {
-  text: string;
-  bg: string;
-} {
-  if (trend.includes('Improving')) {
-    return {
-      text: 'text-green-700 dark:text-green-400',
-      bg: 'bg-green-50 dark:bg-green-900/20',
-    };
-  }
-  if (trend.includes('Fading')) {
-    return {
-      text: 'text-red-700 dark:text-red-400',
-      bg: 'bg-red-50 dark:bg-red-900/20',
-    };
-  }
-  if (trend.includes('Consistent')) {
-    return {
-      text: 'text-blue-700 dark:text-blue-400',
-      bg: 'bg-blue-50 dark:bg-blue-900/20',
-    };
-  }
-  // Not Enough Data
-  return {
-    text: 'text-gray-700 dark:text-gray-400',
-    bg: 'bg-gray-50 dark:bg-gray-800',
-  };
-}
-
-/**
- * Calculate Behavior Score (0-100)
- *
- * Formula:
- * - behaviorScore = clamp(100 - (std * 0.02), 0, 100)
- *
- * Lower standard deviation = higher score = smoother driving
- * Skip laps with null lap_time_ms
- */
-export function calculateBehaviorScore(lapTimes: (number | null)[]): number | null {
-  // Filter out null values
-  const validLapTimes = lapTimes.filter((t): t is number => t !== null && t > 0);
-
-  if (validLapTimes.length < 2) {
-    return null; // Not enough data
-  }
-
-  const std = sampleStandardDeviation(validLapTimes);
-  const behaviorScore = Math.max(0, Math.min(100, 100 - (std * 0.02)));
-
-  return Math.round(behaviorScore);
-}
-
-/**
- * Get color for behavior score
- */
-export function getBehaviorScoreColor(score: number): {
-  text: string;
-  bg: string;
-} {
-  if (score >= 80) {
-    return {
-      text: 'text-green-700 dark:text-green-400',
-      bg: 'bg-green-50 dark:bg-green-900/20',
-    };
-  }
-  if (score >= 60) {
-    return {
-      text: 'text-yellow-700 dark:text-yellow-400',
-      bg: 'bg-yellow-50 dark:bg-yellow-900/20',
-    };
-  }
-  return {
-    text: 'text-red-700 dark:text-red-400',
-    bg: 'bg-red-50 dark:bg-red-900/20',
-  };
+export function calculatePaceTrend(lapTimes: number[]): 'improving' | 'fading' | 'stable' | null {
+  if (!lapTimes || lapTimes.length < 6) return null;
+  
+  const validTimes = lapTimes.filter(t => typeof t === 'number' && t > 0 && isFinite(t));
+  if (validTimes.length < 6) return null;
+  
+  const first3 = validTimes.slice(0, 3);
+  const last3 = validTimes.slice(-3);
+  
+  const first3Avg = first3.reduce((sum, t) => sum + t, 0) / 3;
+  const last3Avg = last3.reduce((sum, t) => sum + t, 0) / 3;
+  
+  const delta = (last3Avg - first3Avg) / first3Avg;
+  const threshold = 0.01;
+  
+  if (delta <= -threshold) return 'improving';
+  if (delta >= threshold) return 'fading';
+  return 'stable';
 }
