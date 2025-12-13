@@ -359,7 +359,8 @@ export default function CoachDashboardPage() {
                         onClick={() => handleSort("consistencyScore")}
                       >
                         <div className="flex items-center gap-2">
-                          Consistency
+                          <span className="hidden md:inline">Consistency</span>
+                          <span className="md:hidden">CST</span>
                           <SortIndicator column="consistencyScore" />
                         </div>
                       </Th>
