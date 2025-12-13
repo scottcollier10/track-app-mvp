@@ -64,7 +64,10 @@ export function TrackAppHeader() {
 
         {/* Right-side CTAs */}
         <div className="flex items-center gap-4">
-          <CoachViewToggle />
+          {/* Coach View Toggle - Desktop only */}
+          <div className="hidden md:flex">
+            <CoachViewToggle />
+          </div>
 
           {/* Hamburger menu button - Mobile */}
           <button
@@ -85,6 +88,11 @@ export function TrackAppHeader() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-900/40 bg-slate-950/95 backdrop-blur-xl">
           <nav className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-4 text-sm font-medium text-slate-300">
+            {/* Coach View Toggle - Mobile only */}
+            <div className="pb-2 border-b border-slate-900/40">
+              <CoachViewToggle />
+            </div>
+
             <Link
               href="/sessions"
               className="hover:text-slate-50 py-2"

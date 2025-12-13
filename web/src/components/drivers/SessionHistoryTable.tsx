@@ -126,7 +126,10 @@ export default function SessionHistoryTable({
                   <Th className="hidden md:table-cell">Source</Th>
                   <Th className="hidden md:table-cell">Laps</Th>
                   <Th>Best Lap</Th>
-                  <Th>Consistency</Th>
+                  <Th>
+                    <span className="hidden md:inline">Consistency</span>
+                    <span className="md:hidden">CST</span>
+                  </Th>
                   <Th className="hidden md:table-cell">Behavior</Th>
                   <Th></Th>
                 </tr>

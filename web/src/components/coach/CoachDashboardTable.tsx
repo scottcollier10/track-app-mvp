@@ -191,7 +191,8 @@ export default function CoachDashboardTable({
                   className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Consistency
+                    <span className="hidden md:inline">Consistency</span>
+                    <span className="md:hidden">CST</span>
                     <SortIndicator column="consistencyScore" />
                   </div>
                 </th>
