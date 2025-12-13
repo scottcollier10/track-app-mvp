@@ -123,11 +123,11 @@ export default function SessionHistoryTable({
               <thead className="text-xs text-slate-400">
                 <tr>
                   <Th>Session</Th>
-                  <Th>Source</Th>
-                  <Th>Laps</Th>
+                  <Th className="hidden md:table-cell">Source</Th>
+                  <Th className="hidden md:table-cell">Laps</Th>
                   <Th>Best Lap</Th>
                   <Th>Consistency</Th>
-                  <Th>Behavior</Th>
+                  <Th className="hidden md:table-cell">Behavior</Th>
                   <Th></Th>
                 </tr>
               </thead>
@@ -151,14 +151,14 @@ export default function SessionHistoryTable({
                       </Td>
 
                       {/* Source Badge */}
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${sourceBadge.className}`}>
                           {sourceBadge.label}
                         </span>
                       </Td>
 
                       {/* Laps */}
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <span className="text-[13px] text-slate-200">
                           {session.lapCount}
                         </span>
@@ -182,7 +182,7 @@ export default function SessionHistoryTable({
                       </Td>
 
                       {/* Behavior */}
-                      <Td>
+                      <Td className="hidden md:table-cell">
                         <BehaviorBar value={mockBehavior} />
                       </Td>
 

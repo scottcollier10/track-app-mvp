@@ -30,7 +30,7 @@ export default async function SessionsPage({ searchParams }: SessionsPageProps) 
       <TrackAppHeader />
       <div className="relative z-10">
         <div className="min-h-screen">
-          <div className="mx-auto max-w-7xl gap-8 px-4 pb-16 pt-24">
+          <div className="mx-auto max-w-7xl gap-8 px-3 md:px-4 pb-16 pt-24">
             <SessionsList filters={initialFilters} />
           </div>
         </div>

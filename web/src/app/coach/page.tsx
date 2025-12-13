@@ -249,7 +249,7 @@ export default function CoachDashboardPage() {
         </header>
 
         {/* KPI cards */}
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           <MetricCard
             label="Drivers"
             value={totalDrivers.toString()}
@@ -346,7 +346,7 @@ export default function CoachDashboardPage() {
                         </div>
                       </Th>
                       <Th
-                        className="cursor-pointer hover:text-slate-200"
+                        className="hidden cursor-pointer hover:text-slate-200 md:table-cell"
                         onClick={() => handleSort("avgBestLapMs")}
                       >
                         <div className="flex items-center gap-2">
@@ -364,7 +364,7 @@ export default function CoachDashboardPage() {
                         </div>
                       </Th>
                       <Th
-                        className="cursor-pointer hover:text-slate-200"
+                        className="hidden cursor-pointer hover:text-slate-200 md:table-cell"
                         onClick={() => handleSort("behaviorScore")}
                       >
                         <div className="flex items-center gap-2">
@@ -373,7 +373,7 @@ export default function CoachDashboardPage() {
                         </div>
                       </Th>
                       <Th
-                        className="hidden cursor-pointer hover:text-slate-200 md:table-cell"
+                        className="hidden cursor-pointer hover:text-slate-200 lg:table-cell"
                         onClick={() => handleSort("sessionCount")}
                       >
                         <div className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function CoachDashboardPage() {
                         </div>
                       </Th>
                       <Th
-                        className="cursor-pointer hover:text-slate-200"
+                        className="hidden cursor-pointer hover:text-slate-200 md:table-cell"
                         onClick={() => handleSort("lastSessionDate")}
                       >
                         <div className="flex items-center gap-2">
@@ -431,7 +431,7 @@ export default function CoachDashboardPage() {
                             </span>
                           </Td>
 
-                          <Td>
+                          <Td className="hidden md:table-cell">
                             <span className="font-mono text-[13px] text-slate-300">
                               {d.avgBestLapMs
                                 ? formatLapMs(d.avgBestLapMs)
@@ -453,7 +453,7 @@ export default function CoachDashboardPage() {
                             )}
                           </Td>
 
-                          <Td>
+                          <Td className="hidden md:table-cell">
                             {d.behaviorScore !== null ? (
                               <BehaviorBar value={d.behaviorScore} />
                             ) : (
@@ -461,7 +461,7 @@ export default function CoachDashboardPage() {
                             )}
                           </Td>
 
-                          <Td className="hidden md:table-cell">
+                          <Td className="hidden lg:table-cell">
                             <span className="text-[13px] text-slate-200">
                               {d.sessionCount}
                             </span>
@@ -473,7 +473,7 @@ export default function CoachDashboardPage() {
                             </span>
                           </Td>
 
-                          <Td>
+                          <Td className="hidden md:table-cell">
                             <span className="text-[12px] text-slate-300">
                               {d.lastSessionDate
                                 ? formatDate(d.lastSessionDate)
@@ -518,7 +518,7 @@ export default function CoachDashboardPage() {
 
 function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
   return (
-    <div className="h-full rounded-2xl border border-emerald-500/40 bg-gradient-to-b from-emerald-500/12 via-emerald-500/4 to-slate-950/80 px-4 py-4 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+    <div className="h-full rounded-2xl border border-emerald-500/40 bg-gradient-to-b from-emerald-500/12 via-emerald-500/4 to-slate-950/80 px-3 py-3 md:px-4 md:py-4 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
@@ -528,7 +528,7 @@ function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
             High consistency and strong behavior scores.
           </p>
         </div>
-        <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium text-emerald-100">
+        <span className="hidden md:inline-flex rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium text-emerald-100">
           Priority: reinforce gains
         </span>
       </div>
@@ -557,7 +557,7 @@ function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
 
 function BottomFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
   return (
-    <div className="h-full rounded-2xl border border-rose-500/45 bg-gradient-to-b from-rose-500/16 via-rose-500/6 to-slate-950/80 px-4 py-4 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+    <div className="h-full rounded-2xl border border-rose-500/45 bg-gradient-to-b from-rose-500/16 via-rose-500/6 to-slate-950/80 px-3 py-3 md:px-4 md:py-4 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200">
@@ -567,7 +567,7 @@ function BottomFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
             Pace is fine; behavior/consistency need attention.
           </p>
         </div>
-        <span className="rounded-full border border-rose-400/40 bg-rose-400/10 px-3 py-1 text-[11px] font-medium text-rose-50">
+        <span className="hidden md:inline-flex rounded-full border border-rose-400/40 bg-rose-400/10 px-3 py-1 text-[11px] font-medium text-rose-50">
           Priority: next debrief
         </span>
       </div>

@@ -155,7 +155,7 @@ export default function CoachDashboardTable({
                 {/* Track (Last Track) */}
                 <th
                   onClick={() => handleSort('lastTrackName')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Track
@@ -177,7 +177,7 @@ export default function CoachDashboardTable({
                 {/* Avg Best Lap */}
                 <th
                   onClick={() => handleSort('avgBestLapMs')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Avg Best Lap
@@ -199,7 +199,7 @@ export default function CoachDashboardTable({
                 {/* Driving Behavior */}
                 <th
                   onClick={() => handleSort('behaviorScore')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Driving Behavior
@@ -210,7 +210,7 @@ export default function CoachDashboardTable({
                 {/* Sessions */}
                 <th
                   onClick={() => handleSort('sessionCount')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Sessions
@@ -221,7 +221,7 @@ export default function CoachDashboardTable({
                 {/* Total Laps */}
                 <th
                   onClick={() => handleSort('totalLaps')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Total Laps
@@ -232,7 +232,7 @@ export default function CoachDashboardTable({
                 {/* Last Session */}
                 <th
                   onClick={() => handleSort('lastSessionDate')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     Last Session
@@ -279,7 +279,7 @@ export default function CoachDashboardTable({
                       </td>
 
                       {/* Track (Last Track) */}
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         <span className="text-sm text-gray-300">
                           {driver.lastTrackName}
                         </span>
@@ -293,7 +293,7 @@ export default function CoachDashboardTable({
                       </td>
 
                       {/* Avg Best Lap */}
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         <span className="text-sm font-mono text-gray-300">
                           {driver.avgBestLapMs
                             ? formatLapMs(driver.avgBestLapMs)
@@ -317,7 +317,7 @@ export default function CoachDashboardTable({
                       </td>
 
                       {/* Driving Behavior (as percentage) */}
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         {driver.behaviorScore !== null ? (
                           <span
                             className={`text-sm font-medium ${getScoreColor(
@@ -332,21 +332,21 @@ export default function CoachDashboardTable({
                       </td>
 
                       {/* Sessions */}
-                      <td className="px-4 py-3">
+                      <td className="hidden lg:table-cell px-4 py-3">
                         <span className="text-sm text-gray-300">
                           {driver.sessionCount}
                         </span>
                       </td>
 
                       {/* Total Laps */}
-                      <td className="px-4 py-3">
+                      <td className="hidden lg:table-cell px-4 py-3">
                         <span className="text-sm text-gray-400">
                           {driver.totalLaps}
                         </span>
                       </td>
 
                       {/* Last Session */}
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         <span className="text-sm text-gray-400">
                           {driver.lastSessionDate
                             ? formatDate(driver.lastSessionDate)
