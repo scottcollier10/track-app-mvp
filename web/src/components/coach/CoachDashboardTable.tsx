@@ -4,10 +4,6 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { formatLapMs, formatDate } from '@/lib/time';
-import {
-  getConsistencyColor,
-  getBehaviorScoreColor,
-} from '@/lib/analytics';
 import { CoachDashboardDriver } from '@/data/coachDashboard';
 
 interface CoachDashboardTableProps {

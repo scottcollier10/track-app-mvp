@@ -176,9 +176,9 @@ function createSessionSummary(
 
   // Convert pace trend string to enum
   let paceTrend: "improving" | "stable" | "fading";
-  if (paceTrendStr.includes('Improving')) {
+  if (paceTrendStr && paceTrendStr.includes('Improving')) {
     paceTrend = "improving";
-  } else if (paceTrendStr.includes('Fading')) {
+  } else if (paceTrendStr && paceTrendStr.includes('Fading')) {
     paceTrend = "fading";
   } else {
     paceTrend = "stable";

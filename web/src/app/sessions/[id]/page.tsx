@@ -17,7 +17,7 @@ import { ScoreCard } from '@/components/ui/scores';
 import ShareSessionButton from '@/components/ui/ShareSessionButton';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card } from '@/components/ui/Card';
-import { Timer, Gauge, Hash, MapPin, ArrowLeft } from 'lucide-react';
+import { MapPin, ArrowLeft } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
@@ -117,20 +117,19 @@ export default async function SessionDetailPage({ params }: PageProps) {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         <MetricCard
-          icon={Timer}
           label="Total Time"
           value={formatDurationMs(session.total_time_ms)}
+          helper="Session duration"
         />
         <MetricCard
-          icon={Gauge}
           label="Best Lap"
           value={session.best_lap_ms ? formatLapMs(session.best_lap_ms) : '--'}
-          highlight
+          helper="Fastest lap time"
         />
         <MetricCard
-          icon={Hash}
           label="Laps"
           value={laps.length.toString()}
+          helper="Total lap count"
         />
       </div>
 

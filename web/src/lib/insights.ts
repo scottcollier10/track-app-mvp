@@ -38,7 +38,7 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
 
   // Generate detailed pace trend description
   let paceTrendDetail = '';
-  if (validLapTimes.length >= 6) {
+  if (validLapTimes.length >= 6 && paceTrendLabel) {
     const first3 = average(validLapTimes.slice(0, 3));
     const last3 = average(validLapTimes.slice(-3));
     const diffMs = last3 - first3;
@@ -58,7 +58,7 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
   return {
     consistencyScore,
     drivingBehaviorScore,
-    paceTrendLabel,
+    paceTrendLabel: paceTrendLabel || 'Stable',
     paceTrendDetail,
   };
 }

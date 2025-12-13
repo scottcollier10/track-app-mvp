@@ -8,9 +8,6 @@ import {
   calculateConsistencyScore,
   calculatePaceTrend,
   calculateBehaviorScore,
-  getConsistencyColor,
-  getPaceTrendColor,
-  getBehaviorScoreColor,
 } from '@/lib/analytics';
 
 interface InsightsPanelProps {
@@ -20,8 +17,26 @@ interface InsightsPanelProps {
   }>;
 }
 
+function getConsistencyColor(score: number): { text: string; bg: string } {
+  if (score >= 80) return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900' };
+  if (score >= 60) return { text: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900' };
+  return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900' };
+}
+
+function getPaceTrendColor(trend: string | null): { text: string; bg: string } {
+  if (trend === 'improving') return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900' };
+  if (trend === 'fading') return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900' };
+  return { text: 'text-gray-700 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-900' };
+}
+
+function getBehaviorScoreColor(score: number): { text: string; bg: string } {
+  if (score >= 80) return { text: 'text-green-700 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900' };
+  if (score >= 60) return { text: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900' };
+  return { text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900' };
+}
+
 export default function InsightsPanel({ laps }: InsightsPanelProps) {
-  const lapTimes = laps.map(lap => lap.lap_time_ms);
+  const lapTimes = laps.map(lap => lap.lap_time_ms).filter((time): time is number => time !== null);
 
   const consistencyScore = calculateConsistencyScore(lapTimes);
   const paceTrend = calculatePaceTrend(lapTimes);
@@ -49,7 +64,7 @@ export default function InsightsPanel({ laps }: InsightsPanelProps) {
         {/* Pace Trend */}
         <InsightCard
           title="Pace Trend"
-          value={paceTrend}
+          value={paceTrend || 'Not Enough Data'}
           description="First 3 vs last 3 laps"
           colors={getPaceTrendColor(paceTrend)}
         />

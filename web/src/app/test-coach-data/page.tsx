@@ -27,14 +27,14 @@ export default async function TestCoachDataPage() {
 
       <div className="mb-6">
         <p className="text-gray-400">
-          Found {drivers?.length || 0} driver-track combinations
+          Found {drivers?.length || 0} drivers
         </p>
       </div>
 
       <div className="space-y-4">
         {drivers?.map((driver) => (
           <div
-            key={`${driver.driverId}-${driver.trackId}`}
+            key={driver.driverId}
             className="bg-gray-800 rounded-lg border border-gray-700 p-6"
           >
             <div className="grid grid-cols-2 gap-4">
@@ -44,7 +44,7 @@ export default async function TestCoachDataPage() {
                 </h3>
                 <p className="text-sm text-gray-400">{driver.driverEmail}</p>
                 <p className="text-sm text-gray-400 mt-2">
-                  Track: {driver.trackName}
+                  Last Track: {driver.lastTrackName}
                 </p>
               </div>
 

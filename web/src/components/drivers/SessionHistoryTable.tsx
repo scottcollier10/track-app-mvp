@@ -2,10 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { formatLapMs, formatDate } from '@/lib/time';
-import {
-  getConsistencyColor,
-  getBehaviorScoreColor,
-} from '@/lib/analytics';
 import { SessionWithDetails } from '@/data/sessions';
 import { BehaviorBar } from '@/components/ui/BehaviorBar';
 import { ViewButton } from '@/components/ui/ViewButton';

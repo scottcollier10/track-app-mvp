@@ -33,15 +33,15 @@ function TestProgressContent() {
 
       try {
         // Fetch driver name
-        const { data: driver } = await supabase
-          .from('drivers')
+        const { data: driver } = await (supabase
+          .from('drivers') as any)
           .select('name')
           .eq('id', testDriverId)
           .single();
 
         // Fetch track name (if we have a trackId)
-        const { data: track } = await supabase
-          .from('tracks')
+        const { data: track } = await (supabase
+          .from('tracks') as any)
           .select('name')
           .eq('id', testTrackId)
           .single();

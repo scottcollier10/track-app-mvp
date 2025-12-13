@@ -288,29 +288,26 @@ export function ProgressTimeline({ driverId }: ProgressTimelineProps) {
       {/* Overall Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          icon={Activity}
           label="Total Sessions"
-          value={overallStats.totalSessions}
+          value={overallStats.totalSessions.toString()}
+          helper="Recorded sessions"
         />
         <MetricCard
-          icon={Flag}
           label="Tracks Visited"
-          value={overallStats.tracksVisited}
+          value={overallStats.tracksVisited.toString()}
+          helper="Unique tracks"
         />
         <MetricCard
-          icon={Timer}
           label="Total Laps"
-          value={overallStats.totalLaps}
+          value={overallStats.totalLaps.toString()}
+          helper="Total lap count"
         />
         <MetricCard
-          icon={TrendingUp}
           label="Avg Improvement"
           value={overallStats.avgImprovementPercent > 0
             ? `${overallStats.avgImprovementPercent.toFixed(1)}%`
             : '--'}
-          trend={overallStats.avgImprovementPercent > 0
-            ? { direction: 'up', value: 'improving' }
-            : undefined}
+          helper="Overall progress"
         />
       </div>
 

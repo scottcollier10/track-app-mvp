@@ -2,7 +2,7 @@ import { getSessionWithLaps } from '@/data/sessions';
 import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { MetricCard } from '@/components/ui/MetricCard';
-import { ArrowLeft, Timer, TrendingUp, Target, Clock } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { formatLapMs, formatDurationMs } from '@/lib/time';
 import { calculateConsistencyScore } from '@/lib/analytics';
@@ -80,28 +80,27 @@ export default async function SessionAnalysisPage({ params }: PageProps) {
 
         {/* Summary Statistics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <MetricCard
-            icon={Target}
-            label="Best Lap"
-            value={formatLapMs(bestLapTime)}
-            highlight={true}
-          />
-          <MetricCard
-            icon={TrendingUp}
-            label="Average Lap"
-            value={formatLapMs(avgLapTime)}
-          />
-          <MetricCard
-            icon={Timer}
-            label="Consistency"
-            value={`${Math.round(consistencyScore)}%`}
-          />
-          <MetricCard
-            icon={Clock}
-            label="Total Time"
-            value={formatDurationMs(totalSessionTime)}
-          />
-        </div>
+  <MetricCard
+    label="Best Lap"
+    value={formatLapMs(bestLapTime)}
+    helper="Fastest lap time"
+  />
+  <MetricCard
+    label="Average Lap"
+    value={formatLapMs(avgLapTime)}
+    helper="Average across all laps"
+  />
+  <MetricCard
+    label="Consistency"
+    value={`${consistencyScore}/100`}
+    helper="Lap time variance"
+  />
+  <MetricCard
+    label="Total Time"
+    value={formatDurationMs(totalSessionTime)}
+    helper="Session duration"
+  />
+</div>
 
         {/* Session Patterns */}
         <div className="mb-6">
