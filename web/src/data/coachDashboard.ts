@@ -220,8 +220,8 @@ export async function getCoachDashboardData(): Promise<{
           const improvementPct = ((earlyAvg - recentAvg) / earlyAvg) * 100;
           driver.improvementPct = Math.round(improvementPct * 10) / 10; // Round to 1 decimal
 
-          // Driver is improving if they're 2%+ faster
-          driver.isImproving = improvementPct >= 2;
+          // Driver is improving if they're 1%+ faster
+          driver.isImproving = improvementPct >= 1;
 
           console.log(
             `[IMPROVING] ${driver.driverName}: ${sessionBestLaps.length} sessions, ` +

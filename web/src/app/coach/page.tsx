@@ -172,13 +172,21 @@ export default function CoachDashboardPage() {
   const improvingCount = drivers.filter(d => d.isImproving).length;
 
 
-  // Calculate Top 5 / Bottom 5 by behavior score
-  const top5Drivers = [...drivers]
-    .sort((a, b) => (b.behaviorScore || 0) - (a.behaviorScore || 0))
+  // Calculate Top 5 / Bottom 5 using improving logic
+  const top5Drivers = drivers
+    .filter(d => d.isImproving === true)  // Only actually improving drivers
+    .sort((a, b) => (b.improvementPct || 0) - (a.improvementPct || 0))  // Sort by % improvement
     .slice(0, 5);
 
-  const bottom5Drivers = [...drivers]
-    .sort((a, b) => (a.behaviorScore || 0) - (b.behaviorScore || 0))
+  const bottom5Drivers = drivers
+    .filter(d => d.sessionCount >= 3)  // Need multiple sessions to assess
+    .filter(d => d.isImproving === false || (d.consistencyScore || 0) < 75)  // Not improving OR low consistency
+    .sort((a, b) => {
+      // Prioritize: regressing drivers first, then low consistency
+      const aScore = a.isImproving === false ? -1000 : (a.consistencyScore || 0);
+      const bScore = b.isImproving === false ? -1000 : (b.consistencyScore || 0);
+      return aScore - bScore;
+    })
     .slice(0, 5);
 
   // Render sort indicator
@@ -524,7 +532,7 @@ function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
-            Top 5 improving
+            Top {drivers.length} improving
           </p>
           <p className="text-xs text-emerald-100/90">
             High consistency and strong behavior scores.
@@ -564,7 +572,7 @@ function BottomFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200">
-            Bottom 5 to watch
+            Bottom {drivers.length} to watch
           </p>
           <p className="text-xs text-rose-100/90">
             Pace is fine; behavior/consistency need attention.
