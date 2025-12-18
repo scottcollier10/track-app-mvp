@@ -18,7 +18,7 @@ const CoachViewContext = createContext<CoachViewContextType | undefined>(
 );
 
 export function CoachViewProvider({ children }: { children: ReactNode }) {
-  const [coachView, setCoachView] = useState(false);
+  const [coachView, setCoachView] = useState(true);
 
   // Load persisted value on mount
   useEffect(() => {
