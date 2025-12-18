@@ -43,7 +43,7 @@ export default function CoachDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Sorting and filtering state
-  const [sortColumn, setSortColumn] = useState<SortColumn>("lastSessionDate");
+  const [sortColumn, setSortColumn] = useState<SortColumn>("sessionCount");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -285,6 +285,138 @@ export default function CoachDashboardPage() {
           />
         </section>
 
+        {/* Demo Highlights panel */}
+        <section className="mb-6">
+          <div className="mb-3">
+            <h2 className="text-xl font-semibold text-slate-50 flex items-center gap-2">
+              📊 Demo Highlights
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Click to explore example coaching scenarios
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(() => {
+              // Find demo drivers by email or name
+              const demoDrivers = {
+                marc: drivers.find(d => d.driverEmail === 'marc.richardson@trackapp.demo'),
+                taylor: drivers.find(d => d.driverEmail === 'taylor.brooks@trackapp.demo'),
+                sofia: drivers.find(d => d.driverEmail === 'sofia.martinez@trackapp.demo'),
+                cole: drivers.find(d => d.driverName?.toLowerCase().includes('cole trickle'))
+              };
+
+              return (
+                <>
+                  {/* Marc Richardson Card */}
+                  {demoDrivers.marc && (
+                    <Link
+                      href={`/drivers/${demoDrivers.marc.driverId}`}
+                      className="
+                        block p-4 rounded-lg
+                        bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90
+                        border border-slate-700/40
+                        hover:border-emerald-500/40
+                        hover:scale-[1.02]
+                        transition-all duration-200
+                        cursor-pointer
+                      "
+                    >
+                      <h3 className="font-semibold text-slate-50 mb-1">
+                        Steady Improvement
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-2">
+                        Marc Richardson
+                      </p>
+                      <p className="text-sm text-slate-300">
+                        12 sessions showing consistent progression
+                      </p>
+                    </Link>
+                  )}
+
+                  {/* Taylor Brooks Card */}
+                  {demoDrivers.taylor && (
+                    <Link
+                      href={`/drivers/${demoDrivers.taylor.driverId}`}
+                      className="
+                        block p-4 rounded-lg
+                        bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90
+                        border border-slate-700/40
+                        hover:border-emerald-500/40
+                        hover:scale-[1.02]
+                        transition-all duration-200
+                        cursor-pointer
+                      "
+                    >
+                      <h3 className="font-semibold text-slate-50 mb-1">
+                        Coaching Success
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-2">
+                        Taylor Brooks
+                      </p>
+                      <p className="text-sm text-slate-300">
+                        +6.6% improvement over 9 sessions
+                      </p>
+                    </Link>
+                  )}
+
+                  {/* Sofia Martinez Card */}
+                  {demoDrivers.sofia && (
+                    <Link
+                      href={`/drivers/${demoDrivers.sofia.driverId}`}
+                      className="
+                        block p-4 rounded-lg
+                        bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90
+                        border border-slate-700/40
+                        hover:border-rose-500/40
+                        hover:scale-[1.02]
+                        transition-all duration-200
+                        cursor-pointer
+                      "
+                    >
+                      <h3 className="font-semibold text-slate-50 mb-1">
+                        Needs Attention
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-2">
+                        Sofia Martinez
+                      </p>
+                      <p className="text-sm text-slate-300">
+                        -4.2% regression over 8 sessions
+                      </p>
+                    </Link>
+                  )}
+
+                  {/* Cole Trickle Card */}
+                  {demoDrivers.cole && (
+                    <Link
+                      href={`/drivers/${demoDrivers.cole.driverId}`}
+                      className="
+                        block p-4 rounded-lg
+                        bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90
+                        border border-rose-700/40
+                        hover:border-rose-500/40
+                        hover:scale-[1.02]
+                        transition-all duration-200
+                        cursor-pointer
+                      "
+                    >
+                      <h3 className="font-semibold text-slate-50 mb-1">
+                        Critical Opportunity
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-2">
+                        Cole Trickle
+                      </p>
+                      <p className="text-sm text-slate-300">
+                        -17.8% decline, major coaching needed
+                      </p>
+                    </Link>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </section>
+
         {/* Top 5 / Bottom 5 cards */}
         <section className="grid gap-4 lg:grid-cols-2">
           <TopFiveCard drivers={top5Drivers} />
@@ -426,9 +558,19 @@ export default function CoachDashboardPage() {
                         <tr key={d.driverId} className="align-middle">
                           <Td>
                             <div className="flex flex-col">
-                              <span className="max-w-[160px] truncate text-[13px] font-medium text-slate-50">
-                                {formatDriverName(d.driverName)}
-                              </span>
+                              <div className="flex items-center gap-1.5 max-w-[160px]">
+                                {d.sessionCount >= 5 && (
+                                  <span
+                                    className="text-amber-400 text-xs flex-shrink-0"
+                                    title="Rich demo data (5+ sessions)"
+                                  >
+                                    ⭐
+                                  </span>
+                                )}
+                                <span className="truncate text-[13px] font-medium text-slate-50">
+                                  {formatDriverName(d.driverName)}
+                                </span>
+                              </div>
                               <span className="text-[10px] text-slate-400">
                                 {d.lastTrackName}
                               </span>
