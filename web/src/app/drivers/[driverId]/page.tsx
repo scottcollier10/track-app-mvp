@@ -29,7 +29,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
   const [filteredSessions, setFilteredSessions] = useState<SessionWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<DateFilter>('last30');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('last90');
 
   // Phase 2: Track selection and progression data
   const [availableTracks, setAvailableTracks] = useState<Array<{ id: string; name: string }>>([]);

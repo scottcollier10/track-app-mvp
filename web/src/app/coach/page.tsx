@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AlertCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { formatLapMs, formatDate } from "@/lib/time";
 import { formatDriverName } from "@/lib/utils/formatters";
@@ -535,9 +536,10 @@ function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
       </div>
       <div className="space-y-2">
         {drivers.map((d) => (
-          <div
+          <Link
             key={d.driverId}
-            className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/60 px-3 py-2"
+            href={`/drivers/${d.driverId}`}
+            className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/60 px-3 py-2 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-slate-800/40"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-slate-50">
@@ -549,7 +551,7 @@ function TopFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
               </p>
             </div>
             {d.behaviorScore !== null && <BehaviorBar value={d.behaviorScore} />}
-          </div>
+          </Link>
         ))}
       </div>
     </div>
@@ -574,9 +576,10 @@ function BottomFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
       </div>
       <div className="space-y-2">
         {drivers.map((d) => (
-          <div
+          <Link
             key={d.driverId}
-            className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/70 px-3 py-2"
+            href={`/drivers/${d.driverId}`}
+            className="flex items-center justify-between gap-3 rounded-xl bg-slate-900/70 px-3 py-2 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-slate-800/50"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-slate-50">
@@ -588,7 +591,7 @@ function BottomFiveCard({ drivers }: { drivers: CoachDashboardDriver[] }) {
               </p>
             </div>
             {d.behaviorScore !== null && <BehaviorBar value={d.behaviorScore} />}
-          </div>
+          </Link>
         ))}
       </div>
     </div>
