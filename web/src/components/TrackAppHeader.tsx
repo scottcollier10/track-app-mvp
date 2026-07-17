@@ -60,6 +60,14 @@ export function TrackAppHeader() {
               Import CSV
             </Link>
           )}
+          <form action="/logout" method="post">
+            <button
+              type="submit"
+              className="text-xs font-medium text-slate-400 hover:text-slate-50"
+            >
+              Sign out
+            </button>
+          </form>
         </nav>
 
         {/* Right-side CTAs */}
