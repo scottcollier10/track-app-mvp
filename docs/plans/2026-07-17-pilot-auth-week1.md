@@ -564,6 +564,7 @@ export async function GET(request: NextRequest) {
         });
       } catch (e) {
         console.error('[auth/callback] coach linking failed', e);
+        await supabase.auth.signOut();
         return NextResponse.redirect(`${origin}/login?error=link`);
       }
       return NextResponse.redirect(`${origin}/coach`);
@@ -686,3 +687,4 @@ Suite state to report: `npm test` → 17 known insights failures only; everythin
 - Deleting backup page copies (`src/app/coach/page*.backup*`, `page-original-backup.tsx`, `page-dashboard-b.tsx`)
 - Regenerating `database.ts` types
 - Fixing the 17 stale `insights.test.ts` failures (optional warm-up if time allows, separate commit)
+- Consider token_hash/verifyOtp flow instead of PKCE code exchange — magic links opened in a different browser than the requesting one fail with the current flow (code_verifier cookie missing)

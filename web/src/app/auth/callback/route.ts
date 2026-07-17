@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
         });
       } catch (e) {
         console.error('[auth/callback] coach linking failed', e);
+        await supabase.auth.signOut();
         return NextResponse.redirect(`${origin}/login?error=link`);
       }
       return NextResponse.redirect(`${origin}/coach`);
