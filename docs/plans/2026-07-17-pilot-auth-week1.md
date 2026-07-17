@@ -443,15 +443,20 @@ export async function ensureCoach(repo: CoachRepo, user: AuthUserLike): Promise<
     throw new Error('Auth user has no email; cannot link coach');
   }
 
+  // Supabase Auth lowercases emails; normalize so seeded mixed-case rows still match.
+  const email = user.email.toLowerCase();
+
+  // Concurrent first-login races are backstopped by DB unique constraints on
+  // email and auth_user_id (no retry logic — intentional).
   const linked = await repo.findByAuthUserId(user.id);
   if (linked) return linked;
 
-  const byEmail = await repo.findByEmail(user.email);
+  const byEmail = await repo.findByEmail(email);
   if (byEmail) return repo.linkAuthUser(byEmail.id, user.id);
 
   return repo.create({
-    name: user.email.split('@')[0],
-    email: user.email,
+    name: email.split('@')[0],
+    email,
     auth_user_id: user.id,
   });
 }
@@ -471,19 +476,24 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export function supabaseCoachRepo(supabase: SupabaseClient<any>): CoachRepo {
   return {
     async findByAuthUserId(authUserId) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('coaches')
         .select('id, name, email')
         .eq('auth_user_id', authUserId)
         .maybeSingle();
+      if (error) throw error;
       return data ?? null;
     },
     async findByEmail(email) {
-      const { data } = await supabase
+      // Case-insensitive match: coaches.email is plain text and may be seeded
+      // with mixed case. Escape ilike wildcards so the email is matched literally.
+      const escaped = email.replace(/([%_\\])/g, '\\$1');
+      const { data, error } = await supabase
         .from('coaches')
         .select('id, name, email')
-        .eq('email', email)
+        .ilike('email', escaped)
         .maybeSingle();
+      if (error) throw error;
       return data ?? null;
     },
     async linkAuthUser(coachId, authUserId) {
