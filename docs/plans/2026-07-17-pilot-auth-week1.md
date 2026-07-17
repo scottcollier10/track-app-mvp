@@ -669,6 +669,7 @@ Suite state to report: `npm test` → 17 known insights failures only; everythin
 
 ## Out of scope (Week 2+, do not do now)
 
+- **Invite-only signup (from Task 4 code review):** `signInWithOtp` defaults to `shouldCreateUser: true`, so any email can create an auth user + coach row. Fine for open pilot; if pilot should be invite-only, set `shouldCreateUser: false` and pre-create coaches.
 - **Middleware matcher hardening (from Task 3 code review):** the static-asset extension exclusion is bypassable via dynamic segments (e.g. `/sessions/123.png` skips middleware). Middleware must not remain the only auth boundary — week 2's route-level auth closes this. Also: API routes should return 401 JSON instead of 307 redirects once migrated.
 - RLS policy replacement (`USING (true)` → coach-scoped) and migrating the 9 API routes off the legacy anon client to `createServerSupabase()`
 - Deriving `coachId` from session in `/api/coaches/[coachId]/*` and removing `DEMO_COACH_ID` from `src/app/api/import-session/route.ts`
