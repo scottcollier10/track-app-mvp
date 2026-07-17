@@ -40,4 +40,20 @@ describe('ensureCoach', () => {
   it('throws when auth user has no email', async () => {
     await expect(ensureCoach(makeRepo(), { id: 'auth-1', email: undefined })).rejects.toThrow();
   });
+
+  it('normalizes mixed-case email before looking up by email', async () => {
+    const repo = makeRepo();
+    await ensureCoach(repo, { id: 'auth-1', email: 'Scott@Example.COM' });
+    expect(repo.findByEmail).toHaveBeenCalledWith('scott@example.com');
+  });
+
+  it('creates the coach with a lowercased email when no match exists', async () => {
+    const repo = makeRepo();
+    await ensureCoach(repo, { id: 'auth-1', email: 'Scott@Example.COM' });
+    expect(repo.create).toHaveBeenCalledWith({
+      name: 'scott',
+      email: 'scott@example.com',
+      auth_user_id: 'auth-1',
+    });
+  });
 });
