@@ -340,6 +340,8 @@ export default function LoginPage() {
 
 Match styling to the existing app if it differs — check `src/app/page.tsx` for the actual palette/classes in use and mirror them.
 
+Note: the page now also surfaces callback failures — it reads `?error=auth|link` (set by `/auth/callback`) via `useSearchParams()` (wrapped in `<Suspense>`) and shows an explanatory banner above the form.
+
 **Step 4.2: Manual check**
 
 Run: `npm run dev`, visit `/login`, submit your real email.

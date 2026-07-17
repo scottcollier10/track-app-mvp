@@ -1,9 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createBrowserSupabase } from '@/lib/supabase/browser';
 
-export default function LoginPage() {
+const CALLBACK_ERROR_MESSAGES: Record<string, string> = {
+  auth: "That sign-in link didn't work. It may have expired or been opened in a different browser — request a new one below.",
+  link: "We couldn't finish setting up your account. Request a new link below; if it keeps happening, contact us.",
+};
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const callbackError = searchParams.get('error');
+  const callbackErrorMsg = callbackError
+    ? CALLBACK_ERROR_MESSAGES[callbackError] ?? CALLBACK_ERROR_MESSAGES.auth
+    : null;
+
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -31,6 +43,11 @@ export default function LoginPage() {
         <p className="mb-6 text-sm text-slate-400">
           Instructor portal. Sign in with your email — no password needed.
         </p>
+        {callbackErrorMsg && status !== 'sent' && (
+          <p role="alert" className="mb-4 text-sm text-red-400">
+            {callbackErrorMsg}
+          </p>
+        )}
         {status === 'sent' ? (
           <p role="status" aria-live="polite" className="text-sm text-emerald-300">
             Check your email for a sign-in link.
@@ -61,5 +78,13 @@ export default function LoginPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
