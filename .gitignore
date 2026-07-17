@@ -172,3 +172,6 @@ xcuserdata/
 
 # Generated demo seed artifact (scripts/seed/generate-demo-seed.ts)
 web/scripts/seed/demo-seed.sql
+
+# Worktrees
+.worktrees/
