@@ -32,7 +32,7 @@ export default function LoginPage() {
           Instructor portal. Sign in with your email — no password needed.
         </p>
         {status === 'sent' ? (
-          <p className="text-sm text-emerald-300">
+          <p role="status" aria-live="polite" className="text-sm text-emerald-300">
             Check your email for a sign-in link.
           </p>
         ) : (
@@ -43,6 +43,8 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
+              aria-label="Email address"
+              autoComplete="email"
               className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500"
             />
             <button
@@ -53,7 +55,7 @@ export default function LoginPage() {
               {status === 'sending' ? 'Sending…' : 'Send sign-in link'}
             </button>
             {status === 'error' && (
-              <p className="text-sm text-red-400">{errorMsg}</p>
+              <p role="alert" className="text-sm text-red-400">{errorMsg}</p>
             )}
           </form>
         )}
