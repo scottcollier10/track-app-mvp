@@ -258,7 +258,9 @@ The app uses TypeScript throughout. Key type files:
 To see Supabase queries in dev tools:
 
 ```typescript
-import { supabase } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+
+const supabase = createServerSupabase();
 
 const { data, error } = await supabase
   .from('sessions')

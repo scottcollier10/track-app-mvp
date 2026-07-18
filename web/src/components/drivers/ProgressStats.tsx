@@ -1,6 +1,6 @@
 'use client';
 
-import { DriverProgressData } from '@/data/driverProgress';
+import type { DriverProgressData } from '@/data/driverProgress';
 import { formatLapMs, formatDelta } from '@/lib/time';
 
 interface ProgressStatsProps {

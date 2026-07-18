@@ -32,8 +32,6 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerSupabase();
-    // Bypass Supabase's strict TS typing for this MVP endpoint
-    const db = supabase as any;
 
     // 1. Find or create driver by email
     const { data: existingDriver } = await (supabase
