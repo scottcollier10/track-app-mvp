@@ -8,9 +8,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllSessions, SessionFilters } from '@/data/sessions';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function GET(request: NextRequest) {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
 
     // Build filters from query params

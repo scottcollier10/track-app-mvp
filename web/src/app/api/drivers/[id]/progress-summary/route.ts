@@ -7,12 +7,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDriverProgress } from '@/lib/queries/driver-progress';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id: driverId } = await params;
     const searchParams = request.nextUrl.searchParams;
 

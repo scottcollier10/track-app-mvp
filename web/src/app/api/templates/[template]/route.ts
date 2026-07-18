@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 // Random name pools
 const FIRST_NAMES = [
@@ -194,6 +195,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { template: string } }
 ) {
+  const coach = await getCurrentCoach();
+  if (!coach) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const template = params.template;
   
   let csv: string;

@@ -6,17 +6,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { ImportSessionPayload } from '@/lib/types';
 import type { TablesInsert, Tables } from '@/lib/types/database';
-
-// Demo coach ID for MVP
-const DEMO_COACH_ID = "c1111111-1111-1111-1111-111111111111";
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // 1. Parse request body
     const payload = (await request.json()) as ImportSessionPayload;
 
@@ -28,15 +31,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
-    // Bypass Supabase's strict TS typing for this MVP endpoint
-    const db = supabase as any;
+    const supabase = createServerSupabase();
 
     // 1. Find or create driver by email
     const { data: existingDriver } = await (supabase
       .from('drivers') as any)
       .select('*')
       .eq('email', payload.driverEmail)
+      .eq('coach_id', coach.id)
       .single();
 
     let driver: Tables<'drivers'>;
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
       const driverInsert: any = {
         email: payload.driverEmail,
         name,
-        coach_id: DEMO_COACH_ID, // Auto-assign to demo coach
+        coach_id: coach.id,
       };
 
       const { data: newDriver, error: driverError } = await (supabase

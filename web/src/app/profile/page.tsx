@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
 import ProfileForm from './ProfileForm';
 import DriverStats from '@/components/profile/DriverStats';
@@ -9,7 +9,7 @@ import { TrackAppHeader } from '@/components/TrackAppHeader';
 export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  const supabase = createServerClient();
+  const supabase = createServerSupabase();
 
   // For MVP: Get the first driver (in production, this would be the authenticated user)
   const { data: drivers, error: driversError } = await (supabase

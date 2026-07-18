@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { EventMetrics } from '@/data/driverProgress';
+import type { EventMetrics } from '@/data/driverProgress';
 import { formatDateShort, msToSeconds, formatLapMs } from '@/lib/time';
 
 interface ProgressChartsProps {

@@ -26,10 +26,19 @@ function LoginForm() {
     const supabase = createBrowserSupabase();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+      },
     });
     if (error) {
-      setErrorMsg(error.message);
+      const inviteOnly =
+        error.status === 422 || /signups? not allowed/i.test(error.message);
+      setErrorMsg(
+        inviteOnly
+          ? 'This pilot is invite-only. Contact Scott to get access.'
+          : error.message
+      );
       setStatus('error');
     } else {
       setStatus('sent');

@@ -4,7 +4,7 @@
  * Clean data access functions for drivers
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 export interface Driver {
   id: string;
@@ -20,7 +20,7 @@ export async function getDrivers(): Promise<{
   error: Error | null;
 }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     const { data, error } = await (supabase
       .from('drivers') as any)

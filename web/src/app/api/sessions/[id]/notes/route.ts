@@ -5,7 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {
@@ -18,9 +19,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: RouteParams
 ) {
-  const supabase = createServerClient();
+  const supabase = createServerSupabase();
 
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Accept either coach_notes or notes in the body
     const body = await request.json();
     const rawNotes =

@@ -7,11 +7,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = createServerSupabase();
     const searchParams = request.nextUrl.searchParams;
     const nameFilter = searchParams.get('name');
 

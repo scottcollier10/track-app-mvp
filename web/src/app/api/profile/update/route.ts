@@ -8,9 +8,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateDriverProfile } from '@/data/driverProfiles';
 import { ExperienceLevel } from '@/types/driver';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function POST(request: NextRequest) {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // 1. Parse request body
     const body = await request.json();
     const { driverId, experienceLevel } = body;

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { isPublicPath } from '@/lib/auth/public-paths';
+import { isApiPath, isPublicPath } from '@/lib/auth/public-paths';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -32,6 +32,9 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user && !isPublicPath(request.nextUrl.pathname)) {
+    if (isApiPath(request.nextUrl.pathname)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';

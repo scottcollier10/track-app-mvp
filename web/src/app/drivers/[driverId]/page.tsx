@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
 import SessionHistoryTable from '@/components/drivers/SessionHistoryTable';
-import { getAllSessions, SessionWithDetails } from '@/data/sessions';
-import { getDrivers, Driver } from '@/data/drivers';
-import { getDriverProgressByTrack, getDriverTracks, DriverProgressData } from '@/data/driverProgress';
+import type { SessionWithDetails } from '@/data/sessions';
+import type { Driver } from '@/data/drivers';
+import type { DriverProgressData } from '@/data/driverProgress';
 import ProgressStats from '@/components/drivers/ProgressStats';
 import ProgressCharts from '@/components/drivers/ProgressCharts';
 import { HeroBurst } from '@/components/ui/HeroBurst';
@@ -45,19 +45,21 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         setLoading(true);
 
         // Fetch driver info and sessions in parallel
-        const [driversResult, sessionsResult] = await Promise.all([
-          getDrivers(),
-          getAllSessions({ driverId }),
+        const [driversRes, sessionsRes] = await Promise.all([
+          fetch('/api/drivers'),
+          fetch(`/api/sessions?driverId=${encodeURIComponent(driverId)}`),
         ]);
+        const driversResult = await driversRes.json();
+        const sessionsResult = await sessionsRes.json();
 
-        if (driversResult.error) {
-          throw new Error(driversResult.error.message);
+        if (!driversRes.ok || driversResult.error) {
+          throw new Error(driversResult.error || 'Failed to fetch drivers');
         }
-        if (sessionsResult.error) {
-          throw new Error(sessionsResult.error.message);
+        if (!sessionsRes.ok || sessionsResult.error) {
+          throw new Error(sessionsResult.error || 'Failed to fetch sessions');
         }
 
-        const allDrivers = driversResult.data || [];
+        const allDrivers: Driver[] = driversResult.data || [];
         const foundDriver = allDrivers.find((d) => d.id === driverId);
 
         if (!foundDriver) {
@@ -203,10 +205,21 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
 
         console.log(`[DriverProgressPage] Fetching with filter: ${dateFilter}, after: ${after}`);
 
-        const result = await getDriverProgressByTrack(driverId, selectedTrackId, { after });
+        const query = new URLSearchParams({ trackId: selectedTrackId });
+        if (after) {
+          query.set('after', after);
+        }
+        const res = await fetch(
+          `/api/drivers/${encodeURIComponent(driverId)}/progress-by-track?${query.toString()}`
+        );
+        const result: { data: DriverProgressData | null; error: string | null } =
+          await res.json();
 
-        if (result.error) {
-          console.error('[DriverProgressPage] Progress data error:', result.error);
+        if (!res.ok || result.error) {
+          console.error(
+            '[DriverProgressPage] Progress data error:',
+            result.error || `Request failed (${res.status})`
+          );
           setProgressData(null);
         } else {
           console.log(`[DriverProgressPage] Loaded progress data - ${result.data?.events?.length || 0} events for ${dateFilter} filter`);

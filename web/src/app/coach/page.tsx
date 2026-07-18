@@ -6,10 +6,7 @@ import Link from "next/link";
 import { AlertCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { formatLapMs, formatDate } from "@/lib/time";
 import { formatDriverName } from "@/lib/utils/formatters";
-import {
-  getCoachDashboardData,
-  CoachDashboardDriver,
-} from "@/data/coachDashboard";
+import type { CoachDashboardDriver } from "@/data/coachDashboard";
 import { HeroBurst } from "@/components/ui/HeroBurst";
 import { TrackAppHeader } from "@/components/TrackAppHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -54,13 +51,15 @@ export default function CoachDashboardPage() {
       try {
         setLoading(true);
 
-        const { data, error: fetchError } = await getCoachDashboardData();
+        const res = await fetch("/api/coach/dashboard");
+        const json = await res.json();
 
-        if (fetchError) {
-          throw fetchError;
+        if (!res.ok || json.error) {
+          throw new Error(json.error || "Failed to load dashboard data");
         }
 
-        setDrivers(data || []);
+        const data: CoachDashboardDriver[] = json.data || [];
+        setDrivers(data);
         console.log(
           `[CoachDashboard] Loaded ${data?.length || 0} driver-track combinations`
         );
