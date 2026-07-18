@@ -1,4 +1,4 @@
-const PUBLIC_PREFIXES = ['/login', '/auth/callback'];
+const PUBLIC_PREFIXES = ['/login', '/auth/callback', '/auth/confirm'];
 
 export function isPublicPath(path: string): boolean {
   const pathname = path.split('?')[0];

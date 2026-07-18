@@ -1,7 +1,14 @@
 import { isApiPath, isPublicPath } from '../public-paths';
 
 describe('isPublicPath', () => {
-  it.each(['/login', '/login/', '/auth/callback', '/auth/callback?code=abc'])(
+  it.each([
+    '/login',
+    '/login/',
+    '/auth/callback',
+    '/auth/callback?code=abc',
+    '/auth/confirm',
+    '/auth/confirm?token_hash=abc&type=email',
+  ])(
     'allows %s without auth',
     (path) => {
       expect(isPublicPath(path)).toBe(true);
