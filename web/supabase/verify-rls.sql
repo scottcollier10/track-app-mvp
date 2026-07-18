@@ -69,5 +69,19 @@ select 'anon sees no coaches' as check, count(*) = 0 as pass from coaches;
 select 'anon sees no laps' as check, count(*) = 0 as pass from laps;
 select 'anon sees no coaching notes' as check, count(*) = 0 as pass from coaching_notes;
 select 'anon sees no driver profiles' as check, count(*) = 0 as pass from driver_profiles;
-select 'anon sees no llm logs' as check, count(*) = 0 as pass from llm_logs;
+-- llm_logs does not exist yet (telemetry writes silently fail); a bare
+-- select would error, so this block skips with a notice when the table is
+-- absent and reports pass/FAIL when it exists.
+do $$
+begin
+  if to_regclass('public.llm_logs') is not null then
+    if (select count(*) from public.llm_logs) = 0 then
+      raise notice 'anon sees no llm logs: pass';
+    else
+      raise notice 'anon sees no llm logs: FAIL';
+    end if;
+  else
+    raise notice 'anon sees no llm logs: skipped (table does not exist)';
+  end if;
+end $$;
 rollback;

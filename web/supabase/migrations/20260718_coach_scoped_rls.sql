@@ -16,8 +16,8 @@ begin
   end loop;
 end $$;
 
--- 1b. RLS must be ON for policies to gate anything. Idempotent; critical for
--- llm_logs, which was created outside the schema file and may have RLS off.
+-- 1b. RLS must be ON for policies to gate anything. Idempotent.
+-- (llm_logs is handled in its own guarded block below; see section 7.)
 alter table public.coaches enable row level security;
 alter table public.drivers enable row level security;
 alter table public.sessions enable row level security;
@@ -28,7 +28,6 @@ alter table public.tracks enable row level security;
 alter table public.users enable row level security;
 alter table public.rag_documents enable row level security;
 alter table public.rag_chunks enable row level security;
-alter table public.llm_logs enable row level security;
 
 -- 2. Helper: coach id for the current auth user
 create or replace function public.current_coach_id()
@@ -100,8 +99,18 @@ create policy tracks_insert on public.tracks for insert to authenticated with ch
 create policy users_select on public.users for select to authenticated using (true);
 create policy rag_documents_select on public.rag_documents for select to authenticated using (true);
 create policy rag_chunks_select on public.rag_chunks for select to authenticated using (true);
-create policy llm_logs_select on public.llm_logs for select to authenticated using (true);
-create policy llm_logs_insert on public.llm_logs for insert to authenticated with check (true);
+
+-- llm_logs does not exist yet (telemetry writes silently fail); guarded so
+-- this migration is safe now and applies RLS if the table is created later.
+-- If you create llm_logs, re-run this block.
+do $$
+begin
+  if to_regclass('public.llm_logs') is not null then
+    execute 'alter table public.llm_logs enable row level security';
+    execute 'create policy llm_logs_select on public.llm_logs for select to authenticated using (true)';
+    execute 'create policy llm_logs_insert on public.llm_logs for insert to authenticated with check (true)';
+  end if;
+end $$;
 
 -- 8. drivers.email: global unique -> per-coach unique.
 -- The import flow scopes driver lookup to the coach; two coaches may
