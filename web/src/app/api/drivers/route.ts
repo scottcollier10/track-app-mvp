@@ -7,9 +7,15 @@
 
 import { NextResponse } from 'next/server';
 import { getDrivers } from '@/data/drivers';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function GET() {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { data: drivers, error } = await getDrivers();
 
     if (error) {

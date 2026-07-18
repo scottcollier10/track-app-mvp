@@ -6,10 +6,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function POST(request: NextRequest) {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { sessionId, author, body } = await request.json();
 
     // Validate payload
@@ -20,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Verify session exists
     const { data: session } = await (supabase

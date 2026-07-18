@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
@@ -28,6 +29,11 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // 1. Check for API key
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey || apiKey.includes('placeholder')) {
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
       sessionId,
     });
 
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // 3. Fetch session data
     const { data: session, error: sessionError } = await (supabase

@@ -7,12 +7,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getTrack } from '@/data/tracks';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const coach = await getCurrentCoach();
+    if (!coach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = params;
 
     if (!id) {
