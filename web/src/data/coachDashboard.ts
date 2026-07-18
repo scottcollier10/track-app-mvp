@@ -4,7 +4,7 @@
  * Aggregated queries for coach dashboard showing all drivers with their metrics
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import {
   calculateConsistencyScore,
   calculateBehaviorScore,
@@ -42,7 +42,7 @@ export async function getCoachDashboardData(): Promise<{
   console.log('[getCoachDashboardData] Fetching drivers with sessions...');
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Fetch all sessions with driver, track, and laps
     const { data: sessions, error } = await (supabase

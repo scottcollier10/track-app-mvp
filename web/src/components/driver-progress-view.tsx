@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getDriverProgress, SessionSummary } from "@/lib/queries/driver-progress";
+import type { SessionSummary } from "@/lib/queries/driver-progress";
 
 interface DriverProgressViewProps {
   driverId: string;
@@ -187,12 +187,22 @@ export function DriverProgressView({
       setError(null);
 
       try {
-        const data = await getDriverProgress({
-          driverId,
-          mode,
-          trackId,
-          dateRange
-        });
+        const query = new URLSearchParams({ mode });
+        if (trackId) {
+          query.set("trackId", trackId);
+        }
+        if (dateRange) {
+          query.set("startDate", dateRange[0]);
+          query.set("endDate", dateRange[1]);
+        }
+        const res = await fetch(
+          `/api/drivers/${encodeURIComponent(driverId)}/progress-summary?${query.toString()}`
+        );
+        const json = await res.json();
+        if (!res.ok || json.error) {
+          throw new Error(json.error || "Failed to load driver progress");
+        }
+        const data: SessionSummary[] = json.sessions || [];
         setSessions(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load data");

@@ -4,7 +4,7 @@
  * Provides flexible session data grouping and comparison for driver progress tracking
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { calculateConsistencyScore, calculatePaceTrend } from '@/lib/analytics';
 
 /**
@@ -65,7 +65,7 @@ export async function getDriverProgress(
 ): Promise<SessionSummary[]> {
   const { driverId, mode, trackId, dateRange } = params;
 
-  const supabase = createServerClient();
+  const supabase = createServerSupabase();
 
   try {
     // Build base query

@@ -4,7 +4,7 @@
  * Clean data access functions for tracks
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 export interface Track {
   id: string;
@@ -31,7 +31,7 @@ export async function getTracks(): Promise<{
   error: Error | null;
 }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
     const db = supabase as any;
 
     const { data, error } = await (supabase
@@ -59,7 +59,7 @@ export async function getTrack(
   id: string
 ): Promise<{ data: TrackWithSessions | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
     const db = supabase as any;
 
     // Fetch track details

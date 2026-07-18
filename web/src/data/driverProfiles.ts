@@ -4,7 +4,7 @@
  * Clean data access functions for driver profiles
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { ExperienceLevel } from '@/types/driver';
 
 export interface DriverProfileData {
@@ -23,7 +23,7 @@ export async function getDriverProfile(
   driverId: string
 ): Promise<{ data: DriverProfileData | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     const { data: profile, error } = await (supabase
       .from('driver_profiles') as any)
@@ -56,7 +56,7 @@ export async function createDriverProfile(
   experienceLevel: ExperienceLevel
 ): Promise<{ data: DriverProfileData | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     const { data: profile, error } = await (supabase
       .from('driver_profiles') as any)
@@ -89,7 +89,7 @@ export async function updateDriverProfile(
   experienceLevel: ExperienceLevel
 ): Promise<{ data: DriverProfileData | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     const { data: profile, error } = await (supabase
       .from('driver_profiles') as any)
@@ -121,7 +121,7 @@ export async function updateTotalSessions(
   driverId: string
 ): Promise<{ data: DriverProfileData | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // First get the current profile
     const { data: currentProfile, error: fetchError } = await (supabase

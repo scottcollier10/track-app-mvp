@@ -1,4 +1,4 @@
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { formatDate, formatLapTime } from '@/lib/utils/formatters';
 import { formatLapMs, formatDateTime } from '@/lib/time';
 import Link from 'next/link';
@@ -9,7 +9,7 @@ import { TrackAppHeader } from '@/components/TrackAppHeader';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const supabase = createServerClient();
+  const supabase = createServerSupabase();
 
   // Fetch all data needed for dashboard
   const [

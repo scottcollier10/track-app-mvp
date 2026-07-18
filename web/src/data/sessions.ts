@@ -4,7 +4,7 @@
  * Clean data access functions for sessions
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 export interface SessionWithDetails {
   id: string;
@@ -54,7 +54,7 @@ export async function getRecentSessions(
   limit: number = 10
 ): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Optimized approach: Use Supabase's aggregation count feature
     const { data: sessions, error } = await (supabase
@@ -101,7 +101,7 @@ export async function getAllSessions(
   filters?: SessionFilters
 ): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Optimized approach: Use Supabase's aggregation count feature
     let query = (supabase.from('sessions') as any).select(
@@ -162,7 +162,7 @@ export async function getSessionWithLaps(
   id: string
 ): Promise<{ data: SessionFull | null; error: Error | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
     // TypeScript escape hatch for build compatibility
     const db = supabase as any;
 

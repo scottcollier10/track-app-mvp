@@ -14,7 +14,7 @@
  *   );
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 /**
  * LLM provider types
@@ -174,7 +174,7 @@ async function logLLMCall(result: LLMCallResult, options: LLMCallOptions): Promi
 
   if (enableSupabaseLogging) {
     try {
-      const supabase = createServerClient();
+      const supabase = createServerSupabase();
 
       const { error } = await (supabase.from('llm_logs') as any).insert({
         provider: options.provider,
@@ -317,7 +317,7 @@ export async function getCostReport(filters?: {
   byModel: Record<string, { calls: number; cost: number; tokens: number }>;
 }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
     let query = (supabase.from('llm_logs') as any).select('*');
 
     // Apply filters

@@ -4,7 +4,7 @@
  * Fetches longitudinal driver progression data grouped by track
  */
 
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { calculateConsistencyScore } from '@/lib/analytics';
 
 export interface EventMetrics {
@@ -45,7 +45,7 @@ export async function getDriverProgressByTrack(
   console.log('[getDriverProgressByTrack] Fetching progress for driver:', driverId, 'at track:', trackId);
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Build query for sessions at this track
     let query = (supabase.from('sessions') as any)
@@ -174,7 +174,7 @@ export async function getDriverTracks(
   driverId: string
 ): Promise<{ data: Array<{ id: string; name: string }> | null; error: string | null }> {
   try {
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     const { data: sessions, error } = await (supabase.from('sessions') as any)
       .select('track:tracks(id, name)')
