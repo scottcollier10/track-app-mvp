@@ -29,26 +29,36 @@ select 'B sees no foreign drivers' as check, count(*) = 0 as pass
 -- row exists with the new email — not a real leak, just the claim arm.
 select 'B sees no foreign coach rows' as check, count(*) = 0 as pass
   from coaches where auth_user_id is distinct from auth.uid();
--- Chained tables: join back to drivers so any row whose owning coach is not
--- B (or is NULL) counts as foreign.
-select 'B sees no foreign sessions' as check, count(*) = 0 as pass
+-- Chained tables: ANTI-JOIN leak checks. An inner join through drivers would
+-- be tautological (drivers is itself RLS-filtered, so foreign parents are
+-- invisible and joined rows always vanish). Instead: under correct RLS every
+-- visible child's parent is also visible, so a visible child row whose parent
+-- is invisible (left join finds no match) IS a cross-tenant leak.
+select 'B sees no orphaned sessions (leak)' as check, count(*) = 0 as pass
   from sessions s
-  join drivers d on d.id = s.driver_id
-  where d.coach_id is distinct from public.current_coach_id();
-select 'B sees no foreign laps' as check, count(*) = 0 as pass
+  left join drivers d on d.id = s.driver_id
+  where d.id is null;
+select 'B sees no orphaned laps (leak)' as check, count(*) = 0 as pass
   from laps l
-  join sessions s on s.id = l.session_id
-  join drivers d on d.id = s.driver_id
-  where d.coach_id is distinct from public.current_coach_id();
-select 'B sees no foreign coaching notes' as check, count(*) = 0 as pass
+  left join sessions s on s.id = l.session_id
+  where s.id is null;
+select 'B sees no orphaned coaching notes (leak)' as check, count(*) = 0 as pass
   from coaching_notes n
-  join sessions s on s.id = n.session_id
-  join drivers d on d.id = s.driver_id
-  where d.coach_id is distinct from public.current_coach_id();
-select 'B sees no foreign driver profiles' as check, count(*) = 0 as pass
+  left join sessions s on s.id = n.session_id
+  where s.id is null;
+select 'B sees no orphaned driver profiles (leak)' as check, count(*) = 0 as pass
   from driver_profiles p
-  join drivers d on d.id = p.driver_id
-  where d.coach_id is distinct from public.current_coach_id();
+  left join drivers d on d.id = p.driver_id
+  where d.id is null;
+-- Complement: every visible session belongs to one of B's own drivers, so the
+-- unfiltered count must equal the count joined to B's drivers. Together with
+-- the anti-joins above (and the direct drivers check), this closes the chain.
+select 'B sees only own-driver sessions' as check,
+  (select count(*) from sessions) =
+  (select count(*)
+     from sessions s
+     join drivers d on d.id = s.driver_id
+     where d.coach_id = public.current_coach_id()) as pass;
 rollback;
 
 begin;
