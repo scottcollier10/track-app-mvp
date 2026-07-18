@@ -115,13 +115,30 @@ end $$;
 -- 8. drivers.email: global unique -> per-coach unique.
 -- The import flow scopes driver lookup to the coach; two coaches may
 -- legitimately share a driver email (e.g., a driver with two instructors).
--- The unique constraint on (email) is looked up by definition in
--- pg_constraint and dropped by its real name; if none exists the block
--- RAISEs so a name/shape mismatch can't silently leave the global unique
--- in place.
+-- Idempotent: if a unique constraint on (coach_id, email) already exists
+-- (prod turned out to already have one — the schema reference file was
+-- stale), the swap is skipped. Otherwise the unique constraint on (email)
+-- is looked up by definition in pg_constraint and dropped by its real
+-- name, then the per-coach constraint is added. If neither shape exists
+-- the block RAISEs so an unexpected shape can't be silently ignored.
 do $$
 declare cname text;
 begin
+  -- 1. Already swapped (or was never global-unique): nothing to do.
+  select c.conname into cname
+  from pg_constraint c
+  where c.conrelid = 'public.drivers'::regclass
+    and c.contype = 'u'
+    and (select array_agg(a.attname::text order by a.attname)
+         from unnest(c.conkey) k
+         join pg_attribute a
+           on a.attrelid = c.conrelid and a.attnum = k) = array['coach_id','email'];
+  if cname is not null then
+    raise notice 'drivers: unique(coach_id, email) already present — skipping swap';
+    return;
+  end if;
+
+  -- 2. Expected pre-migration shape: global unique on (email). Swap it.
   select c.conname into cname
   from pg_constraint c
   where c.conrelid = 'public.drivers'::regclass
@@ -131,8 +148,9 @@ begin
          join pg_attribute a
            on a.attrelid = c.conrelid and a.attnum = k) = array['email'];
   if cname is null then
-    raise exception 'expected a unique constraint on drivers(email); none found — inspect before proceeding';
+    -- 3. Neither shape found: something unexpected — stay loud.
+    raise exception 'drivers: expected either unique(coach_id,email) (done) or unique(email) (to swap); found neither — inspect pg_constraint manually';
   end if;
   execute format('alter table public.drivers drop constraint %I', cname);
+  execute 'alter table public.drivers add constraint drivers_coach_email_unique unique (coach_id, email)';
 end $$;
-alter table public.drivers add constraint drivers_coach_email_unique unique (coach_id, email);

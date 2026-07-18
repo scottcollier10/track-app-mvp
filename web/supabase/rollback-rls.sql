@@ -40,9 +40,6 @@ begin
   end if;
 end $$;
 
--- 3. Restore the global-unique driver email constraint.
--- WARNING: this ALTER will FAIL if, since the migration ran, two coaches
--- created drivers sharing the same email (the per-coach constraint allowed
--- that). Resolve/merge those duplicate driver rows first, then re-run.
-alter table public.drivers drop constraint if exists drivers_coach_email_unique;
-alter table public.drivers add constraint drivers_email_key unique (email);
+-- Constraint note: prod already had unique(coach_id, email) before the RLS
+-- migration (schema ref was stale); the migration's swap is a no-op there.
+-- Rollback intentionally leaves drivers constraints untouched.
