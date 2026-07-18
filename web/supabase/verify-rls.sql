@@ -29,6 +29,26 @@ select 'B sees no foreign drivers' as check, count(*) = 0 as pass
 -- row exists with the new email — not a real leak, just the claim arm.
 select 'B sees no foreign coach rows' as check, count(*) = 0 as pass
   from coaches where auth_user_id is distinct from auth.uid();
+-- Chained tables: join back to drivers so any row whose owning coach is not
+-- B (or is NULL) counts as foreign.
+select 'B sees no foreign sessions' as check, count(*) = 0 as pass
+  from sessions s
+  join drivers d on d.id = s.driver_id
+  where d.coach_id is distinct from public.current_coach_id();
+select 'B sees no foreign laps' as check, count(*) = 0 as pass
+  from laps l
+  join sessions s on s.id = l.session_id
+  join drivers d on d.id = s.driver_id
+  where d.coach_id is distinct from public.current_coach_id();
+select 'B sees no foreign coaching notes' as check, count(*) = 0 as pass
+  from coaching_notes n
+  join sessions s on s.id = n.session_id
+  join drivers d on d.id = s.driver_id
+  where d.coach_id is distinct from public.current_coach_id();
+select 'B sees no foreign driver profiles' as check, count(*) = 0 as pass
+  from driver_profiles p
+  join drivers d on d.id = p.driver_id
+  where d.coach_id is distinct from public.current_coach_id();
 rollback;
 
 begin;
@@ -36,4 +56,8 @@ set local role anon;
 select 'anon sees no drivers' as check, count(*) = 0 as pass from drivers;
 select 'anon sees no sessions' as check, count(*) = 0 as pass from sessions;
 select 'anon sees no coaches' as check, count(*) = 0 as pass from coaches;
+select 'anon sees no laps' as check, count(*) = 0 as pass from laps;
+select 'anon sees no coaching notes' as check, count(*) = 0 as pass from coaching_notes;
+select 'anon sees no driver profiles' as check, count(*) = 0 as pass from driver_profiles;
+select 'anon sees no llm logs' as check, count(*) = 0 as pass from llm_logs;
 rollback;

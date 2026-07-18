@@ -16,6 +16,20 @@ begin
   end loop;
 end $$;
 
+-- 1b. RLS must be ON for policies to gate anything. Idempotent; critical for
+-- llm_logs, which was created outside the schema file and may have RLS off.
+alter table public.coaches enable row level security;
+alter table public.drivers enable row level security;
+alter table public.sessions enable row level security;
+alter table public.laps enable row level security;
+alter table public.coaching_notes enable row level security;
+alter table public.driver_profiles enable row level security;
+alter table public.tracks enable row level security;
+alter table public.users enable row level security;
+alter table public.rag_documents enable row level security;
+alter table public.rag_chunks enable row level security;
+alter table public.llm_logs enable row level security;
+
 -- 2. Helper: coach id for the current auth user
 create or replace function public.current_coach_id()
 returns uuid language sql stable as $$
@@ -92,8 +106,24 @@ create policy llm_logs_insert on public.llm_logs for insert to authenticated wit
 -- 8. drivers.email: global unique -> per-coach unique.
 -- The import flow scopes driver lookup to the coach; two coaches may
 -- legitimately share a driver email (e.g., a driver with two instructors).
--- NOTE: constraint name must match the live DB (schema ref shows the email
--- UNIQUE inline; the conventional generated name is drivers_email_key —
--- verify in dashboard before running; adjust if different).
-alter table public.drivers drop constraint if exists drivers_email_key;
+-- The unique constraint on (email) is looked up by definition in
+-- pg_constraint and dropped by its real name; if none exists the block
+-- RAISEs so a name/shape mismatch can't silently leave the global unique
+-- in place.
+do $$
+declare cname text;
+begin
+  select c.conname into cname
+  from pg_constraint c
+  where c.conrelid = 'public.drivers'::regclass
+    and c.contype = 'u'
+    and (select array_agg(a.attname::text order by a.attname)
+         from unnest(c.conkey) k
+         join pg_attribute a
+           on a.attrelid = c.conrelid and a.attnum = k) = array['email'];
+  if cname is null then
+    raise exception 'expected a unique constraint on drivers(email); none found — inspect before proceeding';
+  end if;
+  execute format('alter table public.drivers drop constraint %I', cname);
+end $$;
 alter table public.drivers add constraint drivers_coach_email_unique unique (coach_id, email);
