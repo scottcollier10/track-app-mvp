@@ -10,7 +10,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/client';
+import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 
 // Disable caching to ensure fresh data on every request
 export const dynamic = 'force-dynamic';
@@ -38,8 +39,17 @@ export async function GET(
   { params }: { params: { coachId: string } }
 ) {
   try {
+    const currentCoach = await getCurrentCoach();
+    if (!currentCoach) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (params.coachId !== currentCoach.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const coachId = params.coachId;
-    const supabase = createServerClient();
+    const supabase = createServerSupabase();
 
     // Get coach info
     const { data: coach, error: coachError } = await (supabase
