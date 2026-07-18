@@ -503,3 +503,4 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 - Regenerating `src/lib/types/database.ts` (remove `as any` casts)
 - Fixing the 17 stale insights tests
 - `users` table cleanup (likely dead)
+- **LLM telemetry is a silent no-op**: `llm-telemetry.ts` writes to `llm_logs`, which does not exist in the DB (discovered when the RLS migration 42P01'd on it, 2026-07-18). Decide: create the table (then re-run the RLS migration — its guarded llm_logs block applies policies automatically) or delete the dead telemetry writes.
