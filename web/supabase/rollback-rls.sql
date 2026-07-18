@@ -29,7 +29,16 @@ create policy tracks_permissive on public.tracks for all using (true) with check
 create policy users_permissive on public.users for all using (true) with check (true);
 create policy rag_documents_permissive on public.rag_documents for all using (true) with check (true);
 create policy rag_chunks_permissive on public.rag_chunks for all using (true) with check (true);
-create policy llm_logs_permissive on public.llm_logs for all using (true) with check (true);
+
+-- llm_logs does not exist yet (telemetry writes silently fail); guarded so
+-- this rollback is safe now and restores the permissive policy if the table
+-- is created later. If you create llm_logs, re-run this block.
+do $$
+begin
+  if to_regclass('public.llm_logs') is not null then
+    execute 'create policy llm_logs_permissive on public.llm_logs for all using (true) with check (true)';
+  end if;
+end $$;
 
 -- 3. Restore the global-unique driver email constraint.
 -- WARNING: this ALTER will FAIL if, since the migration ran, two coaches
