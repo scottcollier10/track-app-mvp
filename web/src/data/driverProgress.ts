@@ -77,7 +77,7 @@ export async function getDriverProgressByTrack(
 
     if (!sessions || sessions.length === 0) {
       console.log('[getDriverProgressByTrack] No sessions found');
-      return { data: null, error: 'No sessions found for this driver at this track' };
+      return { data: null, error: null };
     }
 
     console.log(`[getDriverProgressByTrack] Found ${sessions.length} sessions`);
