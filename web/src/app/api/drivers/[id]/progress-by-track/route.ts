@@ -33,13 +33,21 @@ export async function GET(
     const after = searchParams.get('after') || undefined;
     const before = searchParams.get('before') || undefined;
 
-    // Response shape matches the data-function return: { data, error }
-    const result = await getDriverProgressByTrack(driverId, trackId, {
+    const { data, error } = await getDriverProgressByTrack(driverId, trackId, {
       after,
       before,
     });
 
-    return NextResponse.json(result);
+    if (error) {
+      console.error('[api/drivers/progress-by-track] Error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch progress data' },
+        { status: 500 }
+      );
+    }
+
+    // Response shape matches the data-function return: { data, error }
+    return NextResponse.json({ data, error: null });
   } catch (error) {
     console.error('[api/drivers/progress-by-track] Unexpected error:', error);
     return NextResponse.json(

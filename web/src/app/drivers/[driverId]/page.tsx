@@ -215,8 +215,11 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         const result: { data: DriverProgressData | null; error: string | null } =
           await res.json();
 
-        if (result.error) {
-          console.error('[DriverProgressPage] Progress data error:', result.error);
+        if (!res.ok || result.error) {
+          console.error(
+            '[DriverProgressPage] Progress data error:',
+            result.error || `Request failed (${res.status})`
+          );
           setProgressData(null);
         } else {
           console.log(`[DriverProgressPage] Loaded progress data - ${result.data?.events?.length || 0} events for ${dateFilter} filter`);
