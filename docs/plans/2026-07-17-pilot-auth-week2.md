@@ -505,3 +505,7 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 - `users` table cleanup (likely dead)
 - **LLM telemetry is a silent no-op**: `llm-telemetry.ts` writes to `llm_logs`, which does not exist in the DB (discovered when the RLS migration 42P01'd on it, 2026-07-18). Decide: create the table (then re-run the RLS migration — its guarded llm_logs block applies policies automatically) or delete the dead telemetry writes.
 - Regenerate `web/src/reference/track-app-supabase-schema_v2.4.txt` — stale vs prod (claims global UNIQUE on drivers.email; prod has UNIQUE(coach_id, email))
+- Custom SMTP for auth emails — Supabase built-in email service rate-limits to a few emails/hour, which blocks multi-coach pilot logins (hit 2026-07-18)
+- Show logged-in coach identity (name when available, else email) in the header — needed when testing with multiple coaches, better UX generally (Scott, 2026-07-19)
+- Unknown-email invite-only message says "request invite from Scott" — consider including a contact email address
+- Profile page uses demo-era `.from('drivers').limit(1).single()` (`src/app/profile/page.tsx:15`) — errors with "Cannot coerce the result to a single JSON object" for any coach with zero drivers
