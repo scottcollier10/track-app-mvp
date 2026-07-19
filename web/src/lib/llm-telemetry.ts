@@ -32,6 +32,7 @@ export interface LLMCallOptions {
     project?: string;
     feature?: string;
     userId?: string;
+    coachId?: string;
     sessionId?: string;
     [key: string]: any;
   };
@@ -290,6 +291,10 @@ export async function wrapLLMCall(
 
 /**
  * Get cost report for a project/feature
+ *
+ * NOTE: llm_logs is insert-only under RLS — this query returns zero rows through
+ * the user-scoped client. Run cost queries via the SQL editor (service role), or
+ * call this with a service-role client.
  *
  * @param filters - Optional filters (project, feature, dateRange)
  * @returns Summary of costs and usage
