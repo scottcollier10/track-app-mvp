@@ -12,6 +12,8 @@ import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
+const COACHING_MODEL = 'claude-sonnet-4-6';
+
 /**
  * Format milliseconds to readable lap time (MM:SS.mmm)
  */
@@ -176,13 +178,13 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
 
     console.log('[AI Coaching] Calling Anthropic API', {
       sessionId,
-      model: 'claude-sonnet-4-20250514',
+      model: COACHING_MODEL,
     });
 
     const result = await wrapLLMCall(
       {
         provider: 'anthropic',
-        model: 'claude-sonnet-4-20250514',
+        model: COACHING_MODEL,
         prompt: prompt,
         metadata: {
           project: 'track-app',
@@ -194,7 +196,7 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
       },
       async () => {
         const message = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: COACHING_MODEL,
           max_tokens: 1500,
           messages: [
             {
