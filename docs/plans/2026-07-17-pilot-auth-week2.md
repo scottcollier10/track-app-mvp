@@ -503,7 +503,7 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 - Regenerating `src/lib/types/database.ts` (remove `as any` casts)
 - Fixing the 17 stale insights tests
 - `users` table cleanup (likely dead)
-- **LLM telemetry is a silent no-op**: `llm-telemetry.ts` writes to `llm_logs`, which does not exist in the DB (discovered when the RLS migration 42P01'd on it, 2026-07-18). Decide: create the table (then re-run the RLS migration — its guarded llm_logs block applies policies automatically) or delete the dead telemetry writes.
+- ~~**LLM telemetry is a silent no-op**~~ **RESOLVED 2026-07-19**: `llm_logs` created with coach attribution (PR #10), retired model id fixed (PR #11), verified in prod — one AI coaching note costs ~$0.018. Follow-up candidate: generation takes ~28s (non-streaming, 1,140 output tokens) — consider streaming/lower max_tokens/faster model if coaches complain.
 - Regenerate `web/src/reference/track-app-supabase-schema_v2.4.txt` — stale vs prod (claims global UNIQUE on drivers.email; prod has UNIQUE(coach_id, email))
 - Custom SMTP for auth emails — Supabase built-in email service rate-limits to a few emails/hour, which blocks multi-coach pilot logins (hit 2026-07-18)
 - Show logged-in coach identity (name when available, else email) in the header — needed when testing with multiple coaches, better UX generally (Scott, 2026-07-19)
