@@ -4,8 +4,8 @@ import type { EmailOtpType } from '@supabase/supabase-js';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { ensureCoach, supabaseCoachRepo } from '@/lib/auth/ensure-coach';
 
-// Mirrors /auth/callback (PKCE). Callback stays as a fallback during the
-// email-template transition; delete it once token_hash is proven in prod.
+// Sole auth entry point (token_hash flow). The old PKCE callback route
+// was removed after token_hash was proven in prod.
 const ALLOWED_TYPES: EmailOtpType[] = ['email', 'magiclink', 'invite'];
 
 export async function GET(request: NextRequest) {
