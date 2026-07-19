@@ -66,6 +66,7 @@ export interface LLMUsage {
  */
 const PRICING: Record<string, { input: number; output: number }> = {
   // Anthropic Claude
+  'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'claude-sonnet-4-20250514': { input: 3.0, output: 15.0 },
   'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0 },
   'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
