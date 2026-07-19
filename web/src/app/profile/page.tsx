@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
 import ProfileForm from './ProfileForm';
@@ -16,10 +17,10 @@ export default async function ProfilePage() {
     .from('drivers') as any)
     .select('*')
     .limit(1)
-    .single();
+    .maybeSingle();
 
   // Error state
-  if (driversError || !drivers) {
+  if (driversError) {
     return (
       <div className="relative min-h-screen text-slate-50">
         <HeroBurst />
@@ -37,7 +38,43 @@ export default async function ProfilePage() {
                 Error Loading Profile
               </h3>
               <p className="text-slate-300 text-sm">
-                {driversError?.message || 'No drivers found in database.'}
+                {driversError.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state: no drivers visible to this coach yet
+  if (!drivers) {
+    return (
+      <div className="relative min-h-screen text-slate-50">
+        <HeroBurst />
+        <TrackAppHeader />
+        <div className="relative z-10 mx-auto max-w-6xl px-4 pb-16 pt-24">
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">Driver Profile</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                Manage your driver profile and preferences
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-500/45 bg-gradient-to-b from-amber-500/16 via-amber-500/6 to-slate-950/80 p-6 shadow-[0_22px_50px_rgba(0,0,0,0.60)]">
+              <h3 className="text-amber-400 font-semibold mb-2">
+                No Drivers Yet
+              </h3>
+              <p className="text-slate-300 text-sm">
+                Import a session CSV to add your first driver.
+              </p>
+              <p className="text-sm mt-3">
+                <Link
+                  href="/import"
+                  className="text-amber-400 underline hover:text-amber-300"
+                >
+                  Go to Import
+                </Link>
               </p>
             </div>
           </div>
