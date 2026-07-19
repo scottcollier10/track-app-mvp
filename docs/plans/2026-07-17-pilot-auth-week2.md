@@ -508,4 +508,4 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 - Custom SMTP for auth emails — Supabase built-in email service rate-limits to a few emails/hour, which blocks multi-coach pilot logins (hit 2026-07-18)
 - ~~Show logged-in coach identity in the header~~ **RESOLVED 2026-07-19**: PR #12 — root layout + `CoachIdentityProvider` context, verified in prod. Follow-up candidate: no `global-error.tsx` exists (root-layout throw would render Next's raw 500 page).
 - Unknown-email invite-only message says "request invite from Scott" — consider including a contact email address
-- Profile page uses demo-era `.from('drivers').limit(1).single()` (`src/app/profile/page.tsx:15`) — errors with "Cannot coerce the result to a single JSON object" for any coach with zero drivers
+- ~~Profile page uses demo-era `.from('drivers').limit(1).single()` (`src/app/profile/page.tsx:15`) — errors with "Cannot coerce the result to a single JSON object" for any coach with zero drivers~~ **RESOLVED 2026-07-19**: PR #13 — `.maybeSingle()` + "No Drivers Yet" empty state with /import link, verified in prod (demo-era first-driver semantics remain known tech debt)
