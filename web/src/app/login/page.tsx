@@ -6,7 +6,7 @@ import { createBrowserSupabase } from '@/lib/supabase/browser';
 
 const CALLBACK_ERROR_MESSAGES: Record<string, string> = {
   auth: "That sign-in link didn't work. It may have expired or been opened in a different browser — request a new one below.",
-  link: "We couldn't finish setting up your account. Request a new link below; if it keeps happening, contact us.",
+  link: "We couldn't finish setting up your account. Request a new link below; if it keeps happening, contact us at me@scott-collier.com.",
 };
 
 function LoginForm() {
@@ -36,7 +36,7 @@ function LoginForm() {
         error.status === 422 || /signups? not allowed/i.test(error.message);
       setErrorMsg(
         inviteOnly
-          ? 'This pilot is invite-only. Contact Scott to get access.'
+          ? 'This pilot is invite-only. Contact Scott at me@scott-collier.com to get access.'
           : error.message
       );
       setStatus('error');
