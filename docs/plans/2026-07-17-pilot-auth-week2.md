@@ -499,7 +499,7 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 
 ## Out of scope (week 3+)
 
-- Deleting `/auth/callback` (keep until token_hash proven in prod)
+- ~~Deleting `/auth/callback` (keep until token_hash proven in prod)~~ **RESOLVED 2026-07-19**: PR #15 — route deleted, PUBLIC_PREFIXES + tests updated; old PKCE links now redirect to /login. Dashboard follow-up: remove `/auth/callback` from Supabase redirect allowlist.
 - Regenerating `src/lib/types/database.ts` (remove `as any` casts)
 - Fixing the 17 stale insights tests
 - `users` table cleanup (likely dead)
@@ -507,5 +507,5 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 - Regenerate `web/src/reference/track-app-supabase-schema_v2.4.txt` — stale vs prod (claims global UNIQUE on drivers.email; prod has UNIQUE(coach_id, email))
 - ~~Custom SMTP for auth emails — Supabase built-in email service rate-limits to a few emails/hour, which blocks multi-coach pilot logins (hit 2026-07-18)~~ **RESOLVED 2026-07-19**: Gmail SMTP (smtp.gmail.com:465, Workspace app password, sender noreply@ alias) configured in Supabase; magic link verified end to end. Known deferred quirk: magic-link login now lands on `/` instead of `/coach` — Magic Link email template likely reverted to `{{ .ConfirmationURL }}` when SMTP was saved (same dashboard screen); fix = restore `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email` and re-check Invite template.
 - ~~Show logged-in coach identity in the header~~ **RESOLVED 2026-07-19**: PR #12 — root layout + `CoachIdentityProvider` context, verified in prod. Follow-up candidate: no `global-error.tsx` exists (root-layout throw would render Next's raw 500 page).
-- Unknown-email invite-only message says "request invite from Scott" — consider including a contact email address
+- ~~Unknown-email invite-only message says "request invite from Scott" — consider including a contact email address~~ **RESOLVED 2026-07-19**: PR #14 — invite-only and callback-error messages now include me@scott-collier.com.
 - ~~Profile page uses demo-era `.from('drivers').limit(1).single()` (`src/app/profile/page.tsx:15`) — errors with "Cannot coerce the result to a single JSON object" for any coach with zero drivers~~ **RESOLVED 2026-07-19**: PR #13 — `.maybeSingle()` + "No Drivers Yet" empty state with /import link, verified in prod (demo-era first-driver semantics remain known tech debt)
