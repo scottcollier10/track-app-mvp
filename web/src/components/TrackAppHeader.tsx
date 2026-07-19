@@ -5,10 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { UploadCloud, Menu, X } from "lucide-react";
 import { useCoachView } from "@/context/coach-view";
+import { useCoachIdentity } from "@/context/coach-identity";
 import CoachViewToggle from "@/components/ui/CoachViewToggle";
 
 export function TrackAppHeader() {
   const { coachView } = useCoachView();
+  const identity = useCoachIdentity();
+  const displayName = identity ? identity.name || identity.email : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -72,6 +75,16 @@ export function TrackAppHeader() {
 
         {/* Right-side CTAs */}
         <div className="flex items-center gap-4">
+          {/* Logged-in coach identity - Desktop only */}
+          {displayName && identity && (
+            <span
+              className="hidden text-xs text-slate-400 md:inline"
+              title={identity.email}
+            >
+              {displayName}
+            </span>
+          )}
+
           {/* Coach View Toggle - Desktop only */}
           <div className="hidden md:flex">
             <CoachViewToggle />
@@ -98,6 +111,14 @@ export function TrackAppHeader() {
           <nav className="mx-auto max-w-6xl px-4 py-4 flex flex-col gap-4 text-sm font-medium text-slate-300">
             {/* Coach View Toggle - Mobile only */}
             <div className="pb-2 border-b border-slate-900/40">
+              {displayName && identity && (
+                <p
+                  className="mb-2 text-xs text-slate-400"
+                  title={identity.email}
+                >
+                  {displayName}
+                </p>
+              )}
               <CoachViewToggle />
             </div>
 
