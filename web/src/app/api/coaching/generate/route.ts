@@ -188,6 +188,7 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
           project: 'track-app',
           feature: 'ai-coaching',
           userId: session.driver_id,
+          coachId: coach.id,
           sessionId: sessionId,
         },
       },

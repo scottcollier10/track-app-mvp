@@ -100,14 +100,14 @@ create policy users_select on public.users for select to authenticated using (tr
 create policy rag_documents_select on public.rag_documents for select to authenticated using (true);
 create policy rag_chunks_select on public.rag_chunks for select to authenticated using (true);
 
--- llm_logs does not exist yet (telemetry writes silently fail); guarded so
--- this migration is safe now and applies RLS if the table is created later.
--- If you create llm_logs, re-run this block.
+-- llm_logs is created by 20260719_create_llm_logs.sql; guarded so this
+-- migration is safe to run before or after that one. llm_logs is
+-- insert-only (no select policy) because the app never reads it —
+-- cost queries go through the SQL editor, which bypasses RLS.
 do $$
 begin
   if to_regclass('public.llm_logs') is not null then
     execute 'alter table public.llm_logs enable row level security';
-    execute 'create policy llm_logs_select on public.llm_logs for select to authenticated using (true)';
     execute 'create policy llm_logs_insert on public.llm_logs for insert to authenticated with check (true)';
   end if;
 end $$;

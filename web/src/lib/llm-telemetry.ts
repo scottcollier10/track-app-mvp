@@ -186,6 +186,7 @@ async function logLLMCall(result: LLMCallResult, options: LLMCallOptions): Promi
         project: options.metadata?.project,
         feature: options.metadata?.feature,
         user_id: options.metadata?.userId,
+        coach_id: options.metadata?.coachId,
         metadata: options.metadata || {},
         error: result.error,
       });
