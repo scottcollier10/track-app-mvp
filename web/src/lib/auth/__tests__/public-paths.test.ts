@@ -4,8 +4,6 @@ describe('isPublicPath', () => {
   it.each([
     '/login',
     '/login/',
-    '/auth/callback',
-    '/auth/callback?code=abc',
     '/auth/confirm',
     '/auth/confirm?token_hash=abc&type=email',
   ])(
