@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { updateDriverProfile } from '@/data/driverProfiles';
+import { getDriverById } from '@/data/drivers';
 import { ExperienceLevel } from '@/types/driver';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 
@@ -48,7 +49,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Update profile
+    // 4. Ownership check: the coach may only update a driver they can see.
+    const { data: driver, error: driverError } = await getDriverById(driverId);
+
+    if (driverError) {
+      console.error('[Profile Update] Failed to load driver', {
+        driverId,
+        error: driverError.message,
+      });
+      return NextResponse.json(
+        { success: false, error: driverError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!driver) {
+      return NextResponse.json(
+        { success: false, error: 'Driver not found' },
+        { status: 403 }
+      );
+    }
+
+    // 5. Update profile
     const { data: profile, error } = await updateDriverProfile(
       driverId,
       experienceLevel as ExperienceLevel
@@ -72,7 +94,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Return success
+    // 6. Return success
     console.log('[Profile Update] Success', {
       driverId,
       experienceLevel,
