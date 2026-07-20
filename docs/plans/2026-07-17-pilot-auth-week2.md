@@ -500,7 +500,7 @@ git commit -m "feat(auth): add coach-scoped RLS migration, rollback, and verific
 ## Out of scope (week 3+)
 
 - ~~Deleting `/auth/callback` (keep until token_hash proven in prod)~~ **RESOLVED 2026-07-19**: PR #15 — route deleted, PUBLIC_PREFIXES + tests updated; old PKCE links now redirect to /login. Dashboard follow-up: remove `/auth/callback` from Supabase redirect allowlist.
-- Regenerating `src/lib/types/database.ts` (remove `as any` casts)
+- ~~Regenerating `src/lib/types/database.ts` (remove `as any` casts)~~ **RESOLVED 2026-07-19**: PR #16 — `database.ts` regenerated from live schema (`supabase gen types`, generated-only now, header documents the regen command), stale unused `types/supabase.ts` twin deleted, ~60 Supabase `as any` casts stripped across 20 files with zero new casts (design: `docs/plans/2026-07-19-regen-database-types-design.md`). Follow-up candidates from review: residual `: any` parameter annotations downstream of queries (page.tsx, coachDashboard.ts, driverProgress.ts, comparison route) discard the new types; one `as unknown as` shaping cast in `api/drivers/[id]/progress/route.ts:137`; `driver_profiles.experience_level`/`total_sessions` are nullable at DB level (NOT NULL + defaults migration would harden the boundary assertion).
 - Fixing the 17 stale insights tests
 - `users` table cleanup (likely dead)
 - ~~**LLM telemetry is a silent no-op**~~ **RESOLVED 2026-07-19**: `llm_logs` created with coach attribution (PR #10), retired model id fixed (PR #11), verified in prod — one AI coaching note costs ~$0.018. Follow-up candidate: generation takes ~28s (non-streaming, 1,140 output tokens) — consider streaming/lower max_tokens/faster model if coaches complain.
