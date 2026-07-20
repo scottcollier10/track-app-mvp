@@ -168,7 +168,7 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
         </div>
       )}
 
-      {/* Chart 2: Consistency Score by Event */}
+      {/* Chart 2: Consistency by Event (±s std-dev, lower is tighter) */}
       {consistencyData.length > 0 && (
         <div className="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
           <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">

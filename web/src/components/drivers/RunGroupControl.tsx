@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Loader2, AlertCircle, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, Loader2, AlertCircle } from 'lucide-react';
 import {
   RUN_GROUP_BANDS,
   RUN_GROUP_LABELS,
@@ -11,7 +11,6 @@ import {
 interface RunGroupControlProps {
   driverId: string;
   current: RunGroupBand;
-  readyWhy?: string | null;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -22,9 +21,17 @@ const NEXT_BAND: Partial<Record<RunGroupBand, RunGroupBand>> = {
   intermediate: 'advanced',
 };
 
-export default function RunGroupControl({ driverId, current, readyWhy }: RunGroupControlProps) {
+export default function RunGroupControl({ driverId, current }: RunGroupControlProps) {
   const [level, setLevel] = useState<RunGroupBand>(current);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+
+  // The parent seeds `current` AFTER an async profile fetch, so re-sync when it
+  // lands. Skip while saving so we never clobber an in-flight or just-succeeded
+  // optimistic update with a stale prop.
+  useEffect(() => {
+    if (saveState === 'saving' || saveState === 'saved') return;
+    setLevel(current);
+  }, [current, saveState]);
 
   const nextBand = NEXT_BAND[level];
 
@@ -59,13 +66,18 @@ export default function RunGroupControl({ driverId, current, readyWhy }: RunGrou
         Run Group
       </p>
 
-      <div className="inline-flex rounded-lg border border-slate-700 bg-slate-950/50 p-1">
+      <div
+        role="group"
+        aria-label="Run group"
+        className="inline-flex rounded-lg border border-slate-700 bg-slate-950/50 p-1"
+      >
         {RUN_GROUP_BANDS.map((band) => {
           const active = band === level;
           return (
             <button
               key={band}
               type="button"
+              aria-pressed={active}
               onClick={() => handleSelect(band)}
               disabled={saveState === 'saving'}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
@@ -87,14 +99,6 @@ export default function RunGroupControl({ driverId, current, readyWhy }: RunGrou
             Advance to {RUN_GROUP_LABELS[nextBand]}
           </span>{' '}
           when they are ready — your call, in-car judgment required.
-        </p>
-      )}
-
-      {/* Readiness nudge (blue accent + icon + text) */}
-      {readyWhy && (
-        <p className="mt-2 flex items-start gap-2 text-sm text-sky-400">
-          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{readyWhy}</span>
         </p>
       )}
 

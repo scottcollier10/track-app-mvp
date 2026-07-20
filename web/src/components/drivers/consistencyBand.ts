@@ -21,8 +21,12 @@ export function consistencyBandState(
   const values = consistencySecondsSeries.filter((v): v is number => v !== null);
   if (values.length === 0) return 'neutral';
 
+  // Baseline is built from PRIORS ONLY — every value except the latest, which is
+  // the one being judged. Feeding the latest into its own band would widen it and
+  // could hide a real breakout. Mirrors evaluateStudent in analytics-v2.ts.
   const latest = values[values.length - 1];
-  const band = consistencyBaseline(values);
+  const priors = values.slice(0, -1);
+  const band = consistencyBaseline(priors);
   if (!band) return 'neutral';
 
   if (latest > band.upper) return 'worse';

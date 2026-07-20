@@ -25,7 +25,6 @@ export interface DriverProgressData {
   latestEvent: EventMetrics | null;
   deltas: {
     bestLapDelta: number; // Improvement in ms (negative = faster)
-    consistencyDelta: number; // Std-dev delta in seconds (negative = tightened/improved)
     lapNumberDelta: number; // Lap number improvement (negative = finding pace sooner)
   };
 }
@@ -124,7 +123,6 @@ export async function getDriverProgressByTrack(
     // Calculate deltas
     const deltas = {
       bestLapDelta: 0,
-      consistencyDelta: 0,
       lapNumberDelta: 0,
     };
 
@@ -132,11 +130,6 @@ export async function getDriverProgressByTrack(
       // Best lap delta (negative = improvement)
       if (firstEvent.bestLapMs && latestEvent.bestLapMs) {
         deltas.bestLapDelta = latestEvent.bestLapMs - firstEvent.bestLapMs;
-      }
-
-      // Consistency delta in seconds (negative = tightened/improved)
-      if (firstEvent.consistencySeconds !== null && latestEvent.consistencySeconds !== null) {
-        deltas.consistencyDelta = latestEvent.consistencySeconds - firstEvent.consistencySeconds;
       }
 
       // Lap number delta (negative = finding pace sooner)
