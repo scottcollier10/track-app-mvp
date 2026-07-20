@@ -5,7 +5,7 @@
 -- This script fixes unrealistic demo data to create a more believable
 -- coaching dashboard experience.
 --
--- ACTUAL SCHEMA (verified from track-app-supabase-schema_v2.4.txt):
+-- ACTUAL SCHEMA (verified from track-app-supabase-schema_v3.0.txt):
 -- - sessions: id, driver_id, track_id, date, total_time_ms, best_lap_ms, source, created_at, coach_notes, ai_coaching_summary, notes
 -- - laps: id, session_id, lap_number, lap_time_ms, sector_data, created_at
 --
