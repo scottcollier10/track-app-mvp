@@ -11,7 +11,7 @@
 --   4. Taylor Brooks (Steady Builder) - Multi-track progression
 --
 -- Total: 4 drivers, 48 sessions, ~750 laps
--- Schema: Aligned with track-app-supabase-schema_v2.4.txt
+-- Schema: Aligned with track-app-supabase-schema_v3.0.txt
 -- Run: psql $DATABASE_URL -f web/scripts/seed-demo-drivers.sql
 -- ================================
 
