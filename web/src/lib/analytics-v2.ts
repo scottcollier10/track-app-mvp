@@ -1,4 +1,10 @@
-import { CLEAN_LAP_MAX_MULTIPLE, MIN_CLEAN_LAPS_FOR_FADE } from './analytics-constants';
+import {
+  CLEAN_LAP_MAX_MULTIPLE,
+  MIN_CLEAN_LAPS_FOR_FADE,
+  MIN_PRIOR_SESSIONS_FOR_BASELINE,
+  BASELINE_SIGMA,
+  BASELINE_MIN_DELTA_S,
+} from './analytics-constants';
 
 function median(sorted: number[]): number {
   const n = sorted.length;
@@ -37,4 +43,22 @@ export function sessionFadeSeconds(lapTimesMs: Array<number | null>): number | n
   const firstMed = medianOf(laps.slice(0, third));
   const lastMed = medianOf(laps.slice(-third));
   return (lastMed - firstMed) / 1000;
+}
+
+export interface Baseline { mean: number; upper: number; lower: number; }
+
+/** Personal consistency band from PRIOR per-session std-dev values (seconds). Null if too few priors. */
+export function consistencyBaseline(priorSeconds: number[]): Baseline | null {
+  if (priorSeconds.length < MIN_PRIOR_SESSIONS_FOR_BASELINE) return null;
+  const mean = priorSeconds.reduce((s, v) => s + v, 0) / priorSeconds.length;
+  const variance = priorSeconds.reduce((s, v) => s + (v - mean) ** 2, 0) / (priorSeconds.length - 1);
+  const sigma = Math.sqrt(variance);
+  return { mean, upper: mean + BASELINE_SIGMA * sigma, lower: mean - BASELINE_SIGMA * sigma };
+}
+
+/** True when this session's spread breaks above the driver's personal upper limit by a meaningful margin. */
+export function isOffConsistencyBaseline(sessionSeconds: number, priorSeconds: number[]): boolean {
+  const b = consistencyBaseline(priorSeconds);
+  if (!b) return false;
+  return sessionSeconds > b.upper && sessionSeconds - b.mean >= BASELINE_MIN_DELTA_S;
 }

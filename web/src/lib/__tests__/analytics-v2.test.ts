@@ -1,4 +1,10 @@
-import { cleanLaps, sessionConsistencySeconds, sessionFadeSeconds } from '../analytics-v2';
+import {
+  cleanLaps,
+  sessionConsistencySeconds,
+  sessionFadeSeconds,
+  consistencyBaseline,
+  isOffConsistencyBaseline,
+} from '../analytics-v2';
 
 describe('cleanLaps', () => {
   it('drops null, zero, and negative lap times', () => {
@@ -41,5 +47,29 @@ describe('sessionFadeSeconds', () => {
   });
   it('returns null with fewer than 6 clean laps', () => {
     expect(sessionFadeSeconds([90000, 90000, 90000, 90000, 90000])).toBeNull();
+  });
+});
+
+describe('consistencyBaseline', () => {
+  it('is null below the minimum prior-session count', () => {
+    expect(consistencyBaseline([0.3, 0.35])).toBeNull();
+  });
+  it('returns mean and upper/lower control limits', () => {
+    const b = consistencyBaseline([0.30, 0.32, 0.34, 0.28])!;
+    expect(b.mean).toBeCloseTo(0.31, 2);
+    expect(b.upper).toBeGreaterThan(b.mean);
+    expect(b.lower).toBeLessThan(b.mean);
+  });
+});
+
+describe('isOffConsistencyBaseline', () => {
+  it('flags a session wider than the upper control limit', () => {
+    expect(isOffConsistencyBaseline(0.9, [0.30, 0.32, 0.34, 0.28])).toBe(true);
+  });
+  it('does not flag a normal session', () => {
+    expect(isOffConsistencyBaseline(0.33, [0.30, 0.32, 0.34, 0.28])).toBe(false);
+  });
+  it('ignores breakouts smaller than the min delta (guards sigma~0)', () => {
+    expect(isOffConsistencyBaseline(0.31, [0.30, 0.30, 0.30])).toBe(false);
   });
 });
