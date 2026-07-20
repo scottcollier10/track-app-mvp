@@ -5,13 +5,13 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
-import { calculateConsistencyScore } from '@/lib/analytics';
+import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 
 export interface EventMetrics {
   date: string;
   sessionId: string;
   bestLapMs: number | null;
-  consistency: number | null;
+  consistencySeconds: number | null; // Clean-lap std-dev in seconds (lower = tighter)
   lapCount: number;
   bestLapNumber: number | null; // Which lap was the best
   peakWindowAvg: number | null; // Best 3-lap average
@@ -25,7 +25,7 @@ export interface DriverProgressData {
   latestEvent: EventMetrics | null;
   deltas: {
     bestLapDelta: number; // Improvement in ms (negative = faster)
-    consistencyDelta: number; // Improvement in points
+    consistencyDelta: number; // Std-dev delta in seconds (negative = tightened/improved)
     lapNumberDelta: number; // Lap number improvement (negative = finding pace sooner)
   };
 }
@@ -110,7 +110,7 @@ export async function getDriverProgressByTrack(
         date: session.date,
         sessionId: session.id,
         bestLapMs: session.best_lap_ms,
-        consistency: calculateConsistencyScore(lapTimes),
+        consistencySeconds: sessionConsistencySeconds(lapTimes),
         lapCount: laps.length,
         bestLapNumber,
         peakWindowAvg,
@@ -134,9 +134,9 @@ export async function getDriverProgressByTrack(
         deltas.bestLapDelta = latestEvent.bestLapMs - firstEvent.bestLapMs;
       }
 
-      // Consistency delta (positive = improvement)
-      if (firstEvent.consistency !== null && latestEvent.consistency !== null) {
-        deltas.consistencyDelta = latestEvent.consistency - firstEvent.consistency;
+      // Consistency delta in seconds (negative = tightened/improved)
+      if (firstEvent.consistencySeconds !== null && latestEvent.consistencySeconds !== null) {
+        deltas.consistencyDelta = latestEvent.consistencySeconds - firstEvent.consistencySeconds;
       }
 
       // Lap number delta (negative = finding pace sooner)
