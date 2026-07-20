@@ -15,6 +15,8 @@ export interface SessionWithDetails {
   driver: { id: string; name: string; email: string } | null;
   track: { id: string; name: string; location: string | null } | null;
   lapCount: number;
+  /** Lap times in ms, present when the query fetches lap details (getAllSessions) */
+  lapTimesMs?: number[];
 }
 
 export interface SessionFull {
@@ -103,7 +105,7 @@ export async function getAllSessions(
   try {
     const supabase = createServerSupabase();
 
-    // Optimized approach: Use Supabase's aggregation count feature
+    // Fetch lap times so per-session scores can be computed from real data
     let query = supabase.from('sessions').select(
       `
         id,
@@ -113,7 +115,7 @@ export async function getAllSessions(
         source,
         driver:drivers(id, name, email),
         track:tracks(id, name, location),
-        laps!left(count)
+        laps!left(lap_time_ms)
       `
     );
 
@@ -139,10 +141,13 @@ export async function getAllSessions(
       return { data: null, error: new Error(error.message) };
     }
 
-    // Transform the response to include lapCount from aggregated data
+    // Transform the response to include lapCount and lap times
     const sessionsWithCounts = (sessions || []).map((session) => ({
       ...session,
-      lapCount: session.laps?.[0]?.count || 0,
+      lapCount: session.laps?.length || 0,
+      lapTimesMs: (session.laps || [])
+        .map((lap) => lap.lap_time_ms)
+        .filter((time): time is number => time !== null && time > 0),
       laps: undefined, // Remove the nested laps object
     }));
 
