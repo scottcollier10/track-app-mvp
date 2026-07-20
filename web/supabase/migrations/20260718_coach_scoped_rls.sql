@@ -9,7 +9,7 @@ begin
     select policyname, tablename from pg_policies
     where schemaname = 'public'
       and tablename in ('coaches','drivers','sessions','laps','coaching_notes',
-                        'driver_profiles','tracks','users','rag_documents',
+                        'driver_profiles','tracks','rag_documents',
                         'rag_chunks','llm_logs')
   loop
     execute format('drop policy %I on public.%I', pol.policyname, pol.tablename);
@@ -25,7 +25,6 @@ alter table public.laps enable row level security;
 alter table public.coaching_notes enable row level security;
 alter table public.driver_profiles enable row level security;
 alter table public.tracks enable row level security;
-alter table public.users enable row level security;
 alter table public.rag_documents enable row level security;
 alter table public.rag_chunks enable row level security;
 
@@ -96,7 +95,7 @@ create policy coaching_notes_all on public.coaching_notes for all to authenticat
 -- 7. Shared / non-tenant tables
 create policy tracks_select on public.tracks for select to authenticated using (true);
 create policy tracks_insert on public.tracks for insert to authenticated with check (true);
-create policy users_select on public.users for select to authenticated using (true);
+-- users_select policy removed: public.users dropped by 20260719_drop_users_table.sql
 create policy rag_documents_select on public.rag_documents for select to authenticated using (true);
 create policy rag_chunks_select on public.rag_chunks for select to authenticated using (true);
 
