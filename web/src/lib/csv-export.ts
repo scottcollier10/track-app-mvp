@@ -11,7 +11,7 @@ interface Session {
   date: string;
   total_time_ms: number;
   best_lap_ms: number | null;
-  source?: string;
+  source?: string | null;
   driver: { id: string; name: string; email: string } | null;
   track: { id: string; name: string; location: string | null } | null;
   lapCount: number;

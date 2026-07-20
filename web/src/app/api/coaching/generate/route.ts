@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabase();
 
     // 3. Fetch session data
-    const { data: session, error: sessionError } = await (supabase
-      .from('sessions') as any)
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
       .select('*, tracks(name), drivers(name, email)')
       .eq('id', sessionId)
       .single();
@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Fetch laps
-    const { data: laps, error: lapsError } = await (supabase
-      .from('laps') as any)
+    const { data: laps, error: lapsError } = await supabase
+      .from('laps')
       .select('*')
       .eq('session_id', sessionId)
       .order('lap_number', { ascending: true });
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Fetch driver profile
-    const { data: profile } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: profile } = await supabase
+      .from('driver_profiles')
       .select('*')
       .eq('driver_id', session.driver_id)
       .single();
@@ -239,8 +239,8 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
     });
 
     // 10. Store in database
-    const { error: updateError } = await (supabase
-      .from('sessions') as any)
+    const { error: updateError } = await supabase
+      .from('sessions')
       .update({ ai_coaching_summary: coachingText })
       .eq('id', sessionId);
 

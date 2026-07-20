@@ -32,10 +32,9 @@ export async function getTracks(): Promise<{
 }> {
   try {
     const supabase = createServerSupabase();
-    const db = supabase as any;
 
-    const { data, error } = await (supabase
-      .from('tracks') as any)
+    const { data, error } = await supabase
+      .from('tracks')
       .select('id, name, location, length_meters, config')
       .order('name', { ascending: true });
 
@@ -43,7 +42,7 @@ export async function getTracks(): Promise<{
       return { data: null, error: new Error(error.message) };
     }
 
-    return { data: data as any, error: null };
+    return { data, error: null };
   } catch (err) {
     return {
       data: null,
@@ -60,11 +59,10 @@ export async function getTrack(
 ): Promise<{ data: TrackWithSessions | null; error: Error | null }> {
   try {
     const supabase = createServerSupabase();
-    const db = supabase as any;
 
     // Fetch track details
-    const { data: track, error: trackError } = await (supabase
-      .from('tracks') as any)
+    const { data: track, error: trackError } = await supabase
+      .from('tracks')
       .select('id, name, location, length_meters, config')
       .eq('id', id)
       .single();
@@ -74,8 +72,8 @@ export async function getTrack(
     }
 
     // Fetch recent sessions for this track
-    const { data: sessions, error: sessionsError } = await (supabase
-      .from('sessions') as any)
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('sessions')
       .select(
         `
         id,
@@ -94,9 +92,9 @@ export async function getTrack(
 
     return {
       data: {
-        ...(track as any),
+        ...track,
         recentSessions: sessions || [],
-      } as any,
+      },
       error: null,
     };
   } catch (err) {

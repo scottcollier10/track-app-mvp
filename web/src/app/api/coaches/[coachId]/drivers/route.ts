@@ -52,8 +52,8 @@ export async function GET(
     const supabase = createServerSupabase();
 
     // Get coach info
-    const { data: coach, error: coachError } = await (supabase
-      .from('coaches') as any)
+    const { data: coach, error: coachError } = await supabase
+      .from('coaches')
       .select('id, name')
       .eq('id', coachId)
       .single();
@@ -66,8 +66,8 @@ export async function GET(
     }
 
     // Get all drivers for this coach
-    const { data: drivers, error: driversError } = await (supabase
-      .from('drivers') as any)
+    const { data: drivers, error: driversError } = await supabase
+      .from('drivers')
       .select('id, name, email')
       .eq('coach_id', coachId)
       .order('name', { ascending: true });
@@ -86,8 +86,8 @@ export async function GET(
     for (const driver of drivers || []) {
       try {
         // Get all sessions for this driver
-        const { data: sessions, error: sessionsError } = await (supabase
-          .from('sessions') as any)
+        const { data: sessions, error: sessionsError } = await supabase
+          .from('sessions')
           .select(`
             id,
             date,
@@ -131,8 +131,8 @@ export async function GET(
         // Get total laps count
         let totalLaps = 0;
         for (const session of allSessions) {
-          const { count } = await (supabase
-            .from('laps') as any)
+          const { count } = await supabase
+            .from('laps')
             .select('*', { count: 'exact', head: true })
             .eq('session_id', session.id);
 

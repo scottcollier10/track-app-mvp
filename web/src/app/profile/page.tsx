@@ -13,8 +13,8 @@ export default async function ProfilePage() {
   const supabase = createServerSupabase();
 
   // For MVP: Get the first driver (in production, this would be the authenticated user)
-  const { data: drivers, error: driversError } = await (supabase
-    .from('drivers') as any)
+  const { data: drivers, error: driversError } = await supabase
+    .from('drivers')
     .select('*')
     .limit(1)
     .maybeSingle();

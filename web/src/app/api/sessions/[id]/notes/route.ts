@@ -43,8 +43,8 @@ export async function PATCH(
     };
 
     // Update the session's coach_notes
-    const { data, error } = await (supabase
-      .from('sessions') as any)
+    const { data, error } = await supabase
+      .from('sessions')
       .update(updateData)
       .eq('id', params.id)
       .select()

@@ -45,8 +45,8 @@ export async function getCoachDashboardData(): Promise<{
     const supabase = createServerSupabase();
 
     // Fetch all sessions with driver, track, and laps
-    const { data: sessions, error } = await (supabase
-      .from('sessions') as any)
+    const { data: sessions, error } = await supabase
+      .from('sessions')
       .select(
         `
         id,

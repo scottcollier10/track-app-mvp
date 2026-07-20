@@ -55,8 +55,8 @@ export async function GET(
     const supabase = createServerSupabase();
 
     // Get all sessions for this driver
-    const { data: sessions, error: sessionsError } = await (supabase
-      .from('sessions') as any)
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('sessions')
       .select(
         `
         id,
@@ -138,8 +138,8 @@ export async function GET(
     const recentSessionsList = allSessions.slice(0, 5);
 
     for (const session of allSessions) {
-      const { count } = await (supabase
-        .from('laps') as any)
+      const { count } = await supabase
+        .from('laps')
         .select('*', { count: 'exact', head: true })
         .eq('session_id', session.id);
 
