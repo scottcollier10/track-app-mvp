@@ -185,11 +185,11 @@ function createSessionSummary(
   const consistencyScore = calculateConsistencyScore(lapTimes) || 0;
   const paceTrendStr = calculatePaceTrend(lapTimes);
 
-  // Convert pace trend string to enum
+  // calculatePaceTrend returns 'improving' | 'fading' | 'stable' | null
   let paceTrend: "improving" | "stable" | "fading";
-  if (paceTrendStr && paceTrendStr.includes('Improving')) {
+  if (paceTrendStr === 'improving') {
     paceTrend = "improving";
-  } else if (paceTrendStr && paceTrendStr.includes('Fading')) {
+  } else if (paceTrendStr === 'fading') {
     paceTrend = "fading";
   } else {
     paceTrend = "stable";

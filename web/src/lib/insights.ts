@@ -44,9 +44,9 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
     const diffMs = last3 - first3;
     const diffSec = Math.abs(diffMs / 1000);
 
-    if (paceTrendLabel.includes('Improving')) {
+    if (paceTrendLabel === 'improving') {
       paceTrendDetail = `You got ${diffSec.toFixed(2)}s faster from start to finish.`;
-    } else if (paceTrendLabel.includes('Fading')) {
+    } else if (paceTrendLabel === 'fading') {
       paceTrendDetail = `You slowed ${diffSec.toFixed(2)}s from start to finish.`;
     } else {
       paceTrendDetail = `Your pace remained stable throughout the session.`;

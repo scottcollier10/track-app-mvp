@@ -29,7 +29,7 @@ describe('getSessionInsightsFromMs', () => {
       expect(result.consistencyScore).toBeGreaterThan(90); // Should be very consistent
       expect(result.drivingBehaviorScore).not.toBeNull();
       expect(result.drivingBehaviorScore).toBeGreaterThan(70);
-      expect(result.paceTrendLabel).toMatch(/Improving|Fading|Consistent/);
+      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
       expect(result.paceTrendDetail).toBeDefined();
       expect(typeof result.paceTrendDetail).toBe('string');
     });
@@ -41,7 +41,7 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBe(100);
       expect(result.drivingBehaviorScore).toBe(100);
-      expect(result.paceTrendLabel).toBe('Consistent →');
+      expect(result.paceTrendLabel).toBe('stable');
       expect(result.paceTrendDetail).toContain('stable');
     });
 
@@ -71,7 +71,7 @@ describe('getSessionInsightsFromMs', () => {
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendLabel).toContain('Improving');
+      expect(result.paceTrendLabel).toBe('improving');
       expect(result.paceTrendDetail).toContain('faster');
       expect(result.paceTrendDetail).toMatch(/\d+\.\d+s/); // Should contain time difference
     });
@@ -85,12 +85,12 @@ describe('getSessionInsightsFromMs', () => {
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendLabel).toContain('Fading');
+      expect(result.paceTrendLabel).toBe('fading');
       expect(result.paceTrendDetail).toContain('slowed');
       expect(result.paceTrendDetail).toMatch(/\d+\.\d+s/); // Should contain time difference
     });
 
-    it('detects consistent pace when first 3 equals last 3', () => {
+    it('detects stable pace when first 3 equals last 3', () => {
       const lapTimes = [
         90000, 91000, 92000, // First 3: avg 91000
         91500, 90500,
@@ -99,7 +99,7 @@ describe('getSessionInsightsFromMs', () => {
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendLabel).toContain('Consistent');
+      expect(result.paceTrendLabel).toBe('stable');
       expect(result.paceTrendDetail).toContain('stable');
     });
   });
@@ -110,7 +110,7 @@ describe('getSessionInsightsFromMs', () => {
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendLabel).toBe('Not Enough Data');
+      expect(result.paceTrendLabel).toBe('Stable');
       expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
       // Consistency should still work with 2+ laps
       expect(result.consistencyScore).not.toBeNull();
@@ -124,7 +124,7 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBeNull();
       expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Not Enough Data');
+      expect(result.paceTrendLabel).toBe('Stable');
       expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
     });
 
@@ -135,7 +135,7 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBeNull();
       expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Not Enough Data');
+      expect(result.paceTrendLabel).toBe('Stable');
       expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
     });
 
@@ -147,7 +147,7 @@ describe('getSessionInsightsFromMs', () => {
       // Should have consistency and behavior scores with 2 laps
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toBe('Not Enough Data');
+      expect(result.paceTrendLabel).toBe('Stable');
       expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
     });
 
@@ -170,7 +170,7 @@ describe('getSessionInsightsFromMs', () => {
       // Should process only the valid values (7 valid laps)
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/Improving|Fading|Consistent/); // Should have a valid trend
+      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/); // Should have a valid trend
     });
 
     it('filters out undefined values in array', () => {
@@ -190,7 +190,7 @@ describe('getSessionInsightsFromMs', () => {
       // Should process only the valid values
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/Improving|Fading|Consistent/);
+      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
     });
 
     it('filters out zero and negative values', () => {
@@ -201,7 +201,7 @@ describe('getSessionInsightsFromMs', () => {
       // Should process only the positive values
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/Improving|Fading|Consistent/);
+      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
     });
 
     it('handles one fast lap followed by rest slow', () => {
@@ -215,7 +215,7 @@ describe('getSessionInsightsFromMs', () => {
       expect(result.consistencyScore).not.toBeNull();
       expect(result.consistencyScore).toBeLessThanOrEqual(90); // Should show some inconsistency with large outlier
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/Improving|Fading|Consistent/);
+      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
     });
 
     it('handles all laps exactly the same with 6+ laps', () => {
@@ -225,7 +225,7 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBe(100);
       expect(result.drivingBehaviorScore).toBe(100);
-      expect(result.paceTrendLabel).toBe('Consistent →');
+      expect(result.paceTrendLabel).toBe('stable');
       expect(result.paceTrendDetail).toContain('stable');
     });
   });
@@ -257,17 +257,17 @@ describe('getSessionInsightsFromMs', () => {
       expect(result.paceTrendDetail).toContain('slowed');
     });
 
-    it('handles very small pace differences', () => {
+    it('treats very small pace differences as stable (below 1% threshold)', () => {
       const lapTimes = [
         90100, 90000, 90200, // First 3: avg 90100
         89900, 90000, 89800, // Last 3: avg 89900
       ];
-      // Expected difference: 90100 - 89900 = 200ms = 0.20s
+      // Difference: 200ms = 0.22% of first-3 avg, below the 1% trend threshold
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendDetail).toContain('0.20s');
-      expect(result.paceTrendDetail).toContain('faster');
+      expect(result.paceTrendLabel).toBe('stable');
+      expect(result.paceTrendDetail).toContain('stable');
     });
   });
 });
