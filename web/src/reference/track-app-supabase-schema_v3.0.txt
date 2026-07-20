@@ -128,10 +128,3 @@ CREATE TABLE public.tracks (
   map_image_url text,
   CONSTRAINT tracks_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.users (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  email text NOT NULL,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT users_pkey PRIMARY KEY (id),
-  CONSTRAINT users_email_key UNIQUE (email)
-);
