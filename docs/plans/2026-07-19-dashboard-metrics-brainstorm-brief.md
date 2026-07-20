@@ -11,8 +11,8 @@ A driver flagged "Bottom 2 to Watch" (Taylor Morgan) displays a green 96% behavi
 1. **Behavior ≡ Consistency.** `consistencyScore = (1−cv)×100` and `behaviorScore = 100−(cv×100)` are algebraically identical (`web/src/lib/analytics.ts:6-45`). Two columns, one metric.
 2. **Score compression.** Lap-time coefficient of variation is naturally tiny, so scores cluster 85–100. A 96 means "drove laps," not "excellent." The number cannot discriminate drivers.
 3. **Fixed bar color.** `BehaviorBar.tsx` renders emerald→cyan gradient at ANY value. 45% and 96% look equally healthy.
-4. ~~Per-session scores in driver detail table were random mock data~~ (fixed 2026-07-19, see PR — real computed values now).
-5. ~~"Demo Highlights" card descriptions were hardcoded strings ("−17.8% decline")~~ (fixed 2026-07-19 — computed or removed).
+4. ~~Per-session scores in driver detail table were random mock data~~ (fixed 2026-07-19, PR #23 — real computed values now).
+5. ~~"Demo Highlights" card descriptions were hardcoded strings ("−17.8% decline")~~ (fixed 2026-07-19, PR #23 — computed or removed).
 
 ## Current mechanics (post-fixes, verify against code at session start)
 
