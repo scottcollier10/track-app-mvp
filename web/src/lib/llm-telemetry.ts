@@ -15,6 +15,7 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
+import type { Json } from '@/lib/types/database';
 
 /**
  * LLM provider types
@@ -34,7 +35,7 @@ export interface LLMCallOptions {
     userId?: string;
     coachId?: string;
     sessionId?: string;
-    [key: string]: any;
+    [key: string]: Json | undefined;
   };
 }
 

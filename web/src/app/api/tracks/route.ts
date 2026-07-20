@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform to camelCase for iOS app compatibility
-    const tracksFormatted = (tracks || []).map((track: any) => ({
+    const tracksFormatted = (tracks || []).map((track) => ({
       id: track.id,
       name: track.name,
       location: track.location,

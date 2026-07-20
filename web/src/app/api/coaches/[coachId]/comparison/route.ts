@@ -99,7 +99,7 @@ export async function GET(
       });
     }
 
-    const driverIds = drivers.map((d: any) => d.id);
+    const driverIds = drivers.map((d) => d.id);
 
     // Get all tracks that these drivers have used
     const { data: tracks, error: tracksError } = await supabase
@@ -152,7 +152,7 @@ export async function GET(
         }
 
         // Group sessions by track
-        const trackGroups: Record<string, any[]> = {};
+        const trackGroups: Record<string, NonNullable<typeof sessions>> = {};
 
         for (const session of sessions || []) {
           const tId = session.track_id;
@@ -221,13 +221,13 @@ export async function GET(
     // Get unique tracks from comparison data
     const usedTrackIds = [...new Set(comparison.map(c => c.trackId))];
     const usedTracks = (tracks || [])
-      .filter((t: any) => usedTrackIds.includes(t.id))
-      .map((t: any) => ({ id: t.id, name: t.name }));
+      .filter((t) => usedTrackIds.includes(t.id))
+      .map((t) => ({ id: t.id, name: t.name }));
 
     const response: ComparisonResponse = {
       comparison,
       tracks: usedTracks,
-      drivers: drivers.map((d: any) => ({ id: d.id, name: d.name })),
+      drivers: drivers.map((d) => ({ id: d.id, name: d.name })),
     };
 
     return NextResponse.json({ data: response });
