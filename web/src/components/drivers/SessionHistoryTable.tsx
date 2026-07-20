@@ -3,11 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { formatLapMs, formatDate } from '@/lib/time';
 import { SessionWithDetails } from '@/data/sessions';
-import {
-  calculateConsistencyScore,
-  calculateBehaviorScore,
-} from '@/lib/analytics';
-import { BehaviorBar } from '@/components/ui/BehaviorBar';
+import { sessionConsistencySeconds } from '@/lib/analytics-v2';
+import { formatConsistencySeconds } from '@/components/drivers/consistencyBand';
 import { ViewButton } from '@/components/ui/ViewButton';
 import { Th, Td } from '@/components/ui/TableHelpers';
 
@@ -134,7 +131,6 @@ export default function SessionHistoryTable({
                     <span className="hidden md:inline">Consistency</span>
                     <span className="md:hidden">CST</span>
                   </Th>
-                  <Th className="hidden md:table-cell">Behavior</Th>
                   <Th></Th>
                 </tr>
               </thead>
@@ -143,8 +139,7 @@ export default function SessionHistoryTable({
                   const sourceBadge = getSourceBadge(session.source);
                   // Real scores from lap times; null when < 2 valid laps
                   const lapTimes = session.lapTimesMs ?? [];
-                  const consistency = calculateConsistencyScore(lapTimes);
-                  const behavior = calculateBehaviorScore(lapTimes);
+                  const consistency = sessionConsistencySeconds(lapTimes);
 
                   return (
                     <tr
@@ -185,18 +180,8 @@ export default function SessionHistoryTable({
                       <Td>
                         {consistency !== null ? (
                           <span className="font-mono text-[13px] text-slate-200">
-                            {consistency}
-                            <span className="text-[11px] text-slate-400"> / 100</span>
+                            ±{formatConsistencySeconds(consistency)}
                           </span>
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </Td>
-
-                      {/* Behavior */}
-                      <Td className="hidden md:table-cell">
-                        {behavior !== null ? (
-                          <BehaviorBar value={behavior} />
                         ) : (
                           <span className="text-slate-500">—</span>
                         )}

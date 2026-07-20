@@ -2,17 +2,24 @@
 
 import type { DriverProgressData } from '@/data/driverProgress';
 import { formatLapMs, formatDelta } from '@/lib/time';
+import {
+  consistencyBandState,
+  formatConsistencySeconds,
+  type ConsistencyBandState,
+} from './consistencyBand';
 
 interface ProgressStatsProps {
   progressData: DriverProgressData;
 }
 
 export default function ProgressStats({ progressData }: ProgressStatsProps) {
-  const { firstEvent, latestEvent, deltas } = progressData;
+  const { firstEvent, latestEvent, deltas, events } = progressData;
 
   if (!firstEvent || !latestEvent) {
     return null;
   }
+
+  const bandState = consistencyBandState(events.map((e) => e.consistencySeconds));
 
   return (
     <section className="grid gap-4 md:grid-cols-3">
@@ -22,7 +29,7 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
           label="Best Lap Progress"
           value={formatLapMs(latestEvent.bestLapMs)}
           previousValue={formatLapMs(firstEvent.bestLapMs)}
-          trend={deltas.bestLapDelta < 0 ? 'up' : deltas.bestLapDelta > 0 ? 'down' : 'neutral'}
+          tone={deltas.bestLapDelta < 0 ? 'progress' : 'neutral'}
           description={
             deltas.bestLapDelta < 0
               ? `${formatDelta(Math.abs(deltas.bestLapDelta))} faster than first session`
@@ -35,32 +42,31 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
         <ProgressionCard
           label="Best Lap Progress"
           value="N/A"
-          trend="neutral"
+          tone="neutral"
           description="Insufficient data"
         />
       )}
 
-      {/* Card 2: Consistency Trend */}
-      {firstEvent.consistency !== null && latestEvent.consistency !== null ? (
+      {/* Card 2: Consistency Trend (std-dev in seconds; lower = tighter) */}
+      {firstEvent.consistencySeconds !== null && latestEvent.consistencySeconds !== null ? (
         <ProgressionCard
           label="Consistency Trend"
-          value={latestEvent.consistency.toString()}
-          previousValue={firstEvent.consistency.toString()}
-          unit="/100"
-          trend={
-            deltas.consistencyDelta > 0
-              ? 'up'
-              : deltas.consistencyDelta < 0
-              ? 'down'
+          value={`±${formatConsistencySeconds(latestEvent.consistencySeconds)}`}
+          previousValue={`±${formatConsistencySeconds(firstEvent.consistencySeconds)}`}
+          tone={
+            bandState === 'better'
+              ? 'progress'
+              : bandState === 'worse'
+              ? 'breakout'
               : 'neutral'
           }
-          description={getConsistencyText(deltas.consistencyDelta)}
+          description={getConsistencyText(bandState)}
         />
       ) : (
         <ProgressionCard
           label="Consistency Trend"
           value="N/A"
-          trend="neutral"
+          tone="neutral"
           description="Insufficient data"
         />
       )}
@@ -71,13 +77,7 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
           label="Peak Performance Window"
           value={`Lap ${latestEvent.bestLapNumber}`}
           previousValue={`Lap ${firstEvent.bestLapNumber}`}
-          trend={
-            deltas.lapNumberDelta < 0
-              ? 'up'
-              : deltas.lapNumberDelta > 0
-              ? 'down'
-              : 'neutral'
-          }
+          tone={deltas.lapNumberDelta < 0 ? 'progress' : 'neutral'}
           description={
             deltas.lapNumberDelta < 0
               ? 'Finding peak performance earlier'
@@ -90,7 +90,7 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
         <ProgressionCard
           label="Peak Performance Window"
           value="N/A"
-          trend="neutral"
+          tone="neutral"
           description="Insufficient data"
         />
       )}
@@ -98,22 +98,22 @@ export default function ProgressStats({ progressData }: ProgressStatsProps) {
   );
 }
 
-// Helper function for consistency text
-function getConsistencyText(delta: number): string {
-  if (delta >= 10) return 'Much more repeatable';
-  if (delta >= 5) return 'More consistent';
-  if (delta <= -10) return 'Much less consistent';
-  if (delta <= -5) return 'Less consistent';
-  return 'Similar consistency';
+// Helper: baseline-aware consistency caption.
+function getConsistencyText(state: ConsistencyBandState): string {
+  if (state === 'better') return 'Tightening past their usual spread';
+  if (state === 'worse') return 'Swinging wider than usual';
+  return 'Holding their usual spread';
 }
+
+// Card tone: never green-by-default. Blue = progressing, amber = breakout, grey = neutral.
+type CardTone = 'progress' | 'breakout' | 'neutral';
 
 // Progression Card Component
 interface ProgressionCardProps {
   label: string;
   value: string | number;
   previousValue?: string | number;
-  unit?: string;
-  trend: 'up' | 'down' | 'neutral';
+  tone: CardTone;
   description: string;
 }
 
@@ -121,46 +121,42 @@ function ProgressionCard({
   label,
   value,
   previousValue,
-  unit = '',
-  trend,
+  tone,
   description,
 }: ProgressionCardProps) {
-  const trendColors = {
-    up: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
-    down: 'text-rose-400 border-rose-400/40 bg-rose-400/10',
-    neutral: 'text-sky-400 border-sky-400/40 bg-sky-400/10',
+  const toneBadge = {
+    progress: 'text-sky-400 border-sky-400/40 bg-sky-400/10',
+    breakout: 'text-amber-400 border-amber-400/40 bg-amber-400/10',
+    neutral: 'text-slate-300 border-slate-600/60 bg-slate-700/20',
   };
 
-  const trendBorderColors = {
-    up: 'border-emerald-400/40',
-    down: 'border-rose-400/40',
-    neutral: 'border-sky-400/40',
+  const toneBorder = {
+    progress: 'border-sky-400/40',
+    breakout: 'border-amber-400/40',
+    neutral: 'border-slate-800/80',
   };
 
-  const trendIcons = {
-    up: '↗',
-    down: '↘',
+  const toneIcon = {
+    progress: '↘', // tighter / faster is downward movement
+    breakout: '⚠',
     neutral: '→',
   };
 
   return (
-    <div className={`rounded-2xl border ${trendBorderColors[trend]} bg-slate-900/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]`}>
+    <div className={`rounded-2xl border ${toneBorder[tone]} bg-slate-900/80 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.75)]`}>
       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </p>
 
       <div className="mb-3 flex items-baseline gap-3 flex-wrap">
-        <span className="text-4xl font-bold text-slate-50">
-          {value}
-          {unit && <span className="text-2xl text-slate-400">{unit}</span>}
-        </span>
+        <span className="text-4xl font-bold text-slate-50">{value}</span>
 
         {previousValue && (
           <div className="flex items-center gap-2">
             <span
-              className={`rounded-full border px-2 py-1 text-xs font-medium ${trendColors[trend]}`}
+              className={`rounded-full border px-2 py-1 text-xs font-medium ${toneBadge[tone]}`}
             >
-              {trendIcons[trend]} {previousValue}{unit}
+              {toneIcon[tone]} {previousValue}
             </span>
           </div>
         )}

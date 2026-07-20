@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getDriverProfile, createDriverProfile } from '@/data/driverProfiles';
-import ProfileForm from './ProfileForm';
 import DriverStats from '@/components/profile/DriverStats';
 import { ProgressTimeline } from '@/components/profile/ProgressTimeline';
 import { HeroBurst } from '@/components/ui/HeroBurst';
@@ -198,13 +197,6 @@ export default async function ProfilePage() {
             </div>
             <ProgressTimeline driverId={driver.id} />
           </div>
-
-          {/* Profile Form */}
-          <ProfileForm
-            driverId={driver.id}
-            initialExperienceLevel={profile.experience_level}
-            totalSessions={profile.total_sessions}
-          />
         </div>
       </div>
     </div>

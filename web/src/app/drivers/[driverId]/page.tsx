@@ -10,6 +10,8 @@ import type { Driver } from '@/data/drivers';
 import type { DriverProgressData } from '@/data/driverProgress';
 import ProgressStats from '@/components/drivers/ProgressStats';
 import ProgressCharts from '@/components/drivers/ProgressCharts';
+import RunGroupControl from '@/components/drivers/RunGroupControl';
+import { toRunGroupBand, type RunGroupBand } from '@/components/coach/runGroups';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 
@@ -25,6 +27,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
   const { driverId } = params;
 
   const [driver, setDriver] = useState<Driver | null>(null);
+  const [currentLevel, setCurrentLevel] = useState<RunGroupBand>('beginner');
   const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +47,11 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
       try {
         setLoading(true);
 
-        // Fetch driver info and sessions in parallel
-        const [driversRes, sessionsRes] = await Promise.all([
+        // Fetch driver info, sessions, and profile in parallel
+        const [driversRes, sessionsRes, profileRes] = await Promise.all([
           fetch('/api/drivers'),
           fetch(`/api/sessions?driverId=${encodeURIComponent(driverId)}`),
+          fetch(`/api/drivers/${encodeURIComponent(driverId)}/profile`),
         ]);
         const driversResult = await driversRes.json();
         const sessionsResult = await sessionsRes.json();
@@ -67,6 +71,10 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         }
 
         setDriver(foundDriver);
+        if (profileRes.ok) {
+          const profileResult = await profileRes.json();
+          setCurrentLevel(toRunGroupBand(profileResult.experienceLevel));
+        }
         setSessions(sessionsResult.data || []);
         console.log(
           `[DriverProgressPage] Loaded ${sessionsResult.data?.length || 0} sessions for ${foundDriver.name}`
@@ -303,6 +311,9 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
               {driver.email}
             </span>
           </div>
+
+          {/* Run-group control */}
+          <RunGroupControl driverId={driverId} current={currentLevel} />
 
           {/* Track selector dropdown */}
           {availableTracks.length > 0 && (
