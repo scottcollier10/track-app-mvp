@@ -162,8 +162,8 @@ export default async function SessionDetailPage({ params }: PageProps) {
               {/* Pace Trend Card with Sparkline */}
               <Card>
                 <div className="text-xs md:text-sm text-muted uppercase tracking-wide mb-2">Pace Trend</div>
-                <div className={`text-lg font-semibold mb-1 ${insights.paceTrendLabel.includes('Improving') ? 'text-status-success' : insights.paceTrendLabel.includes('Fading') ? 'text-status-warn' : 'text-muted'}`}>
-                  {insights.paceTrendLabel}
+                <div className={`text-lg font-semibold mb-1 ${insights.paceTrendLabel === 'improving' ? 'text-status-success' : insights.paceTrendLabel === 'fading' ? 'text-status-warn' : 'text-muted'}`}>
+                  {insights.paceTrendLabel.charAt(0).toUpperCase() + insights.paceTrendLabel.slice(1)}
                 </div>
                 <div className="text-xs text-text-subtle mb-3">
                   {insights.paceTrendDetail}
@@ -171,7 +171,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                 <Sparkline
                   data={lapTimes}
                   height={40}
-                  color={insights.paceTrendLabel.includes('Improving') ? '#22C55E' : insights.paceTrendLabel.includes('Fading') ? '#FACC15' : '#6B7280'}
+                  color={insights.paceTrendLabel === 'improving' ? '#22C55E' : insights.paceTrendLabel === 'fading' ? '#FACC15' : '#6B7280'}
                 />
               </Card>
 
