@@ -1,4 +1,4 @@
-import { CLEAN_LAP_MAX_MULTIPLE } from './analytics-constants';
+import { CLEAN_LAP_MAX_MULTIPLE, MIN_CLEAN_LAPS_FOR_FADE } from './analytics-constants';
 
 function median(sorted: number[]): number {
   const n = sorted.length;
@@ -23,4 +23,18 @@ export function sessionConsistencySeconds(lapTimesMs: Array<number | null>): num
   const mean = laps.reduce((s, t) => s + t, 0) / laps.length;
   const variance = laps.reduce((s, t) => s + (t - mean) ** 2, 0) / (laps.length - 1);
   return Math.sqrt(variance) / 1000;
+}
+
+function medianOf(values: number[]): number {
+  return median([...values].sort((a, b) => a - b));
+}
+
+/** (last-third median − first-third median) of clean laps, in SECONDS. +ve = slowed late. Null if <6 clean laps. */
+export function sessionFadeSeconds(lapTimesMs: Array<number | null>): number | null {
+  const laps = cleanLaps(lapTimesMs);
+  if (laps.length < MIN_CLEAN_LAPS_FOR_FADE) return null;
+  const third = Math.ceil(laps.length / 3);
+  const firstMed = medianOf(laps.slice(0, third));
+  const lastMed = medianOf(laps.slice(-third));
+  return (lastMed - firstMed) / 1000;
 }
