@@ -15,3 +15,12 @@ export function cleanLaps(lapTimesMs: Array<number | null>): number[] {
   const limit = med * CLEAN_LAP_MAX_MULTIPLE;
   return valid.filter((t) => t <= limit);
 }
+
+/** Sample standard deviation of clean lap times, in SECONDS. Null if <2 clean laps. */
+export function sessionConsistencySeconds(lapTimesMs: Array<number | null>): number | null {
+  const laps = cleanLaps(lapTimesMs);
+  if (laps.length < 2) return null;
+  const mean = laps.reduce((s, t) => s + t, 0) / laps.length;
+  const variance = laps.reduce((s, t) => s + (t - mean) ** 2, 0) / (laps.length - 1);
+  return Math.sqrt(variance) / 1000;
+}
