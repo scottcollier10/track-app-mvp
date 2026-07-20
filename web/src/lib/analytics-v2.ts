@@ -71,3 +71,40 @@ export function isRegressedVsTrackPB(sessionBestMs: number, priorTrackBestsMs: n
   const pb = Math.min(...valid);
   return sessionBestMs > pb * (1 + PB_REGRESSION_PCT);
 }
+
+/** One lap's sector splits: sector-id (string) -> milliseconds. Matches laps.sector_data (Record<string, number> | null). */
+export type LapSectors = Record<string, number>;
+
+/**
+ * Theoretical best lap = sum of the fastest split for each sector across all laps (ms).
+ * Sector keys are taken from the union across laps; a sector counts only positive splits.
+ * Returns null if no laps carry usable sector splits, or if any sector key never has a positive split.
+ */
+export function idealLapMs(laps: Array<LapSectors | null | undefined>): number | null {
+  const valid = (laps || []).filter((l): l is LapSectors => !!l && typeof l === 'object' && Object.keys(l).length > 0);
+  if (valid.length === 0) return null;
+  const keys = new Set<string>();
+  for (const lap of valid) for (const k of Object.keys(lap)) keys.add(k);
+  if (keys.size === 0) return null;
+  let total = 0;
+  for (const key of keys) {
+    let best = Infinity;
+    for (const lap of valid) {
+      const v = lap[key];
+      if (typeof v === 'number' && v > 0 && v < best) best = v;
+    }
+    if (!isFinite(best)) return null; // a sector with no positive split -> cannot form an ideal lap
+    total += best;
+  }
+  return total;
+}
+
+/**
+ * Fastest actual lap (real lap_time_ms) − ideal lap, in SECONDS.
+ * Null when sector data is absent (ideal null) or no valid fastest lap is given.
+ */
+export function gapToIdealSeconds(fastestActualLapMs: number | null, laps: Array<LapSectors | null | undefined>): number | null {
+  const ideal = idealLapMs(laps);
+  if (ideal === null || fastestActualLapMs == null || !(fastestActualLapMs > 0)) return null;
+  return (fastestActualLapMs - ideal) / 1000;
+}

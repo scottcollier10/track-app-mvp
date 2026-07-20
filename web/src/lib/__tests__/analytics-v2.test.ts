@@ -5,7 +5,10 @@ import {
   consistencyBaseline,
   isOffConsistencyBaseline,
   isRegressedVsTrackPB,
+  idealLapMs,
+  gapToIdealSeconds,
 } from '../analytics-v2';
+import type { LapSectors } from '../analytics-v2';
 
 describe('cleanLaps', () => {
   it('drops null, zero, and negative lap times', () => {
@@ -84,5 +87,56 @@ describe('isRegressedVsTrackPB', () => {
   });
   it('does not flag when there is no prior best at this track', () => {
     expect(isRegressedVsTrackPB(92000, [])).toBe(false);
+  });
+});
+
+describe('idealLapMs', () => {
+  it('sums the fastest split per sector across laps', () => {
+    const laps: LapSectors[] = [
+      { '1': 30000, '2': 31000, '3': 29000 },
+      { '1': 29500, '2': 30500, '3': 29500 },
+    ];
+    expect(idealLapMs(laps)).toBe(89000);
+  });
+  it('returns null on empty input', () => {
+    expect(idealLapMs([])).toBeNull();
+  });
+  it('returns null when every lap is null or empty', () => {
+    expect(idealLapMs([null, undefined, {}])).toBeNull();
+  });
+  it('returns null when a sector never has a positive split', () => {
+    const laps: LapSectors[] = [
+      { '1': 30000, '2': 0 },
+      { '1': 29500, '2': -1 },
+    ];
+    expect(idealLapMs(laps)).toBeNull();
+  });
+  it('ignores non-positive splits for an otherwise-covered sector', () => {
+    const laps: LapSectors[] = [
+      { '1': 30000, '2': 31000 },
+      { '1': 0, '2': 30500 },
+    ];
+    // sector 1 best = 30000, sector 2 best = 30500
+    expect(idealLapMs(laps)).toBe(60500);
+  });
+});
+
+describe('gapToIdealSeconds', () => {
+  it('returns fastest actual lap minus ideal in seconds', () => {
+    const laps: LapSectors[] = [
+      { '1': 30000, '2': 31000, '3': 29000 },
+      { '1': 29500, '2': 30500, '3': 29500 },
+    ];
+    // ideal = 89000, fastest actual = 89500 -> gap 0.5s
+    expect(gapToIdealSeconds(89500, laps)!).toBeCloseTo(0.5, 2);
+  });
+  it('returns null when sector data is absent', () => {
+    expect(gapToIdealSeconds(89500, [])).toBeNull();
+    expect(gapToIdealSeconds(89500, [null, {}])).toBeNull();
+  });
+  it('returns null when no valid fastest lap is given', () => {
+    const laps: LapSectors[] = [{ '1': 30000, '2': 31000, '3': 29000 }];
+    expect(gapToIdealSeconds(null, laps)).toBeNull();
+    expect(gapToIdealSeconds(0, laps)).toBeNull();
   });
 });
