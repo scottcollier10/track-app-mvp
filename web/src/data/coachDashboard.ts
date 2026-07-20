@@ -34,7 +34,7 @@ export interface SessionRow {
 
 /**
  * Rolled-up student row for the coach dashboard.
- * ONE ROW PER DRIVER. Replaces the legacy CoachDashboardDriver.
+ * ONE ROW PER DRIVER.
  */
 export interface CoachDashboardStudent {
   driverId: string;
@@ -54,26 +54,6 @@ export interface CoachDashboardStudent {
   sparkline: number[];
   ready: boolean;
   readyWhy: string | null;
-}
-
-/**
- * @deprecated Legacy shape kept only so the not-yet-rewritten coach UI
- * (Phase C) keeps compiling. Do not add new consumers. Removed in Phase E.
- */
-export interface CoachDashboardDriver {
-  driverId: string;
-  driverName: string;
-  driverEmail: string;
-  lastTrackName: string;
-  bestLapMs: number | null;
-  avgBestLapMs: number | null;
-  consistencyScore: number | null;
-  behaviorScore: number | null;
-  sessionCount: number;
-  totalLaps: number;
-  lastSessionDate: string | null;
-  isImproving: boolean;
-  improvementPct: number | null;
 }
 
 const DEFAULT_RUN_GROUP = 'beginner';
