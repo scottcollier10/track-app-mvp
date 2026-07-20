@@ -4,6 +4,7 @@ import {
   MIN_PRIOR_SESSIONS_FOR_BASELINE,
   BASELINE_SIGMA,
   BASELINE_MIN_DELTA_S,
+  PB_REGRESSION_PCT,
 } from './analytics-constants';
 
 function median(sorted: number[]): number {
@@ -61,4 +62,12 @@ export function isOffConsistencyBaseline(sessionSeconds: number, priorSeconds: n
   const b = consistencyBaseline(priorSeconds);
   if (!b) return false;
   return sessionSeconds > b.upper && sessionSeconds - b.mean >= BASELINE_MIN_DELTA_S;
+}
+
+/** True when sessionBestMs is >PB_REGRESSION_PCT slower than the min of priorBestsMs (same track). */
+export function isRegressedVsTrackPB(sessionBestMs: number, priorTrackBestsMs: number[]): boolean {
+  const valid = priorTrackBestsMs.filter((t) => t > 0);
+  if (valid.length === 0 || !(sessionBestMs > 0)) return false;
+  const pb = Math.min(...valid);
+  return sessionBestMs > pb * (1 + PB_REGRESSION_PCT);
 }

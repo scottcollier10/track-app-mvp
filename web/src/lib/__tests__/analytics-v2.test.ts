@@ -4,6 +4,7 @@ import {
   sessionFadeSeconds,
   consistencyBaseline,
   isOffConsistencyBaseline,
+  isRegressedVsTrackPB,
 } from '../analytics-v2';
 
 describe('cleanLaps', () => {
@@ -71,5 +72,17 @@ describe('isOffConsistencyBaseline', () => {
   });
   it('ignores breakouts smaller than the min delta (guards sigma~0)', () => {
     expect(isOffConsistencyBaseline(0.31, [0.30, 0.30, 0.30])).toBe(false);
+  });
+});
+
+describe('isRegressedVsTrackPB', () => {
+  it('flags when session best is >1% slower than the prior track PB', () => {
+    expect(isRegressedVsTrackPB(92000, [90000, 90500])).toBe(true);
+  });
+  it('does not flag within 1% of PB', () => {
+    expect(isRegressedVsTrackPB(90500, [90000, 90500])).toBe(false);
+  });
+  it('does not flag when there is no prior best at this track', () => {
+    expect(isRegressedVsTrackPB(92000, [])).toBe(false);
   });
 });
