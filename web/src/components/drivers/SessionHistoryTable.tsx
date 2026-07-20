@@ -3,6 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { formatLapMs, formatDate } from '@/lib/time';
 import { SessionWithDetails } from '@/data/sessions';
+import {
+  calculateConsistencyScore,
+  calculateBehaviorScore,
+} from '@/lib/analytics';
 import { BehaviorBar } from '@/components/ui/BehaviorBar';
 import { ViewButton } from '@/components/ui/ViewButton';
 import { Th, Td } from '@/components/ui/TableHelpers';
@@ -137,9 +141,10 @@ export default function SessionHistoryTable({
               <tbody>
                 {group.sessions.map((session, index) => {
                   const sourceBadge = getSourceBadge(session.source);
-                  // TODO: Replace with actual consistency/behavior data when available
-                  const mockConsistency = 85 + Math.floor(Math.random() * 10);
-                  const mockBehavior = 75 + Math.floor(Math.random() * 20);
+                  // Real scores from lap times; null when < 2 valid laps
+                  const lapTimes = session.lapTimesMs ?? [];
+                  const consistency = calculateConsistencyScore(lapTimes);
+                  const behavior = calculateBehaviorScore(lapTimes);
 
                   return (
                     <tr
@@ -178,15 +183,23 @@ export default function SessionHistoryTable({
 
                       {/* Consistency */}
                       <Td>
-                        <span className="font-mono text-[13px] text-slate-200">
-                          {mockConsistency}
-                          <span className="text-[11px] text-slate-400"> / 100</span>
-                        </span>
+                        {consistency !== null ? (
+                          <span className="font-mono text-[13px] text-slate-200">
+                            {consistency}
+                            <span className="text-[11px] text-slate-400"> / 100</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
                       </Td>
 
                       {/* Behavior */}
                       <Td className="hidden md:table-cell">
-                        <BehaviorBar value={mockBehavior} />
+                        {behavior !== null ? (
+                          <BehaviorBar value={behavior} />
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
                       </Td>
 
                       {/* ViewButton */}
