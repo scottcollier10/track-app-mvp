@@ -1,14 +1,23 @@
 'use client';
 
+import { useEffect } from 'react';
+
 // Catches errors thrown by the root layout (e.g. getCurrentCoach), which
 // regular error.tsx boundaries cannot. Must render its own <html>/<body>.
 // Inline styles only: globals.css may not be available in this failure mode.
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Surface in the browser console; errors caught by this boundary are
+    // otherwise invisible client-side.
+    console.error(error);
+  }, [error]);
+
   return (
     <html lang="en">
       <body
