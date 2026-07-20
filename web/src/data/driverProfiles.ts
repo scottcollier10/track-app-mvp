@@ -7,6 +7,12 @@
 import { createServerSupabase } from '@/lib/supabase/server';
 import { ExperienceLevel } from '@/types/driver';
 
+/**
+ * App-level profile shape. The generated row type is looser
+ * (experience_level: string | null, nullable counts/timestamps); a DB CHECK
+ * constraint restricts experience_level to the ExperienceLevel union, so the
+ * `as DriverProfileData` assertions below narrow at this read boundary.
+ */
 export interface DriverProfileData {
   id: string;
   driver_id: string;
@@ -25,8 +31,8 @@ export async function getDriverProfile(
   try {
     const supabase = createServerSupabase();
 
-    const { data: profile, error } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: profile, error } = await supabase
+      .from('driver_profiles')
       .select('*')
       .eq('driver_id', driverId)
       .single();
@@ -58,8 +64,8 @@ export async function createDriverProfile(
   try {
     const supabase = createServerSupabase();
 
-    const { data: profile, error } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: profile, error } = await supabase
+      .from('driver_profiles')
       .insert({
         driver_id: driverId,
         experience_level: experienceLevel,
@@ -91,8 +97,8 @@ export async function updateDriverProfile(
   try {
     const supabase = createServerSupabase();
 
-    const { data: profile, error } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: profile, error } = await supabase
+      .from('driver_profiles')
       .update({
         experience_level: experienceLevel,
         updated_at: new Date().toISOString(),
@@ -124,8 +130,8 @@ export async function updateTotalSessions(
     const supabase = createServerSupabase();
 
     // First get the current profile
-    const { data: currentProfile, error: fetchError } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: currentProfile, error: fetchError } = await supabase
+      .from('driver_profiles')
       .select('total_sessions')
       .eq('driver_id', driverId)
       .single();
@@ -135,8 +141,8 @@ export async function updateTotalSessions(
     }
 
     // Increment the session count
-    const { data: profile, error } = await (supabase
-      .from('driver_profiles') as any)
+    const { data: profile, error } = await supabase
+      .from('driver_profiles')
       .update({
         total_sessions: (currentProfile.total_sessions || 0) + 1,
         updated_at: new Date().toISOString(),

@@ -178,7 +178,7 @@ async function logLLMCall(result: LLMCallResult, options: LLMCallOptions): Promi
     try {
       const supabase = createServerSupabase();
 
-      const { error } = await (supabase.from('llm_logs') as any).insert({
+      const { error } = await supabase.from('llm_logs').insert({
         provider: options.provider,
         model: options.model,
         tokens_in: result.tokensIn,
@@ -325,7 +325,7 @@ export async function getCostReport(filters?: {
 }> {
   try {
     const supabase = createServerSupabase();
-    let query = (supabase.from('llm_logs') as any).select('*');
+    let query = supabase.from('llm_logs').select('*');
 
     // Apply filters
     if (filters?.project) {
@@ -355,7 +355,8 @@ export async function getCostReport(filters?: {
     let totalTokensOut = 0;
     let totalLatency = 0;
 
-    logs.forEach((log: any) => {
+    const rows = logs ?? [];
+    rows.forEach((log) => {
       totalCost += Number(log.cost_usd) || 0;
       totalTokensIn += log.tokens_in || 0;
       totalTokensOut += log.tokens_out || 0;
@@ -372,10 +373,10 @@ export async function getCostReport(filters?: {
 
     return {
       totalCost,
-      totalCalls: logs.length,
+      totalCalls: rows.length,
       totalTokensIn,
       totalTokensOut,
-      avgLatencyMs: logs.length > 0 ? totalLatency / logs.length : 0,
+      avgLatencyMs: rows.length > 0 ? totalLatency / rows.length : 0,
       byModel,
     };
   } catch (error) {

@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     const nameFilter = searchParams.get('name');
 
     // Build query
-    let query = (supabase
-      .from('tracks') as any)
+    let query = supabase
+      .from('tracks')
       .select('id, name, location, length_meters, config');
 
     // Apply name filter if provided

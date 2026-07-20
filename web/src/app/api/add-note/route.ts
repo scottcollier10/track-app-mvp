@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabase();
 
     // Verify session exists
-    const { data: session } = await (supabase
-      .from('sessions') as any)
+    const { data: session } = await supabase
+      .from('sessions')
       .select('id')
       .eq('id', sessionId)
       .single();
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create note
-    const { data: note, error } = await (supabase
-      .from('coaching_notes') as any)
+    const { data: note, error } = await supabase
+      .from('coaching_notes')
       .insert({
         session_id: sessionId,
         author,

@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabase();
 
     // 1. Find or create driver by email
-    const { data: existingDriver } = await (supabase
-      .from('drivers') as any)
+    const { data: existingDriver } = await supabase
+      .from('drivers')
       .select('*')
       .eq('email', payload.driverEmail)
       .eq('coach_id', coach.id)
@@ -47,14 +47,14 @@ export async function POST(request: NextRequest) {
       // Extract name from email (before @)
       const name = payload.driverEmail.split('@')[0];
 
-      const driverInsert: any = {
+      const driverInsert: TablesInsert<'drivers'> = {
         email: payload.driverEmail,
         name,
         coach_id: coach.id,
       };
 
-      const { data: newDriver, error: driverError } = await (supabase
-        .from('drivers') as any)
+      const { data: newDriver, error: driverError } = await supabase
+        .from('drivers')
         .insert(driverInsert)
         .select()
         .single();
@@ -70,14 +70,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      driver = newDriver as Tables<'drivers'>;
+      driver = newDriver;
     } else {
-      driver = existingDriver as Tables<'drivers'>;
+      driver = existingDriver;
     }
 
     // 2. Verify track exists
-    const { data: track } = await (supabase
-      .from('tracks') as any)
+    const { data: track } = await supabase
+      .from('tracks')
       .select('*')
       .eq('id', payload.trackId)
       .single();
@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
       source: payload.source || 'csv_import', // Use source from payload
     };
 
-    const { data: sessionData, error: sessionError } = await (supabase
-      .from('sessions') as any)
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('sessions')
       .insert(sessionInsert)
       .select()
       .single();
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session = sessionData as Tables<'sessions'>;
+    const session = sessionData;
 
     // 4. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
@@ -135,8 +135,8 @@ export async function POST(request: NextRequest) {
       sector_data: lap.sectorData || null,
     }));
 
-    const { error: lapsError } = await (supabase
-      .from('laps') as any)
+    const { error: lapsError } = await supabase
+      .from('laps')
       .insert(lapsToInsert);
 
     if (lapsError) {

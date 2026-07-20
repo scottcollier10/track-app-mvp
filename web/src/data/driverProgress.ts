@@ -48,7 +48,7 @@ export async function getDriverProgressByTrack(
     const supabase = createServerSupabase();
 
     // Build query for sessions at this track
-    let query = (supabase.from('sessions') as any)
+    let query = supabase.from('sessions')
       .select(`
         id,
         date,
@@ -176,7 +176,7 @@ export async function getDriverTracks(
   try {
     const supabase = createServerSupabase();
 
-    const { data: sessions, error } = await (supabase.from('sessions') as any)
+    const { data: sessions, error } = await supabase.from('sessions')
       .select('track:tracks(id, name)')
       .eq('driver_id', driverId);
 

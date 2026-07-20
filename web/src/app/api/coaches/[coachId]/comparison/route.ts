@@ -61,8 +61,8 @@ export async function GET(
     const supabase = createServerSupabase();
 
     // Verify coach exists
-    const { data: coach, error: coachError } = await (supabase
-      .from('coaches') as any)
+    const { data: coach, error: coachError } = await supabase
+      .from('coaches')
       .select('id, name')
       .eq('id', coachId)
       .single();
@@ -75,8 +75,8 @@ export async function GET(
     }
 
     // Get all drivers for this coach
-    const { data: drivers, error: driversError } = await (supabase
-      .from('drivers') as any)
+    const { data: drivers, error: driversError } = await supabase
+      .from('drivers')
       .select('id, name')
       .eq('coach_id', coachId)
       .order('name', { ascending: true });
@@ -102,8 +102,8 @@ export async function GET(
     const driverIds = drivers.map((d: any) => d.id);
 
     // Get all tracks that these drivers have used
-    const { data: tracks, error: tracksError } = await (supabase
-      .from('tracks') as any)
+    const { data: tracks, error: tracksError } = await supabase
+      .from('tracks')
       .select('id, name')
       .order('name', { ascending: true });
 
@@ -121,8 +121,8 @@ export async function GET(
     for (const driver of drivers) {
       try {
         // Build query for sessions
-        let sessionsQuery = (supabase
-          .from('sessions') as any)
+        let sessionsQuery = supabase
+          .from('sessions')
           .select(`
             id,
             date,
@@ -164,7 +164,7 @@ export async function GET(
 
         // Calculate stats for each track
         for (const [tId, trackSessions] of Object.entries(trackGroups)) {
-          const trackInfo = (trackSessions[0] as any).track;
+          const trackInfo = trackSessions[0].track;
 
           // Best lap for this driver on this track
           let bestLapMs: number | null = null;
@@ -188,8 +188,8 @@ export async function GET(
           // Get total laps for these sessions
           let totalLaps = 0;
           for (const session of trackSessions) {
-            const { count } = await (supabase
-              .from('laps') as any)
+            const { count } = await supabase
+              .from('laps')
               .select('*', { count: 'exact', head: true })
               .eq('session_id', session.id);
 

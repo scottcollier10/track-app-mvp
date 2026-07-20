@@ -202,7 +202,7 @@ function createSessionSummary(
     sessionId: session.id,
     label,
     date: session.date,
-    trackName: (session.tracks as any).name,
+    trackName: session.tracks.name,
     trackId: session.track_id,
     bestLap,
     consistencyScore,

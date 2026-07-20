@@ -59,7 +59,7 @@ function groupSessionsByEvent(
 /**
  * Get source badge styling
  */
-function getSourceBadge(source?: string): { label: string; className: string } {
+function getSourceBadge(source?: string | null): { label: string; className: string } {
   const s = source?.toLowerCase() || 'unknown';
 
   if (s.includes('ios') || s.includes('app')) {

@@ -22,8 +22,8 @@ export async function getDrivers(): Promise<{
   try {
     const supabase = createServerSupabase();
 
-    const { data, error } = await (supabase
-      .from('drivers') as any)
+    const { data, error } = await supabase
+      .from('drivers')
       .select('id, name, email')
       .order('name', { ascending: true });
 
@@ -31,7 +31,7 @@ export async function getDrivers(): Promise<{
       return { data: null, error: new Error(error.message) };
     }
 
-    return { data: data as any, error: null };
+    return { data, error: null };
   } catch (err) {
     return {
       data: null,

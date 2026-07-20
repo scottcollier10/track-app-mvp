@@ -11,7 +11,7 @@ export interface SessionWithDetails {
   date: string;
   total_time_ms: number;
   best_lap_ms: number | null;
-  source?: string;
+  source?: string | null;
   driver: { id: string; name: string; email: string } | null;
   track: { id: string; name: string; location: string | null } | null;
   lapCount: number;
@@ -24,7 +24,7 @@ export interface SessionFull {
   best_lap_ms: number | null;
   coach_notes: string | null;
   ai_coaching_summary: string | null;
-  source?: string;
+  source?: string | null;
   driver: { id: string; name: string; email: string } | null;
   track: {
     id: string;
@@ -57,8 +57,8 @@ export async function getRecentSessions(
     const supabase = createServerSupabase();
 
     // Optimized approach: Use Supabase's aggregation count feature
-    const { data: sessions, error } = await (supabase
-      .from('sessions') as any)
+    const { data: sessions, error } = await supabase
+      .from('sessions')
       .select(
         `
         id,
@@ -79,13 +79,13 @@ export async function getRecentSessions(
     }
 
     // Transform the response to include lapCount from aggregated data
-    const sessionsWithCounts = (sessions || []).map((session: any) => ({
+    const sessionsWithCounts = (sessions || []).map((session) => ({
       ...session,
       lapCount: session.laps?.[0]?.count || 0,
       laps: undefined, // Remove the nested laps object
     }));
 
-    return { data: sessionsWithCounts as any, error: null };
+    return { data: sessionsWithCounts, error: null };
   } catch (err) {
     return {
       data: null,
@@ -104,7 +104,7 @@ export async function getAllSessions(
     const supabase = createServerSupabase();
 
     // Optimized approach: Use Supabase's aggregation count feature
-    let query = (supabase.from('sessions') as any).select(
+    let query = supabase.from('sessions').select(
       `
         id,
         date,
@@ -140,13 +140,13 @@ export async function getAllSessions(
     }
 
     // Transform the response to include lapCount from aggregated data
-    const sessionsWithCounts = (sessions || []).map((session: any) => ({
+    const sessionsWithCounts = (sessions || []).map((session) => ({
       ...session,
       lapCount: session.laps?.[0]?.count || 0,
       laps: undefined, // Remove the nested laps object
     }));
 
-    return { data: sessionsWithCounts as any, error: null };
+    return { data: sessionsWithCounts, error: null };
   } catch (err) {
     return {
       data: null,
@@ -163,11 +163,9 @@ export async function getSessionWithLaps(
 ): Promise<{ data: SessionFull | null; error: Error | null }> {
   try {
     const supabase = createServerSupabase();
-    // TypeScript escape hatch for build compatibility
-    const db = supabase as any;
 
-    const { data: session, error: sessionError } = await (supabase
-      .from('sessions') as any)
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
       .select(
         `
         id,
@@ -189,8 +187,8 @@ export async function getSessionWithLaps(
     }
 
     // Fetch laps separately
-    const { data: laps, error: lapsError } = await (supabase
-      .from('laps') as any)
+    const { data: laps, error: lapsError } = await supabase
+      .from('laps')
       .select('id, lap_number, lap_time_ms')
       .eq('session_id', id)
       .order('lap_number', { ascending: true });
@@ -201,9 +199,9 @@ export async function getSessionWithLaps(
 
     return {
       data: {
-        ...(session as any),  // Cast to bypass TypeScript never type
+        ...session,
         laps: laps || [],
-      } as any,
+      },
       error: null,
     };
   } catch (err) {
