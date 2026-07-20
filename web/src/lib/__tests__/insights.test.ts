@@ -110,8 +110,8 @@ describe('getSessionInsightsFromMs', () => {
 
       const result = getSessionInsightsFromMs(lapTimes);
 
-      expect(result.paceTrendLabel).toBe('Stable');
-      expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
+      expect(result.paceTrendLabel).toBe('Not enough data');
+      expect(result.paceTrendDetail).toContain('at least 6 laps');
       // Consistency should still work with 2+ laps
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
@@ -124,8 +124,8 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBeNull();
       expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Stable');
-      expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
+      expect(result.paceTrendLabel).toBe('Not enough data');
+      expect(result.paceTrendDetail).toContain('at least 6 laps');
     });
 
     it('handles single lap', () => {
@@ -135,8 +135,8 @@ describe('getSessionInsightsFromMs', () => {
 
       expect(result.consistencyScore).toBeNull();
       expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Stable');
-      expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
+      expect(result.paceTrendLabel).toBe('Not enough data');
+      expect(result.paceTrendDetail).toContain('at least 6 laps');
     });
 
     it('handles two laps', () => {
@@ -147,8 +147,8 @@ describe('getSessionInsightsFromMs', () => {
       // Should have consistency and behavior scores with 2 laps
       expect(result.consistencyScore).not.toBeNull();
       expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toBe('Stable');
-      expect(result.paceTrendDetail).toBe(INSIGHT_HELPERS.paceTrend);
+      expect(result.paceTrendLabel).toBe('Not enough data');
+      expect(result.paceTrendDetail).toContain('at least 6 laps');
     });
 
     it('filters out null values in array', () => {

@@ -52,13 +52,13 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
       paceTrendDetail = `Your pace remained stable throughout the session.`;
     }
   } else {
-    paceTrendDetail = INSIGHT_HELPERS.paceTrend;
+    paceTrendDetail = 'Not enough laps to show a trend. Pace trend needs at least 6 laps.';
   }
 
   return {
     consistencyScore,
     drivingBehaviorScore,
-    paceTrendLabel: paceTrendLabel || 'Stable',
+    paceTrendLabel: paceTrendLabel || 'Not enough data',
     paceTrendDetail,
   };
 }
