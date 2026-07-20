@@ -51,6 +51,13 @@ export function RosterByRunGroup({
     byBand.get(toRunGroupBand(student.runGroup))!.push(student);
   }
 
+  const searching = query.length > 0;
+  const noMatches = searching && filtered.length === 0;
+  // During an active search, only render bands that have at least one match.
+  const bandsToRender = searching
+    ? RUN_GROUP_BANDS.filter((band) => byBand.get(band)!.length > 0)
+    : RUN_GROUP_BANDS;
+
   return (
     <section className="space-y-6">
       <div className="space-y-1">
@@ -64,13 +71,21 @@ export function RosterByRunGroup({
         </p>
       </div>
 
-      {RUN_GROUP_BANDS.map((band) => (
-        <RunGroupBandSection
-          key={band}
-          band={band}
-          students={byBand.get(band)!}
-        />
-      ))}
+      {noMatches ? (
+        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/80 p-8 text-center shadow-[0_22px_50px_rgba(15,23,42,0.9)]">
+          <p className="text-sm text-slate-400">
+            No students match &ldquo;{searchQuery?.trim()}&rdquo;.
+          </p>
+        </div>
+      ) : (
+        bandsToRender.map((band) => (
+          <RunGroupBandSection
+            key={band}
+            band={band}
+            students={byBand.get(band)!}
+          />
+        ))
+      )}
     </section>
   );
 }

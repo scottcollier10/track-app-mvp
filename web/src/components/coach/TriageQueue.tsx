@@ -2,20 +2,12 @@ import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
 import type { CoachDashboardStudent } from '@/data/coachDashboard';
 import { formatDriverName } from '@/lib/utils/formatters';
-import { RUN_GROUP_LABELS, toRunGroupBand } from './runGroups';
+import { RUN_GROUP_LABELS, toRunGroupBand, formatDelta } from './runGroups';
 import { StudentSparkline } from './StudentSparkline';
 import { FlagChip } from './FlagChip';
 
 interface TriageQueueProps {
   students: CoachDashboardStudent[];
-}
-
-/** Signed delta in tenths, e.g. +0.9s. Empty when it rounds to zero. */
-function formatDelta(deltaSeconds: number): string {
-  const rounded = Math.round(deltaSeconds * 10) / 10;
-  if (rounded === 0) return '';
-  const sign = rounded > 0 ? '+' : '';
-  return `${sign}${rounded.toFixed(1)}s`;
 }
 
 /**

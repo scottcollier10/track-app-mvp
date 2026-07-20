@@ -12,7 +12,7 @@ export const RUN_GROUP_BANDS: RunGroupBand[] = [
   'advanced',
 ];
 
-export const RUN_GROUP_LABELS: Record<string, string> = {
+export const RUN_GROUP_LABELS: Record<RunGroupBand, string> = {
   beginner: 'Novice',
   intermediate: 'Intermediate',
   advanced: 'Advanced',
@@ -24,4 +24,12 @@ export function toRunGroupBand(runGroup: string): RunGroupBand {
   if (normalized === 'intermediate') return 'intermediate';
   if (normalized === 'advanced') return 'advanced';
   return 'beginner';
+}
+
+/** Signed delta in tenths, e.g. +0.9s. Empty when it rounds to zero. */
+export function formatDelta(deltaSeconds: number): string {
+  const rounded = Math.round(deltaSeconds * 10) / 10;
+  if (rounded === 0) return '';
+  const sign = rounded > 0 ? '+' : '';
+  return `${sign}${rounded.toFixed(1)}s`;
 }

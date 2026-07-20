@@ -1,5 +1,6 @@
 import { AlertTriangle, TrendingDown, Activity } from 'lucide-react';
 import type { Flag } from '@/lib/analytics-v2';
+import { formatDelta } from './runGroups';
 
 interface FlagChipProps {
   flag: Flag;
@@ -16,14 +17,6 @@ const ICONS: Record<Flag['kind'], typeof AlertTriangle> = {
   regressed: AlertTriangle,
   off_baseline: Activity,
 };
-
-/** Signed delta in tenths, e.g. +0.9s. Empty when the delta rounds to zero. */
-function formatDelta(deltaSeconds: number): string {
-  const rounded = Math.round(deltaSeconds * 10) / 10;
-  if (rounded === 0) return '';
-  const sign = rounded > 0 ? '+' : '';
-  return `${sign}${rounded.toFixed(1)}s`;
-}
 
 /**
  * Small pill summarizing a fired flag. Amber by default; red when the flag is
