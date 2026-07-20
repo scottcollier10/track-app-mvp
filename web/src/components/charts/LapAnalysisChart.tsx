@@ -46,10 +46,10 @@ export default function LapAnalysisChart({ data, bestLapTime, stdDev }: LapAnaly
   const padding = (maxTime - minTime) * 0.1 || 1;
 
   // Custom dot to highlight best lap
-  const CustomDot = (props: any) => {
+  const CustomDot = (props: { cx?: number; cy?: number; payload?: ChartDataPoint }) => {
     const { cx, cy, payload } = props;
 
-    if (payload.isBest) {
+    if (payload?.isBest) {
       return (
         <g>
           <circle
@@ -86,7 +86,13 @@ export default function LapAnalysisChart({ data, bestLapTime, stdDev }: LapAnaly
   };
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload: ChartDataPoint }>;
+  }) => {
     if (!active || !payload || !payload.length) return null;
 
     const data = payload[0].payload;

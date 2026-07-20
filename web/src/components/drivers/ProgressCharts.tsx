@@ -46,7 +46,13 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
   const consistencyData = chartData.filter((d) => d.consistency !== null);
 
   // Custom tooltip for lap time chart
-  const LapTimeTooltip = ({ active, payload }: any) => {
+  const LapTimeTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload: (typeof chartData)[number] }>;
+  }) => {
     if (!active || !payload || !payload.length) return null;
 
     const data = payload[0].payload;
@@ -61,7 +67,13 @@ export default function ProgressCharts({ events, trackName, seasonTarget }: Prog
   };
 
   // Custom tooltip for consistency chart
-  const ConsistencyTooltip = ({ active, payload }: any) => {
+  const ConsistencyTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload: (typeof chartData)[number] }>;
+  }) => {
     if (!active || !payload || !payload.length) return null;
 
     const data = payload[0].payload;

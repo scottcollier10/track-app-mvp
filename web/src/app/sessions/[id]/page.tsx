@@ -224,7 +224,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
-                {laps.map((lap: any) => {
+                {laps.map((lap) => {
                   const isBest = lap.lap_time_ms === session.best_lap_ms;
                   const delta = session.best_lap_ms
                     ? lap.lap_time_ms - session.best_lap_ms

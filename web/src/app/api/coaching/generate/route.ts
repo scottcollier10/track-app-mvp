@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     // 6. Calculate insights
-    const lapTimesMs = laps.map((lap: any) => lap.lap_time_ms);
+    const lapTimesMs = laps.map((lap) => lap.lap_time_ms);
     const insights = getSessionInsightsFromMs(lapTimesMs);
     const consistencyLabel = getScoreLabel(insights.consistencyScore);
     const behaviorLabel = getScoreLabel(insights.drivingBehaviorScore);
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 
     // Build lap times table
     const lapTimesTable = laps
-      .map((lap: any, idx: number) => {
+      .map((lap) => {
         const lapNum = lap.lap_number;
         const lapTime = formatLapTime(lap.lap_time_ms);
         const isBest = lap.lap_time_ms === session.best_lap_ms;

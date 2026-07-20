@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/Card';
-import { Snowflake, Flame, TrendingDown, Info } from 'lucide-react';
+import { Snowflake, Flame, TrendingDown, Info, LucideIcon } from 'lucide-react';
 import { formatLapMs } from '@/lib/time';
 
 interface Lap {
@@ -19,7 +19,7 @@ interface Pattern {
   type: 'cold-tires' | 'peak-performance' | 'tire-degradation' | 'consistent';
   title: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   bgColor: string;
   laps: string;

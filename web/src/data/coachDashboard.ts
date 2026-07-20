@@ -75,7 +75,7 @@ export async function getCoachDashboardData(): Promise<{
     // Aggregate by DRIVER (not driver-track)
     const driverMap = new Map<string, CoachDashboardDriver>();
 
-    sessions.forEach((session: any) => {
+    sessions.forEach((session) => {
       const driverId = session.driver?.id;
       const driverName = session.driver?.name;
       const driverEmail = session.driver?.email;
@@ -87,7 +87,7 @@ export async function getCoachDashboardData(): Promise<{
       }
 
       const lapTimes = (session.laps || [])
-        .map((lap: any) => lap.lap_time_ms)
+        .map((lap) => lap.lap_time_ms)
         .filter((time: number | null) => time !== null && time > 0);
 
       const existing = driverMap.get(driverId);
@@ -140,13 +140,13 @@ export async function getCoachDashboardData(): Promise<{
     driverMap.forEach((driver) => {
       // Get all sessions for this driver (across all tracks)
       const driverSessions = sessions.filter(
-        (s: any) => s.driver?.id === driver.driverId
+        (s) => s.driver?.id === driver.driverId
       );
 
       // Calculate average best lap (across all sessions)
       const bestLaps = driverSessions
-        .map((s: any) => s.best_lap_ms)
-        .filter((lap: number | null) => lap !== null && lap > 0);
+        .map((s) => s.best_lap_ms)
+        .filter((lap): lap is number => lap !== null && lap > 0);
 
       if (bestLaps.length > 0) {
         driver.avgBestLapMs = Math.round(
@@ -159,7 +159,7 @@ export async function getCoachDashboardData(): Promise<{
       const mostRecentSession = driverSessions[0]; // Already sorted by date desc
       if (mostRecentSession && mostRecentSession.laps) {
         const recentLapTimes = mostRecentSession.laps
-          .map((lap: any) => lap.lap_time_ms)
+          .map((lap) => lap.lap_time_ms)
           .filter((time: number | null) => time !== null && time > 0);
 
         if (recentLapTimes.length >= 2) {
@@ -172,10 +172,10 @@ export async function getCoachDashboardData(): Promise<{
       let behaviorScoreSum = 0;
       let behaviorScoreCount = 0;
 
-      driverSessions.forEach((session: any) => {
+      driverSessions.forEach((session) => {
         if (session.laps && session.laps.length >= 2) {
           const sessionLapTimes = session.laps
-            .map((lap: any) => lap.lap_time_ms)
+            .map((lap) => lap.lap_time_ms)
             .filter((time: number | null) => time !== null && time > 0);
           
           if (sessionLapTimes.length >= 2) {
@@ -205,8 +205,8 @@ export async function getCoachDashboardData(): Promise<{
 
         // Get best laps from sessions (filter out nulls)
         const sessionBestLaps = sortedSessions
-          .map((s: any) => s.best_lap_ms)
-          .filter((lap: number | null) => lap !== null && lap > 0);
+          .map((s) => s.best_lap_ms)
+          .filter((lap): lap is number => lap !== null && lap > 0);
 
         if (sessionBestLaps.length >= 3) {
           // Calculate early average (first 2 sessions)

@@ -67,8 +67,8 @@ export default function DriverComparisonTable({
   // Sort the data
   const sortedData = useMemo(() => {
     return [...filteredData].sort((a, b) => {
-      let aVal: any;
-      let bVal: any;
+      let aVal: string | number;
+      let bVal: string | number;
 
       switch (sortField) {
         case "driverName":

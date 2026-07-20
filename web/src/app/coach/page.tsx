@@ -109,8 +109,8 @@ export default function CoachDashboardPage() {
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
-      let aValue: any = a[sortColumn];
-      let bValue: any = b[sortColumn];
+      let aValue: string | number | null = a[sortColumn];
+      let bValue: string | number | null = b[sortColumn];
 
       // Handle null values
       if (aValue === null && bValue === null) return 0;
@@ -139,8 +139,10 @@ export default function CoachDashboardPage() {
         return sortDirection === "asc" ? aDate - bDate : bDate - aDate;
       }
 
-      // Numeric comparison
-      return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
+      // Numeric comparison (remaining sort columns are all numeric)
+      return sortDirection === "asc"
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number);
     });
 
     return sorted;

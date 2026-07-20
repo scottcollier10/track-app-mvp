@@ -2,18 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 
-type SessionWithTrack = {
-  id: string;
-  track_id: string;
-  date: string;
-  best_lap_ms: number | null;
-  tracks: {
-    id: string;
-    name: string;
-    location: string | null;
-  };
-};
-
 interface SessionData {
   sessionId: string;
   date: string;
@@ -75,7 +63,7 @@ export async function GET(
   .eq('driver_id', driverId)
   .order('date', { ascending: true });
 
-const sessions = sessionsQuery.data as SessionWithTrack[] | null;
+const sessions = sessionsQuery.data;
 const sessionsError = sessionsQuery.error;
 
     if (sessionsError) {
@@ -105,7 +93,7 @@ const sessionsError = sessionsQuery.error;
       .select('session_id')
       .in('session_id', sessionIds);
     
-    const lapCounts = lapQuery.data as { session_id: string }[] | null;
+    const lapCounts = lapQuery.data;
     const lapError = lapQuery.error;
 
     if (lapError) {
@@ -134,11 +122,7 @@ const sessionsError = sessionsQuery.error;
 
     sessions.forEach((session) => {
       const trackId = session.track_id;
-      const track = session.tracks as unknown as {
-        id: string;
-        name: string;
-        location: string | null;
-      };
+      const track = session.tracks;
 
       if (!trackSessionsMap[trackId]) {
         trackSessionsMap[trackId] = {

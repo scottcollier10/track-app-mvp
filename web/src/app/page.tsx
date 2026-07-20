@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   const recentSessions = sessions.slice(0, 10);
 
   // Calculate best lap across all sessions
-  const bestLapMs = sessions.reduce((best: number | null, session: any) => {
+  const bestLapMs = sessions.reduce((best: number | null, session) => {
     if (!session.best_lap_ms) return best;
     if (best === null) return session.best_lap_ms;
     return Math.min(best, session.best_lap_ms);
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
   }
 
   // Mobile Card Component for Recent Sessions
-  const SessionCard = ({ session }: { session: any }) => (
+  const SessionCard = ({ session }: { session: (typeof sessions)[number] }) => (
     <Link
       href={`/sessions/${session.id}`}
       className="block rounded-2xl border border-slate-700/40 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950/90 p-4 hover:border-slate-600/50 transition-colors shadow-[0_22px_50px_rgba(0,0,0,0.60)]"
@@ -230,7 +230,7 @@ export default async function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {recentSessions.map((session: any) => (
+                      {recentSessions.map((session) => (
                         <tr key={session.id} className="hover:bg-slate-900/40 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                             {formatDate(session.date)}
@@ -263,7 +263,7 @@ export default async function DashboardPage() {
 
               {/* Mobile Cards (shown on mobile/tablet) */}
               <div className="md:hidden space-y-4">
-                {recentSessions.map((session: any) => (
+                {recentSessions.map((session) => (
                   <SessionCard key={session.id} session={session} />
                 ))}
               </div>

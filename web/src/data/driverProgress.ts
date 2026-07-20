@@ -87,14 +87,14 @@ export async function getDriverProgressByTrack(
     const extractedTrackId = sessions[0]?.track?.id || trackId;
 
     // Process each session into event metrics
-    const events: EventMetrics[] = sessions.map((session: any) => {
+    const events: EventMetrics[] = sessions.map((session) => {
       const laps = session.laps || [];
-      const lapTimes = laps.map((lap: any) => lap.lap_time_ms).filter((t: number) => t > 0);
+      const lapTimes = laps.map((lap) => lap.lap_time_ms).filter((t: number) => t > 0);
 
       // Find which lap number was the best
       let bestLapNumber: number | null = null;
       if (session.best_lap_ms && laps.length > 0) {
-        const bestLap = laps.find((lap: any) => lap.lap_time_ms === session.best_lap_ms);
+        const bestLap = laps.find((lap) => lap.lap_time_ms === session.best_lap_ms);
         bestLapNumber = bestLap?.lap_number || null;
       }
 
@@ -186,7 +186,7 @@ export async function getDriverTracks(
 
     // Extract unique tracks
     const tracksMap = new Map<string, { id: string; name: string }>();
-    sessions?.forEach((session: any) => {
+    sessions?.forEach((session) => {
       if (session.track) {
         tracksMap.set(session.track.id, {
           id: session.track.id,
