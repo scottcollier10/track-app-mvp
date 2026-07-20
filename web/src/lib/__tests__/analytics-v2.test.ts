@@ -183,3 +183,43 @@ describe('evaluateStudent', () => {
     expect(multiScore).toBeGreaterThan(singleScore);
   });
 });
+
+describe('evaluateStudent readiness', () => {
+  // Prior sessions with a moderate, consistent spread (~0.79s std-dev each).
+  const spreadLaps = [90000, 90500, 91000, 91500, 92000, 92000, 92000, 92000];
+  // Latest session: tighter than prior mean AND holds pace late (no fade).
+  const tightSteadyLaps = [90000, 90000, 90000, 90000, 90000, 90000, 90000, 90000];
+
+  it('returns ready with a readyWhy for a settled, tightening student', () => {
+    const h: StudentHistory = { runGroup: 'beginner', sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-02', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-03', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-04', trackId: 't1', bestLapMs: 90000, lapTimesMs: tightSteadyLaps },
+    ]};
+    const r = evaluateStudent(h);
+    expect(r.ready).toBe(true);
+    expect(r.readyWhy).not.toBeNull();
+  });
+
+  it('is not ready for a thin-data student', () => {
+    const h: StudentHistory = { runGroup: 'beginner', sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: tightSteadyLaps },
+    ]};
+    const r = evaluateStudent(h);
+    expect(r.ready).toBe(false);
+    expect(r.readyWhy).toBeNull();
+  });
+
+  it('is not ready when the latest session is regressing/fading', () => {
+    const h: StudentHistory = { runGroup: 'beginner', sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-02', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-03', trackId: 't1', bestLapMs: 90000, lapTimesMs: spreadLaps },
+      { date: '2026-01-04', trackId: 't1', bestLapMs: 90000, lapTimesMs: fadingLaps },
+    ]};
+    const r = evaluateStudent(h);
+    expect(r.ready).toBe(false);
+    expect(r.readyWhy).toBeNull();
+  });
+});
