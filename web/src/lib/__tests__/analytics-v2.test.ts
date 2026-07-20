@@ -7,8 +7,9 @@ import {
   isRegressedVsTrackPB,
   idealLapMs,
   gapToIdealSeconds,
+  evaluateStudent,
 } from '../analytics-v2';
-import type { LapSectors } from '../analytics-v2';
+import type { LapSectors, StudentHistory } from '../analytics-v2';
 
 describe('cleanLaps', () => {
   it('drops null, zero, and negative lap times', () => {
@@ -138,5 +139,47 @@ describe('gapToIdealSeconds', () => {
     const laps: LapSectors[] = [{ '1': 30000, '2': 31000, '3': 29000 }];
     expect(gapToIdealSeconds(null, laps)).toBeNull();
     expect(gapToIdealSeconds(0, laps)).toBeNull();
+  });
+});
+
+const base: StudentHistory = { runGroup: 'beginner', sessions: [] };
+
+// A session where the driver clearly slows late (fade > 0.5s) with >=6 clean laps.
+const fadingLaps = [90000, 90000, 90000, 90500, 91000, 91500, 91500, 91500];
+// A steady session with tight, non-fading laps.
+const steadyLaps = [90000, 90000, 90000, 90000, 90000, 90000, 90000, 90000];
+
+describe('evaluateStudent', () => {
+  it('returns building-baseline state and fade-only for a thin-data student', () => {
+    const h: StudentHistory = { ...base, sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: fadingLaps },
+    ]};
+    const r = evaluateStudent(h);
+    expect(r.baselineState).toBe('building');
+    expect(r.flags.map(f => f.kind)).toContain('faded');
+    expect(r.flags.map(f => f.kind)).not.toContain('off_baseline');
+  });
+
+  it('ranks a multi-flag sustained student above a single-flag student', () => {
+    // Single-flag: one modest, non-sustained fade in the latest session; no prior fade, no regression.
+    const single: StudentHistory = { ...base, sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: steadyLaps },
+      { date: '2026-01-02', trackId: 't1', bestLapMs: 90000, lapTimesMs: fadingLaps },
+    ]};
+
+    // Multi-flag sustained: track PB set early, then progressively slower bests (sustained regression),
+    // and the latest two sessions both fade hard (sustained fade).
+    const multi: StudentHistory = { ...base, sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 90000, lapTimesMs: steadyLaps },
+      { date: '2026-01-02', trackId: 't1', bestLapMs: 93000, lapTimesMs: fadingLaps },
+      { date: '2026-01-03', trackId: 't1', bestLapMs: 94000, lapTimesMs: fadingLaps },
+    ]};
+
+    const singleScore = evaluateStudent(single).severityScore;
+    const multiScore = evaluateStudent(multi).severityScore;
+
+    expect(evaluateStudent(single).flags.length).toBe(1);
+    expect(evaluateStudent(multi).flags.length).toBeGreaterThan(1);
+    expect(multiScore).toBeGreaterThan(singleScore);
   });
 });

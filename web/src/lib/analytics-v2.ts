@@ -5,6 +5,9 @@ import {
   BASELINE_SIGMA,
   BASELINE_MIN_DELTA_S,
   PB_REGRESSION_PCT,
+  FADE_THRESHOLD_S,
+  READINESS_MIN_SESSIONS,
+  SPARKLINE_WINDOW,
 } from './analytics-constants';
 
 function median(sorted: number[]): number {
@@ -107,4 +110,88 @@ export function gapToIdealSeconds(fastestActualLapMs: number | null, laps: Array
   const ideal = idealLapMs(laps);
   if (ideal === null || fastestActualLapMs == null || !(fastestActualLapMs > 0)) return null;
   return (fastestActualLapMs - ideal) / 1000;
+}
+
+export type FlagKind = 'faded' | 'regressed' | 'off_baseline';
+export interface Flag { kind: FlagKind; why: string; deltaSeconds: number; sustained: boolean; }
+export interface StudentSession {
+  date: string; trackId: string; bestLapMs: number | null; lapTimesMs: Array<number | null>;
+  sectorData?: unknown | null;
+}
+export interface StudentHistory { runGroup: string; sessions: StudentSession[]; }
+export interface StudentEval {
+  flags: Flag[];
+  severityScore: number;
+  baselineState: 'ok' | 'building';
+  sessionConsistencySeconds: number | null;
+  sparkline: number[];
+  ready: boolean;
+  readyWhy: string | null;
+}
+
+export function evaluateStudent(h: StudentHistory): StudentEval {
+  const sessions = [...h.sessions].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sessions[sessions.length - 1];
+  const prior = sessions.slice(0, -1);
+  const flags: Flag[] = [];
+  const priorConsistency = prior
+    .map((s) => sessionConsistencySeconds(s.lapTimesMs))
+    .filter((v): v is number => v !== null);
+  const baselineState = priorConsistency.length >= MIN_PRIOR_SESSIONS_FOR_BASELINE ? 'ok' : 'building';
+  const latestConsistency = latest ? sessionConsistencySeconds(latest.lapTimesMs) : null;
+  // faded
+  const fade = latest ? sessionFadeSeconds(latest.lapTimesMs) : null;
+  if (fade !== null && fade > FADE_THRESHOLD_S) {
+    const priorFade = prior.length ? sessionFadeSeconds(prior[prior.length - 1].lapTimesMs) : null;
+    flags.push({
+      kind: 'faded', deltaSeconds: fade, sustained: priorFade !== null && priorFade > FADE_THRESHOLD_S,
+      why: `Slowed ${fade.toFixed(1)}s from start to finish`,
+    });
+  }
+  // off baseline
+  if (baselineState === 'ok' && latestConsistency !== null &&
+      isOffConsistencyBaseline(latestConsistency, priorConsistency)) {
+    const b = consistencyBaseline(priorConsistency)!;
+    flags.push({
+      kind: 'off_baseline', deltaSeconds: latestConsistency - b.mean, sustained: false,
+      why: `Lap times swinging wider than usual (±${latestConsistency.toFixed(1)}s vs ±${b.mean.toFixed(1)}s typical)`,
+    });
+  }
+  // regressed vs track PB
+  if (latest && latest.bestLapMs) {
+    const priorBests = prior.filter((s) => s.trackId === latest.trackId)
+      .map((s) => s.bestLapMs).filter((v): v is number => v !== null && v > 0);
+    if (isRegressedVsTrackPB(latest.bestLapMs, priorBests)) {
+      const pb = Math.min(...priorBests);
+      const deltaS = (latest.bestLapMs - pb) / 1000;
+      const priorSlower = prior.length >= 2 &&
+        isRegressedVsTrackPB(prior[prior.length - 1].bestLapMs ?? 0, priorBests.slice(0, -1));
+      flags.push({
+        kind: 'regressed', deltaSeconds: deltaS, sustained: priorSlower,
+        why: `Best lap ${deltaS.toFixed(1)}s off your track PB`,
+      });
+    }
+  }
+  const severityScore = flags.reduce((s, f) => s + Math.abs(f.deltaSeconds) * (f.sustained ? 2 : 1), 0);
+  const sparkline = sessions.map((s) => s.bestLapMs).filter((v): v is number => v !== null).slice(-SPARKLINE_WINDOW);
+  const { ready, readyWhy } = evaluateReadiness(sessions, priorConsistency, latestConsistency);
+  return { flags, severityScore, baselineState, sessionConsistencySeconds: latestConsistency, sparkline, ready, readyWhy };
+}
+
+function evaluateReadiness(
+  sessions: StudentSession[], priorConsistency: number[], latestConsistency: number | null,
+): { ready: boolean; readyWhy: string | null } {
+  const cleanCount = sessions.filter((s) => sessionConsistencySeconds(s.lapTimesMs) !== null).length;
+  if (cleanCount < READINESS_MIN_SESSIONS) return { ready: false, readyWhy: null };
+  const b = consistencyBaseline(priorConsistency);
+  const latest = sessions[sessions.length - 1];
+  const noRecentFade = (() => {
+    const f = latest ? sessionFadeSeconds(latest.lapTimesMs) : null;
+    return f !== null && f <= FADE_THRESHOLD_S;
+  })();
+  const tightening = b !== null && latestConsistency !== null && latestConsistency < b.mean;
+  if (tightening && noRecentFade) {
+    return { ready: true, readyWhy: `Settling in — tight consistency, holding pace late, ${cleanCount} clean sessions` };
+  }
+  return { ready: false, readyWhy: null };
 }
