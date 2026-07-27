@@ -55,7 +55,7 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
   lines.push(`-- Idempotent: re-run any time to refresh demo dates. Do not edit by hand.`);
 
   // Guards: coach and tracks must exist.
-  lines.push(`DO $$ BEGIN`);
+  lines.push(`DO $seed_guard$ BEGIN`);
   lines.push(`  IF NOT EXISTS (SELECT 1 FROM coaches WHERE email = '${q(coachEmail)}') THEN`);
   lines.push(`    RAISE EXCEPTION 'Coach % not found — check coaches.email', '${q(coachEmail)}';`);
   lines.push(`  END IF;`);
@@ -64,9 +64,24 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
     lines.push(`    RAISE EXCEPTION 'Track % not found — check tracks.name', '${q(t)}';`);
     lines.push(`  END IF;`);
   }
-  lines.push(`END $$;`);
+  lines.push(`END $seed_guard$;`);
 
-  const allSessionIds: string[] = [];
+  // Compute the full demo-namespace id sets up front so we can clean up any
+  // sessions from earlier generator versions that are no longer in the cast.
+  const allDriverIds = scenarios.map(s => driverUuid(s.n));
+  const allSessionIds = scenarios.flatMap(s => s.sessions.map((_, i) => sessionUuid(s.n, i + 1)));
+  const driverIdList = allDriverIds.map(id => `'${id}'`).join(', ');
+  const sessionIdList = allSessionIds.map(id => `'${id}'`).join(', ');
+
+  // Stale-session cleanup: if a scenario's session list shrank between runs,
+  // orphaned demo sessions/laps would silently skew dashboard output.
+  lines.push(``);
+  lines.push(`DELETE FROM laps WHERE session_id IN (`);
+  lines.push(`  SELECT id FROM sessions WHERE driver_id IN (${driverIdList})`);
+  lines.push(`    AND id NOT IN (${sessionIdList})`);
+  lines.push(`);`);
+  lines.push(`DELETE FROM sessions WHERE driver_id IN (${driverIdList})`);
+  lines.push(`  AND id NOT IN (${sessionIdList});`);
 
   for (const s of scenarios) {
     const dId = driverUuid(s.n);
@@ -84,7 +99,6 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
     );
     s.sessions.forEach((sess, i) => {
       const sId = sessionUuid(s.n, i + 1);
-      allSessionIds.push(sId);
       const date = weekendDate(now, sess.weeksAgo, sess.day);
       const total = sess.lapTimesMs.reduce((a, b) => a + b, 0);
       const best = Math.min(...sess.lapTimesMs);
@@ -97,10 +111,11 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
     });
   }
 
-  // Refresh laps wholesale: delete-then-insert is simpler than per-lap upserts and
-  // handles scenarios shrinking between generator versions.
+  // Refresh laps wholesale: delete-then-insert is simpler than per-lap upserts.
+  // Combined with the stale-session cleanup above, a re-run refreshes dates and
+  // removes stale demo sessions.
   lines.push(``);
-  lines.push(`DELETE FROM laps WHERE session_id IN (${allSessionIds.map(id => `'${id}'`).join(', ')});`);
+  lines.push(`DELETE FROM laps WHERE session_id IN (${sessionIdList});`);
   const lapValues: string[] = [];
   for (const s of scenarios) {
     s.sessions.forEach((sess, i) => {

@@ -41,4 +41,15 @@ describe('buildSeedSql', () => {
     expect(sql).toContain(String(total));
     expect(sql).toContain(String(best));
   });
+
+  it('escapes single quotes in the coach email', () => {
+    const escaped = buildSeedSql(SCENARIOS, "o'brien@example.com", now);
+    expect(escaped).toContain("o''brien@example.com");
+    expect(escaped).not.toContain("'o'brien");
+  });
+
+  it('removes stale demo sessions not in the current set', () => {
+    expect(sql).toContain('DELETE FROM sessions WHERE driver_id IN');
+    expect(sql).toContain('AND id NOT IN');
+  });
 });
