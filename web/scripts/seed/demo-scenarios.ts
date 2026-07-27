@@ -53,7 +53,7 @@ const STREETS = 'Streets of Willow';
 export const SCENARIOS: Scenario[] = [
   {
     // Latest session: first-third median 91400, last-third median 92150 -> fade 0.75s.
-    // Priors' sigma deliberately varied (~0.2/0.3/0.5s) to keep the baseline band wide
+    // Priors' sigma deliberately varied (0.12/0.34/0.50s) to keep the baseline band wide
     // so the fade session's spread does NOT also trip off_baseline.
     n: 1, name: 'Kai Garcia', email: 'kai.garcia@trackapp.demo', experienceLevel: 'beginner',
     sessions: [
@@ -128,22 +128,23 @@ export const SCENARIOS: Scenario[] = [
     expect: { flagKinds: [], baselineState: 'building', ready: false },
   },
   {
-    // Six flat sessions. Latest best (90150) within 1% of PB (89900 in s2).
-    // Latest σ (~0.33s) just ABOVE prior mean (~0.29s) so not tightening -> not ready,
-    // but only ~0.04s over the mean, under the 0.1s min-delta guard -> not off_baseline.
-    // The quiet control.
+    // Six flat sessions. Latest best (90150) within 1% of PB (89900 in s2, 1.01*PB=90799).
+    // Priors' σ spread deliberately wide (0.20/0.25/0.30/0.35/0.40s -> mean ~0.30s,
+    // 2σ band upper ~0.46s). Latest σ (~0.33s) sits ABOVE the mean so not tightening
+    // -> not ready, but comfortably INSIDE the band -> not off_baseline (no reliance
+    // on the 0.1s min-delta guard). The quiet control.
     n: 6, name: 'Sam Whitaker', email: 'sam.whitaker@trackapp.demo', experienceLevel: 'advanced',
     sessions: [
       { weeksAgo: 5, day: 'sun', trackName: THUNDERHILL,
-        lapTimesMs: [90500, 90100, 90700, 90200, 90600, 90000, 90800, 90300] },
+        lapTimesMs: [90500, 90250, 90600, 90150, 90650, 90200, 90550, 90300] },
       { weeksAgo: 4, day: 'sun', trackName: THUNDERHILL,
-        lapTimesMs: [90400, 89900, 90600, 90100, 90500, 90000, 90700, 90200] },
+        lapTimesMs: [90400, 90050, 90450, 89900, 90600, 90050, 90450, 90100] },
       { weeksAgo: 3, day: 'sun', trackName: THUNDERHILL,
-        lapTimesMs: [90500, 90000, 90700, 90100, 90600, 90100, 90800, 90300] },
+        lapTimesMs: [90500, 90150, 90700, 90000, 90800, 90100, 90650, 90300] },
       { weeksAgo: 2, day: 'sun', trackName: THUNDERHILL,
-        lapTimesMs: [90400, 90000, 90600, 90100, 90500, 89950, 90700, 90200] },
+        lapTimesMs: [90500, 90100, 90750, 89950, 90850, 90050, 90700, 90300] },
       { weeksAgo: 1, day: 'sun', trackName: THUNDERHILL,
-        lapTimesMs: [90500, 90050, 90700, 90150, 90600, 90050, 90800, 90250] },
+        lapTimesMs: [90600, 90200, 90900, 89950, 91050, 90100, 90800, 90400] },
       { weeksAgo: 0, day: 'sun', trackName: THUNDERHILL,
         lapTimesMs: [90650, 90150, 90850, 90200, 90750, 90150, 90950, 90300] },
     ],
