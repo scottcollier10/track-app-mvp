@@ -12,6 +12,7 @@ export type Track = Database['public']['Tables']['tracks']['Row'];
 export type Session = Database['public']['Tables']['sessions']['Row'];
 export type Lap = Database['public']['Tables']['laps']['Row'];
 export type CoachingNote = Database['public']['Tables']['coaching_notes']['Row'];
+export type TrackDay = Database['public']['Tables']['track_days']['Row'];
 
 // Extended types with relations
 export interface SessionWithRelations extends Session {
@@ -19,6 +20,16 @@ export interface SessionWithRelations extends Session {
   track: Track;
   laps: Lap[];
   coaching_notes?: CoachingNote[];
+}
+
+export interface SessionWithLapTimes extends Session {
+  laps: Pick<Lap, 'lap_number' | 'lap_time_ms'>[];
+}
+
+export interface TrackDayWithSessions extends TrackDay {
+  driver: Driver;
+  track: Track;
+  sessions: SessionWithLapTimes[];
 }
 
 export interface LapWithDelta extends Lap {
