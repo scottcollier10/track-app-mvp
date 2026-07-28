@@ -34,7 +34,7 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
 
   // Generate detailed pace trend description
   let paceTrendDetail = '';
-  if (validLapTimes.length >= 6 && paceTrendLabel) {
+  if (validLapTimes.length >= MIN_LAPS_FOR_INSIGHTS && paceTrendLabel) {
     const first3 = average(validLapTimes.slice(0, 3));
     const last3 = average(validLapTimes.slice(-3));
     const diffMs = last3 - first3;
@@ -48,7 +48,7 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
       paceTrendDetail = `Your pace remained stable throughout the session.`;
     }
   } else {
-    paceTrendDetail = 'Not enough laps to show a trend. Pace trend needs at least 6 laps.';
+    paceTrendDetail = `Not enough laps to show a trend. Pace trend needs at least ${MIN_LAPS_FOR_INSIGHTS} laps.`;
   }
 
   return {
