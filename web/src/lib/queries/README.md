@@ -41,12 +41,12 @@ interface SessionSummary {
   trackName: string;
   trackId: string;
   bestLap: number;        // in seconds
-  consistencyScore: number; // 0-100
+  consistencySeconds: number | null; // std-dev seconds, lower = tighter
   paceTrend: "improving" | "stable" | "fading";
   lapsCount: number;
   delta?: {               // Calculated vs previous session/event
     bestLap: number;      // negative = improved
-    consistency: number;  // positive = improved
+    consistency: number | null; // seconds; negative = improved
   }
 }
 ```
@@ -107,7 +107,7 @@ The `delta` field compares the current session/event to the previous one:
 ```typescript
 delta: {
   bestLap: -0.7,     // Negative = improved (0.7 seconds faster)
-  consistency: 2      // Positive = improved (2 points better)
+  consistency: -0.3   // Negative = improved (0.3s tighter spread)
 }
 ```
 
@@ -117,9 +117,10 @@ delta: {
 - Example: `-0.7` means 0.7 seconds faster than previous
 
 **Consistency Delta:**
-- Positive value = more consistent (improvement)
-- Negative value = less consistent (regression)
-- Example: `2` means 2 points more consistent than previous
+- Negative value = tighter lap spread (improvement)
+- Positive value = looser lap spread (regression)
+- `null` when either session has fewer than 2 clean laps
+- Example: `-0.3` means the std-dev is 0.3 seconds tighter than previous
 
 ### Example API Route
 
@@ -149,5 +150,5 @@ All errors are logged to the console.
 
 - All dates should be in ISO 8601 format (e.g., "2025-11-16T09:00:00Z")
 - Best lap times are converted from milliseconds to seconds
-- Consistency scores are calculated using the existing `calculateConsistencyScore` function
+- Consistency is the sample std-dev of clean laps in seconds, via `sessionConsistencySeconds` (null if fewer than 2 clean laps)
 - Pace trends are calculated using the existing `calculatePaceTrend` function

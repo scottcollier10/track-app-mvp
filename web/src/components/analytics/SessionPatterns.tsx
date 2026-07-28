@@ -13,6 +13,8 @@ interface Lap {
 interface SessionPatternsProps {
   laps: Lap[];
   bestLapTime: number;
+  /** Session std-dev in seconds from analytics-v2 (single σ source for the page). Display only. */
+  consistencySeconds: number | null;
 }
 
 interface Pattern {
@@ -26,7 +28,7 @@ interface Pattern {
   avgTime?: string;
 }
 
-export default function SessionPatterns({ laps, bestLapTime }: SessionPatternsProps) {
+export default function SessionPatterns({ laps, bestLapTime, consistencySeconds }: SessionPatternsProps) {
   const patterns: Pattern[] = [];
 
   if (laps.length < 5) {
@@ -123,7 +125,10 @@ export default function SessionPatterns({ laps, bestLapTime }: SessionPatternsPr
     patterns.push({
       type: 'consistent',
       title: 'Exceptional Consistency',
-      description: `Lap times varied by less than 2%, showing excellent pace control throughout the session`,
+      description:
+        consistencySeconds !== null
+          ? `Lap times stayed within ±${consistencySeconds.toFixed(1)}s, showing excellent pace control throughout the session`
+          : 'Lap times stayed remarkably tight, showing excellent pace control throughout the session',
       icon: Info,
       color: 'text-green-600 dark:text-green-400',
       bgColor: 'bg-green-50 dark:bg-green-950/20',

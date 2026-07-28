@@ -1,18 +1,16 @@
 /**
  * Session Insights - Centralized Analytics Helpers
  *
- * Provides unified interface for session analytics with scoring, labels, and tooltips.
+ * Honest metrics only: consistency is the sample std-dev of clean lap times in
+ * SECONDS (from analytics-v2), never a /100 composite.
  */
 
-import {
-  calculateConsistencyScore,
-  calculatePaceTrend,
-  calculateBehaviorScore,
-} from './analytics';
+import { calculatePaceTrend } from './analytics';
+import { sessionConsistencySeconds } from './analytics-v2';
 
-/**
- * Calculate average
- */
+/** Single lap-count gate for the interpretive layer (insight tabs + AI coaching). */
+export const MIN_LAPS_FOR_INSIGHTS = 6;
+
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -22,23 +20,21 @@ function average(values: number[]): number {
  * Get session insights from millisecond lap times
  *
  * @param lapTimesMs - Array of lap times in milliseconds
- * @returns Object containing all session insights
+ * @returns consistency (±seconds, null if <2 clean laps) and pace trend
  */
 export function getSessionInsightsFromMs(lapTimesMs: number[]): {
-  consistencyScore: number | null;
-  drivingBehaviorScore: number | null;
+  consistencySeconds: number | null;
   paceTrendLabel: string;
   paceTrendDetail: string;
 } {
   const validLapTimes = lapTimesMs.filter(t => t != null && t > 0);
 
-  const consistencyScore = calculateConsistencyScore(lapTimesMs);
-  const drivingBehaviorScore = calculateBehaviorScore(lapTimesMs);
+  const consistencySeconds = sessionConsistencySeconds(lapTimesMs);
   const paceTrendLabel = calculatePaceTrend(lapTimesMs);
 
   // Generate detailed pace trend description
   let paceTrendDetail = '';
-  if (validLapTimes.length >= 6 && paceTrendLabel) {
+  if (validLapTimes.length >= MIN_LAPS_FOR_INSIGHTS && paceTrendLabel) {
     const first3 = average(validLapTimes.slice(0, 3));
     const last3 = average(validLapTimes.slice(-3));
     const diffMs = last3 - first3;
@@ -52,56 +48,13 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
       paceTrendDetail = `Your pace remained stable throughout the session.`;
     }
   } else {
-    paceTrendDetail = 'Not enough laps to show a trend. Pace trend needs at least 6 laps.';
+    paceTrendDetail = `Not enough laps to show a trend. Pace trend needs at least ${MIN_LAPS_FOR_INSIGHTS} laps.`;
   }
 
   return {
-    consistencyScore,
-    drivingBehaviorScore,
+    consistencySeconds,
     paceTrendLabel: paceTrendLabel || 'Not enough data',
     paceTrendDetail,
-  };
-}
-
-/**
- * Map score to label with severity and color
- *
- * @param score - Score value (0-100) or null
- * @returns Object with label, severity level, and Tailwind color class
- */
-export function getScoreLabel(score: number | null): {
-  label: string;
-  severity: 'excellent' | 'good' | 'ok' | 'poor' | 'unknown';
-  colorClass: string;
-} {
-  if (score === null) return {
-    label: 'No Data',
-    severity: 'unknown',
-    colorClass: 'text-gray-400'
-  };
-
-  if (score >= 90) return {
-    label: 'Excellent',
-    severity: 'excellent',
-    colorClass: 'text-emerald-400'
-  };
-
-  if (score >= 80) return {
-    label: 'Strong',
-    severity: 'good',
-    colorClass: 'text-green-400'
-  };
-
-  if (score >= 65) return {
-    label: 'Needs Work',
-    severity: 'ok',
-    colorClass: 'text-amber-400'
-  };
-
-  return {
-    label: 'Inconsistent',
-    severity: 'poor',
-    colorClass: 'text-red-400'
   };
 }
 
@@ -109,7 +62,6 @@ export function getScoreLabel(score: number | null): {
  * Tooltip descriptions for each insight metric
  */
 export const INSIGHT_HELPERS = {
-  consistency: "How tightly your laps group around your best times.",
-  paceTrend: "Compares your first 3 vs last 3 laps to show improvement or fade.",
-  behavior: "Based on how stable your lap-to-lap pace is.",
+  consistency: 'Spread of your clean lap times in seconds. Lower means tighter, more repeatable laps.',
+  paceTrend: 'Compares your first 3 vs last 3 laps to show improvement or fade.',
 };
