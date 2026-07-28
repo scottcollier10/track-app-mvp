@@ -20,14 +20,15 @@ interface ChartDataPoint {
   time: number; // in seconds
   timeMs: number;
   isBest: boolean;
-  upperBand: number;
-  lowerBand: number;
+  upperBand?: number;
+  lowerBand?: number;
 }
 
 interface LapAnalysisChartProps {
   data: ChartDataPoint[];
   bestLapTime: number;
-  stdDev: number;
+  /** Session std-dev in seconds (analytics-v2). Null = not enough clean laps; band hidden. */
+  stdDev: number | null;
 }
 
 export default function LapAnalysisChart({ data, bestLapTime, stdDev }: LapAnalysisChartProps) {
@@ -171,20 +172,24 @@ export default function LapAnalysisChart({ data, bestLapTime, stdDev }: LapAnaly
           <Tooltip content={<CustomTooltip />} />
 
           {/* Consistency Band (±1 standard deviation) */}
-          <Area
-            type="monotone"
-            dataKey="upperBand"
-            stroke="none"
-            fill="url(#consistencyBand)"
-            fillOpacity={1}
-          />
-          <Area
-            type="monotone"
-            dataKey="lowerBand"
-            stroke="none"
-            fill="url(#consistencyBand)"
-            fillOpacity={1}
-          />
+          {stdDev !== null && (
+            <>
+              <Area
+                type="monotone"
+                dataKey="upperBand"
+                stroke="none"
+                fill="url(#consistencyBand)"
+                fillOpacity={1}
+              />
+              <Area
+                type="monotone"
+                dataKey="lowerBand"
+                stroke="none"
+                fill="url(#consistencyBand)"
+                fillOpacity={1}
+              />
+            </>
+          )}
 
           {/* Best lap reference line */}
           <ReferenceLine
@@ -222,10 +227,12 @@ export default function LapAnalysisChart({ data, bestLapTime, stdDev }: LapAnaly
           <div className="w-3 h-3 rounded-full bg-blue-500"></div>
           <span>Lap Time</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-3 bg-blue-500 bg-opacity-20 rounded"></div>
-          <span>Consistency Band (±1σ)</span>
-        </div>
+        {stdDev !== null && (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-3 bg-blue-500 bg-opacity-20 rounded"></div>
+            <span>Consistency Band (±1σ)</span>
+          </div>
+        )}
       </div>
     </div>
   );
