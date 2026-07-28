@@ -104,7 +104,7 @@ export default async function SessionAnalysisPage({ params }: PageProps) {
 
         {/* Session Patterns */}
         <div className="mb-6">
-          <SessionPatterns laps={laps} bestLapTime={bestLapTime} />
+          <SessionPatterns laps={laps} bestLapTime={bestLapTime} consistencySeconds={null} />
         </div>
 
         {/* Lap Time Chart with Consistency Bands */}
