@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { getSessionInsightsFromMs, getScoreLabel } from '@/lib/insights';
+import { getSessionInsightsFromMs } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
 const COACHING_MODEL = 'claude-sonnet-4-6';
@@ -113,8 +113,6 @@ export async function POST(request: NextRequest) {
     // 6. Calculate insights
     const lapTimesMs = laps.map((lap) => lap.lap_time_ms);
     const insights = getSessionInsightsFromMs(lapTimesMs);
-    const consistencyLabel = getScoreLabel(insights.consistencyScore);
-    const behaviorLabel = getScoreLabel(insights.drivingBehaviorScore);
 
     // 7. Format data for prompt
     const driverName = session.drivers?.name || 'Driver';
@@ -124,8 +122,10 @@ export async function POST(request: NextRequest) {
     const sessionDate = new Date(session.date).toLocaleDateString();
     const lapCount = laps.length;
     const bestLapTime = session.best_lap_ms ? formatLapTime(session.best_lap_ms) : 'N/A';
-    const consistencyScore = insights.consistencyScore ?? 0;
-    const behaviorScore = insights.drivingBehaviorScore ?? 0;
+    const consistencyText =
+      insights.consistencySeconds !== null
+        ? `±${insights.consistencySeconds.toFixed(1)}s lap-time spread (std-dev of clean laps; lower is tighter)`
+        : 'not enough clean laps to measure';
     const paceTrend = insights.paceTrendLabel;
 
     // Build lap times table
@@ -153,9 +153,8 @@ Total Laps: ${lapCount}
 Best Lap Time: ${bestLapTime}
 
 PERFORMANCE METRICS
-- Consistency Score: ${consistencyScore}/100 (${consistencyLabel.label})
+- Consistency: ${consistencyText}
 - Pace Trend: ${paceTrend}
-- Driving Behavior: ${behaviorScore}/100 (${behaviorLabel.label})
 
 LAP TIMES
 ${lapTimesTable}

@@ -1,430 +1,110 @@
 /**
- * Tests for session insights calculations
+ * Tests for session insights calculations (honest metrics: std-dev seconds, no /100 composites)
  */
 
 import {
   getSessionInsightsFromMs,
-  getScoreLabel,
   INSIGHT_HELPERS,
+  MIN_LAPS_FOR_INSIGHTS,
 } from '../insights';
 
-describe('getSessionInsightsFromMs', () => {
-  describe('normal session scenarios', () => {
-    it('calculates insights for normal 8-lap session with varying times', () => {
-      // Lap times around 90 seconds with some variation
-      const lapTimes = [
-        92000, // 1:32.000
-        91500, // 1:31.500
-        90800, // 1:30.800
-        91200, // 1:31.200
-        90500, // 1:30.500
-        91800, // 1:31.800
-        90200, // 1:30.200
-        90900, // 1:30.900
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.consistencyScore).toBeGreaterThan(90); // Should be very consistent
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).toBeGreaterThan(70);
-      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
-      expect(result.paceTrendDetail).toBeDefined();
-      expect(typeof result.paceTrendDetail).toBe('string');
-    });
-
-    it('handles session with all identical lap times (consistency = 100)', () => {
-      const lapTimes = [90000, 90000, 90000, 90000, 90000, 90000, 90000, 90000];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).toBe(100);
-      expect(result.drivingBehaviorScore).toBe(100);
-      expect(result.paceTrendLabel).toBe('stable');
-      expect(result.paceTrendDetail).toContain('stable');
-    });
-
-    it('handles session with one outlier lap (2x slower)', () => {
-      const lapTimes = [
-        90000, 90500, 91000, 180000, // Outlier - 2x slower
-        90200, 90800, 91200, 90600,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.consistencyScore).toBeLessThan(80); // Lower due to outlier
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toBeDefined();
-      expect(result.paceTrendDetail).toBeDefined();
-    });
-  });
-
-  describe('pace trend detection', () => {
-    it('detects improving pace (first 3 > last 3)', () => {
-      const lapTimes = [
-        95000, 94000, 93000, // First 3: avg 94000
-        92000, 91000, 90000, // Last 3: avg 91000
-        91500, 90500,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendLabel).toBe('improving');
-      expect(result.paceTrendDetail).toContain('faster');
-      expect(result.paceTrendDetail).toMatch(/\d+\.\d+s/); // Should contain time difference
-    });
-
-    it('detects declining pace (first 3 < last 3)', () => {
-      const lapTimes = [
-        90000, 91000, 90500, // First 3: avg 90500
-        92000, 93000, 94000, // Last 3: avg 93000
-        92500, 93500,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendLabel).toBe('fading');
-      expect(result.paceTrendDetail).toContain('slowed');
-      expect(result.paceTrendDetail).toMatch(/\d+\.\d+s/); // Should contain time difference
-    });
-
-    it('detects stable pace when first 3 equals last 3', () => {
-      const lapTimes = [
-        90000, 91000, 92000, // First 3: avg 91000
-        91500, 90500,
-        92000, 91000, 90000, // Last 3: avg 91000
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendLabel).toBe('stable');
-      expect(result.paceTrendDetail).toContain('stable');
-    });
-  });
-
-  describe('edge cases', () => {
-    it('handles session with less than 6 laps gracefully', () => {
-      const lapTimes = [90000, 91000, 90500, 91500, 90200];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendLabel).toBe('Not enough data');
-      expect(result.paceTrendDetail).toContain('at least 6 laps');
-      // Consistency should still work with 2+ laps
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).not.toBeNull();
-    });
-
-    it('handles empty array', () => {
-      const lapTimes: number[] = [];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).toBeNull();
-      expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Not enough data');
-      expect(result.paceTrendDetail).toContain('at least 6 laps');
-    });
-
-    it('handles single lap', () => {
-      const lapTimes = [90000];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).toBeNull();
-      expect(result.drivingBehaviorScore).toBeNull();
-      expect(result.paceTrendLabel).toBe('Not enough data');
-      expect(result.paceTrendDetail).toContain('at least 6 laps');
-    });
-
-    it('handles two laps', () => {
-      const lapTimes = [90000, 91000];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      // Should have consistency and behavior scores with 2 laps
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toBe('Not enough data');
-      expect(result.paceTrendDetail).toContain('at least 6 laps');
-    });
-
-    it('filters out null values in array', () => {
-      const lapTimes = [
-        95000,
-        null as any,
-        94000,
-        null as any,
-        93000,
-        92000,
-        91000,
-        null as any,
-        90000,
-        90500,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      // Should process only the valid values (7 valid laps)
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/); // Should have a valid trend
-    });
-
-    it('filters out undefined values in array', () => {
-      const lapTimes = [
-        90000,
-        undefined as any,
-        91000,
-        90500,
-        undefined as any,
-        91500,
-        90200,
-        91200,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      // Should process only the valid values
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
-    });
-
-    it('filters out zero and negative values', () => {
-      const lapTimes = [90000, 0, 91000, -100, 90500, 91500, 90200, 91200];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      // Should process only the positive values
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
-    });
-
-    it('handles one fast lap followed by rest slow', () => {
-      const lapTimes = [
-        70000, // Fast outlier - much faster
-        95000, 96000, 95500, 96500, 95200, 96200, 95800,
-      ];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).not.toBeNull();
-      expect(result.consistencyScore).toBeLessThanOrEqual(90); // Should show some inconsistency with large outlier
-      expect(result.drivingBehaviorScore).not.toBeNull();
-      expect(result.paceTrendLabel).toMatch(/^(improving|fading|stable)$/);
-    });
-
-    it('handles all laps exactly the same with 6+ laps', () => {
-      const lapTimes = [90000, 90000, 90000, 90000, 90000, 90000, 90000];
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.consistencyScore).toBe(100);
-      expect(result.drivingBehaviorScore).toBe(100);
-      expect(result.paceTrendLabel).toBe('stable');
-      expect(result.paceTrendDetail).toContain('stable');
-    });
-  });
-
-  describe('pace trend detail calculations', () => {
-    it('calculates correct time difference for improving pace', () => {
-      const lapTimes = [
-        95000, 94000, 93000, // First 3: avg 94000
-        92000, 91000, 90000, // Last 3: avg 91000
-      ];
-      // Expected difference: 94000 - 91000 = 3000ms = 3.00s
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendDetail).toContain('3.00s');
-      expect(result.paceTrendDetail).toContain('faster');
-    });
-
-    it('calculates correct time difference for fading pace', () => {
-      const lapTimes = [
-        90000, 91000, 90500, // First 3: avg 90500
-        92000, 93000, 94000, // Last 3: avg 93000
-      ];
-      // Expected difference: 93000 - 90500 = 2500ms = 2.50s
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendDetail).toContain('2.50s');
-      expect(result.paceTrendDetail).toContain('slowed');
-    });
-
-    it('treats very small pace differences as stable (below 1% threshold)', () => {
-      const lapTimes = [
-        90100, 90000, 90200, // First 3: avg 90100
-        89900, 90000, 89800, // Last 3: avg 89900
-      ];
-      // Difference: 200ms = 0.22% of first-3 avg, below the 1% trend threshold
-
-      const result = getSessionInsightsFromMs(lapTimes);
-
-      expect(result.paceTrendLabel).toBe('stable');
-      expect(result.paceTrendDetail).toContain('stable');
-    });
+describe('MIN_LAPS_FOR_INSIGHTS', () => {
+  it('is 6 — the single gate for the interpretive layer', () => {
+    expect(MIN_LAPS_FOR_INSIGHTS).toBe(6);
   });
 });
 
-describe('getScoreLabel', () => {
-  describe('score boundaries', () => {
-    it('returns "Excellent" for score of 100', () => {
-      const result = getScoreLabel(100);
-
-      expect(result.label).toBe('Excellent');
-      expect(result.severity).toBe('excellent');
-      expect(result.colorClass).toBe('text-emerald-400');
+describe('getSessionInsightsFromMs', () => {
+  describe('consistency (std-dev seconds)', () => {
+    it('returns 0 for identical lap times', () => {
+      const result = getSessionInsightsFromMs([90000, 90000, 90000, 90000, 90000, 90000]);
+      expect(result.consistencySeconds).toBe(0);
     });
 
-    it('returns "Excellent" for score of 90', () => {
-      const result = getScoreLabel(90);
-
-      expect(result.label).toBe('Excellent');
-      expect(result.severity).toBe('excellent');
-      expect(result.colorClass).toBe('text-emerald-400');
+    it('returns sample std-dev in seconds for a normal 8-lap session', () => {
+      const lapTimes = [92000, 91500, 90800, 91200, 90500, 91800, 90200, 90900];
+      const result = getSessionInsightsFromMs(lapTimes);
+      // sample std-dev of these values is ~0.63s
+      expect(result.consistencySeconds).not.toBeNull();
+      expect(result.consistencySeconds!).toBeGreaterThan(0.3);
+      expect(result.consistencySeconds!).toBeLessThan(1.0);
     });
 
-    it('returns "Strong" for score of 89', () => {
-      const result = getScoreLabel(89);
-
-      expect(result.label).toBe('Strong');
-      expect(result.severity).toBe('good');
-      expect(result.colorClass).toBe('text-green-400');
+    it('filters outlier laps (>1.25x median) before computing spread', () => {
+      // 180000 is a pit/out lap — clean-lap filter must drop it
+      const withOutlier = getSessionInsightsFromMs([
+        90000, 90500, 91000, 180000, 90200, 90800, 91200, 90600,
+      ]);
+      const without = getSessionInsightsFromMs([
+        90000, 90500, 91000, 90200, 90800, 91200, 90600,
+      ]);
+      expect(withOutlier.consistencySeconds).toBeCloseTo(without.consistencySeconds!, 3);
     });
 
-    it('returns "Strong" for score of 80', () => {
-      const result = getScoreLabel(80);
-
-      expect(result.label).toBe('Strong');
-      expect(result.severity).toBe('good');
-      expect(result.colorClass).toBe('text-green-400');
+    it('returns null with fewer than 2 valid laps', () => {
+      expect(getSessionInsightsFromMs([]).consistencySeconds).toBeNull();
+      expect(getSessionInsightsFromMs([90000]).consistencySeconds).toBeNull();
     });
 
-    it('returns "Needs Work" for score of 79', () => {
-      const result = getScoreLabel(79);
-
-      expect(result.label).toBe('Needs Work');
-      expect(result.severity).toBe('ok');
-      expect(result.colorClass).toBe('text-amber-400');
-    });
-
-    it('returns "Needs Work" for score of 75 (mid-range)', () => {
-      const result = getScoreLabel(75);
-
-      expect(result.label).toBe('Needs Work');
-      expect(result.severity).toBe('ok');
-      expect(result.colorClass).toBe('text-amber-400');
-    });
-
-    it('returns "Needs Work" for score of 65', () => {
-      const result = getScoreLabel(65);
-
-      expect(result.label).toBe('Needs Work');
-      expect(result.severity).toBe('ok');
-      expect(result.colorClass).toBe('text-amber-400');
-    });
-
-    it('returns "Inconsistent" for score of 64', () => {
-      const result = getScoreLabel(64);
-
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
-    });
-
-    it('returns "Inconsistent" for score of 50 (mid-range)', () => {
-      const result = getScoreLabel(50);
-
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
-    });
-
-    it('returns "Inconsistent" for score of 0 (edge case)', () => {
-      const result = getScoreLabel(0);
-
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
+    it('ignores null, undefined, zero and negative values', () => {
+      const result = getSessionInsightsFromMs([
+        90000, null as any, 0, -100, undefined as any, 91000, 90500,
+      ]);
+      expect(result.consistencySeconds).not.toBeNull();
+      expect(result.consistencySeconds!).toBeGreaterThan(0);
     });
   });
 
-  describe('null and undefined handling', () => {
-    it('returns "No Data" for null score', () => {
-      const result = getScoreLabel(null);
-
-      expect(result.label).toBe('No Data');
-      expect(result.severity).toBe('unknown');
-      expect(result.colorClass).toBe('text-gray-400');
+  describe('pace trend (unchanged behavior)', () => {
+    it('detects improving pace (first 3 > last 3)', () => {
+      const result = getSessionInsightsFromMs([
+        95000, 94000, 93000, 92000, 91000, 90000, 91500, 90500,
+      ]);
+      expect(result.paceTrendLabel).toBe('improving');
+      expect(result.paceTrendDetail).toContain('faster');
     });
 
-    it('returns "Inconsistent" for undefined score (treated as falsy)', () => {
-      const result = getScoreLabel(undefined as any);
+    it('detects fading pace (first 3 < last 3)', () => {
+      const result = getSessionInsightsFromMs([
+        90000, 91000, 90500, 92000, 93000, 94000, 92500, 93500,
+      ]);
+      expect(result.paceTrendLabel).toBe('fading');
+      expect(result.paceTrendDetail).toContain('slowed');
+    });
 
-      // undefined is not strictly === null, so it falls through to the default case
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
+    it('treats <1% delta as stable', () => {
+      const result = getSessionInsightsFromMs([
+        90100, 90000, 90200, 89900, 90000, 89800,
+      ]);
+      expect(result.paceTrendLabel).toBe('stable');
+      expect(result.paceTrendDetail).toContain('stable');
+    });
+
+    it('calculates the correct time difference for improving pace', () => {
+      const result = getSessionInsightsFromMs([
+        95000, 94000, 93000, 92000, 91000, 90000,
+      ]);
+      expect(result.paceTrendDetail).toContain('3.00s');
+    });
+
+    it('reports not enough data under 6 laps', () => {
+      const result = getSessionInsightsFromMs([90000, 91000, 90500, 91500, 90200]);
+      expect(result.paceTrendLabel).toBe('Not enough data');
+      expect(result.paceTrendDetail).toContain('at least 6 laps');
     });
   });
 
-  describe('edge cases', () => {
-    it('handles score of 1 (very low)', () => {
-      const result = getScoreLabel(1);
-
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
-    });
-
-    it('handles score of 99 (very high)', () => {
-      const result = getScoreLabel(99);
-
-      expect(result.label).toBe('Excellent');
-      expect(result.severity).toBe('excellent');
-      expect(result.colorClass).toBe('text-emerald-400');
-    });
-
-    it('handles negative score (should treat as poor)', () => {
-      const result = getScoreLabel(-10);
-
-      expect(result.label).toBe('Inconsistent');
-      expect(result.severity).toBe('poor');
-      expect(result.colorClass).toBe('text-red-400');
-    });
-
-    it('handles score above 100 (should treat as excellent)', () => {
-      const result = getScoreLabel(150);
-
-      expect(result.label).toBe('Excellent');
-      expect(result.severity).toBe('excellent');
-      expect(result.colorClass).toBe('text-emerald-400');
-    });
+  it('exposes no /100 composite fields', () => {
+    const result = getSessionInsightsFromMs([90000, 91000, 90500, 91500, 90200, 90700]);
+    expect(result).not.toHaveProperty('consistencyScore');
+    expect(result).not.toHaveProperty('drivingBehaviorScore');
   });
 });
 
 describe('INSIGHT_HELPERS', () => {
-  it('exports consistency helper text', () => {
-    expect(INSIGHT_HELPERS.consistency).toBeDefined();
-    expect(typeof INSIGHT_HELPERS.consistency).toBe('string');
+  it('has consistency and paceTrend helpers only (behavior removed)', () => {
     expect(INSIGHT_HELPERS.consistency.length).toBeGreaterThan(0);
-  });
-
-  it('exports pace trend helper text', () => {
-    expect(INSIGHT_HELPERS.paceTrend).toBeDefined();
-    expect(typeof INSIGHT_HELPERS.paceTrend).toBe('string');
     expect(INSIGHT_HELPERS.paceTrend.length).toBeGreaterThan(0);
-  });
-
-  it('exports behavior helper text', () => {
-    expect(INSIGHT_HELPERS.behavior).toBeDefined();
-    expect(typeof INSIGHT_HELPERS.behavior).toBe('string');
-    expect(INSIGHT_HELPERS.behavior.length).toBeGreaterThan(0);
+    expect(INSIGHT_HELPERS).not.toHaveProperty('behavior');
   });
 });
