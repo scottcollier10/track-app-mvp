@@ -5,7 +5,8 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
-import { calculateConsistencyScore, calculatePaceTrend } from '@/lib/analytics';
+import { calculatePaceTrend } from '@/lib/analytics';
+import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 
 /**
  * Session summary interface for progress tracking
@@ -17,12 +18,12 @@ export interface SessionSummary {
   trackName: string;
   trackId: string;
   bestLap: number;        // in seconds
-  consistencyScore: number; // 0-100
+  consistencySeconds: number | null; // std-dev of clean laps, seconds (lower = tighter)
   paceTrend: "improving" | "stable" | "fading";
   lapsCount: number;
   delta?: {               // Calculated vs previous session/event
     bestLap: number;      // negative = improved
-    consistency: number;  // positive = improved
+    consistency: number | null; // seconds; negative = improved
   }
 }
 
@@ -182,7 +183,7 @@ function createSessionSummary(
     .sort((a, b) => a.lap_number - b.lap_number)
     .map(lap => lap.lap_time_ms);
 
-  const consistencyScore = calculateConsistencyScore(lapTimes) || 0;
+  const consistencySeconds = sessionConsistencySeconds(lapTimes);
   const paceTrendStr = calculatePaceTrend(lapTimes);
 
   // calculatePaceTrend returns 'improving' | 'fading' | 'stable' | null
@@ -205,7 +206,7 @@ function createSessionSummary(
     trackName: session.tracks.name,
     trackId: session.track_id,
     bestLap,
-    consistencyScore,
+    consistencySeconds,
     paceTrend,
     lapsCount: session.laps.length
   };
@@ -294,7 +295,10 @@ function calculateDeltas(sessions: SessionSummary[]): SessionSummary[] {
       ...session,
       delta: {
         bestLap: session.bestLap - previousSession.bestLap,
-        consistency: session.consistencyScore - previousSession.consistencyScore
+        consistency:
+          session.consistencySeconds !== null && previousSession.consistencySeconds !== null
+            ? session.consistencySeconds - previousSession.consistencySeconds
+            : null
       }
     };
   });

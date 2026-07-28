@@ -85,14 +85,16 @@ function SessionCard({ session, showDelta = false }: SessionCardProps) {
           Consistency
         </p>
         <p className="text-xl font-semibold text-slate-200">
-          {Math.round(session.consistencyScore)} / 100
+          {session.consistencySeconds !== null
+            ? `±${session.consistencySeconds.toFixed(1)}s`
+            : '—'}
         </p>
-        {showDelta && session.delta && (
+        {showDelta && session.delta && session.delta.consistency !== null && (
           <p className={`text-sm font-medium mt-1 ${
-            session.delta.consistency > 0 ? 'text-green-400' : session.delta.consistency < 0 ? 'text-red-400' : 'text-slate-400'
+            session.delta.consistency < 0 ? 'text-green-400' : session.delta.consistency > 0 ? 'text-red-400' : 'text-slate-400'
           }`}>
-            {session.delta.consistency > 0 ? '↑' : session.delta.consistency < 0 ? '↓' : '→'}
-            {session.delta.consistency > 0 ? '+' : ''}{Math.round(session.delta.consistency)} pts
+            {session.delta.consistency < 0 ? '↓' : session.delta.consistency > 0 ? '↑' : '→'}
+            {session.delta.consistency > 0 ? '+' : ''}{session.delta.consistency.toFixed(1)}s
           </p>
         )}
       </div>
