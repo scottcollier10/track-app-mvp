@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { getSessionInsightsFromMs } from '@/lib/insights';
+import { getSessionInsightsFromMs, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
 const COACHING_MODEL = 'claude-sonnet-4-6';
@@ -100,6 +100,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'No laps found for this session' },
         { status: 404 }
+      );
+    }
+
+    if (laps.length < MIN_LAPS_FOR_INSIGHTS) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `AI coaching requires at least ${MIN_LAPS_FOR_INSIGHTS} laps`,
+        },
+        { status: 400 }
       );
     }
 

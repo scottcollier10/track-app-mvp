@@ -207,7 +207,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
           )}
 
           {/* Interpretive layer: Insights | Patterns */}
-          {laps.length > 0 && (
+          {laps.length > 0 && bestLapMs !== null && (
             showInsights ? (
               <Tabs
                 tabs={[
@@ -255,7 +255,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                     content: (
                       <SessionPatterns
                         laps={laps}
-                        bestLapTime={bestLapMs!}
+                        bestLapTime={bestLapMs}
                         consistencySeconds={consistencySeconds}
                       />
                     ),
