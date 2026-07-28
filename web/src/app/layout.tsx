@@ -21,7 +21,7 @@ export default async function RootLayout({
   const identity = coach ? { name: coach.name, email: coach.email } : null;
 
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>
         <CoachIdentityProvider coach={identity}>
           <CoachViewProvider>
