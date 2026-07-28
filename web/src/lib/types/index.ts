@@ -22,15 +22,24 @@ export interface SessionWithRelations extends Session {
   coaching_notes?: CoachingNote[];
 }
 
+/** Session + the minimal lap projection fetched by the track-day queries. Mirrors the exact `laps(lap_number, lap_time_ms)` select — widening it to `Lap[]` would break that correspondence. */
 export interface SessionWithLapTimes extends Session {
   laps: Pick<Lap, 'lap_number' | 'lap_time_ms'>[];
 }
 
+/** A day plus its ordered sessions. Driver is implied by context (e.g. the driver page). */
 export interface TrackDayWithSessions extends TrackDay {
-  driver: Driver;
   track: Track;
   sessions: SessionWithLapTimes[];
 }
+
+/** Standalone day view (/days/[id]) — no ambient driver context, so it carries one. */
+export interface TrackDayDetail extends TrackDayWithSessions {
+  driver: Driver;
+}
+
+/** DB CHECK constraint on sessions.representativeness. NULL = representative. */
+export type Representativeness = 'representative' | 'partial' | 'not_representative';
 
 export interface LapWithDelta extends Lap {
   delta_ms?: number;

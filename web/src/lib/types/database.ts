@@ -349,11 +349,7 @@ export type Database = {
           driver_id: string
           id: string
           notes: string | null
-          representativeness:
-            | "representative"
-            | "partial"
-            | "not_representative"
-            | null
+          representativeness: string | null
           representativeness_note: string | null
           source: string | null
           total_time_ms: number
@@ -369,11 +365,7 @@ export type Database = {
           driver_id: string
           id?: string
           notes?: string | null
-          representativeness?:
-            | "representative"
-            | "partial"
-            | "not_representative"
-            | null
+          representativeness?: string | null
           representativeness_note?: string | null
           source?: string | null
           total_time_ms: number
@@ -389,11 +381,7 @@ export type Database = {
           driver_id?: string
           id?: string
           notes?: string | null
-          representativeness?:
-            | "representative"
-            | "partial"
-            | "not_representative"
-            | null
+          representativeness?: string | null
           representativeness_note?: string | null
           source?: string | null
           total_time_ms?: number
