@@ -189,4 +189,19 @@ describe('POST /api/import-session', () => {
     expect(json.sessionId).toBe('session-1');
     expect(json.trackDayId).toBe('day-1');
   });
+
+  it('still returns the track day id on the 207 partial-laps path', async () => {
+    // The session (and therefore its day) exists even when the laps insert
+    // fails, so the import panel links to it exactly as it does for a 201.
+    // Without this, the 207 branch could stop returning trackDayId and nothing
+    // would notice: the client reads it off an untyped `await response.json()`.
+    results.laps = { data: null, error: { message: 'laps insert failed' } };
+
+    const res = await POST(makeRequest(validPayload));
+    const json = await res.json();
+
+    expect(res.status).toBe(207);
+    expect(json.trackDayId).toBe('day-1');
+    expect(json.sessionId).toBe('session-1');
+  });
 });

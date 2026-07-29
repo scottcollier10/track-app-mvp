@@ -62,6 +62,24 @@ export interface ImportSessionPayload {
   }[];
 }
 
+/**
+ * Response body of POST /api/import-session — the other half of
+ * ImportSessionPayload's contract, kept beside it so a route change has one
+ * place to land.
+ *
+ * `trackDayId` is returned by BOTH success paths: 201, and the 207 "session
+ * created but some laps failed" path, which still created the session and so
+ * still has a day worth linking to. The import panel's day links depend on
+ * that; `web/src/app/api/import-session/__tests__/route.test.ts` covers both.
+ */
+export interface ImportedSessionResponse {
+  sessionId: string;
+  trackDayId?: string | null;
+  message?: string;
+  /** 207 only — why some laps did not import. */
+  warning?: string;
+}
+
 // Filter types
 export interface SessionFilters {
   trackId?: string;

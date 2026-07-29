@@ -4,6 +4,7 @@
  */
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import type { ImportedSessionResponse } from '@/lib/types';
 
 /** Track-local calendar date as YYYY-MM-DD. Throws RangeError on an unparseable timestamp; a null/invalid IANA name falls back to UTC. */
 export function localDateForTimezone(isoTimestamp: string, timezone: string | null): string {
@@ -148,19 +149,33 @@ export function formatConsistencyTrend(trend: ConsistencyTrend | null): string |
   return `±${first}s → ±${last}s`;
 }
 
-/** The only field of an /api/import-session response the day links care about. */
-export interface ImportedSessionResponse {
-  trackDayId?: string | null;
+/** A track day an import landed in, and the driver whose day it is. */
+export interface TrackDayLink {
+  trackDayId: string;
+  driverName: string;
 }
 
 /**
- * The distinct track days a batch of imported sessions landed in, in the order
- * they were first seen.
+ * The distinct track days a batch of imported sessions landed in, each paired
+ * with its driver, in the order they were first seen.
+ *
+ * WARNING on that order: first-seen is CSV ROW ORDER, not chronological. A file
+ * listing driver B's Jul 12 sessions above driver A's Jul 11 yields B's day
+ * first. It is stable and deterministic, and that is all it is — never number
+ * these ("track day 1", "track day 2") or otherwise present them as a sequence.
+ * Every "N" a driver reads in this app comes from bySessionStart above; an
+ * ordinal derived from row order would contradict it.
  *
  * Deduped because the import loop posts one session at a time and the route
  * returns the SAME trackDayId for every session of the same driver/track/day —
  * the common case (a coach uploading one event's CSV) is N responses carrying
  * one id, which must render as one link and not N identical ones.
+ *
+ * The driver name is safe to pair here: resolveTrackDay keys a track day on
+ * (driver, track, date), so one trackDayId belongs to exactly one driver. The
+ * first response carrying an id therefore names the same driver as every later
+ * response carrying it, and the same driver /days/[id] renders. Unlike a date,
+ * this label cannot contradict the page it links to.
  *
  * Filtered, not cast: a response is only supposed to arrive without a
  * trackDayId if the route changes shape, and the failure mode of casting is a
@@ -170,11 +185,16 @@ export interface ImportedSessionResponse {
  * days are per DRIVER, so two drivers at the same event on the same date are
  * two days.
  */
-export function uniqueTrackDayIds(responses: ImportedSessionResponse[]): string[] {
-  const ids = responses
-    .map((r) => r.trackDayId)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0);
-  return Array.from(new Set(ids));
+export function uniqueTrackDayLinks(
+  imports: Array<ImportedSessionResponse & { driverName: string }>
+): TrackDayLink[] {
+  const byId = new Map<string, TrackDayLink>();
+  for (const imported of imports) {
+    const { trackDayId, driverName } = imported;
+    if (typeof trackDayId !== 'string' || trackDayId.length === 0) continue;
+    if (!byId.has(trackDayId)) byId.set(trackDayId, { trackDayId, driverName });
+  }
+  return Array.from(byId.values());
 }
 
 export interface SessionDelta {

@@ -14,8 +14,9 @@ import CsvPreview from './CsvPreview';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { parseSessionCsv, ParsedSession } from '@/lib/csv-parser';
-import { uniqueTrackDayIds, type ImportedSessionResponse } from '@/lib/track-days';
-import type { ImportSessionPayload } from '@/lib/types';
+import { uniqueTrackDayLinks, type TrackDayLink } from '@/lib/track-days';
+import { formatDriverName } from '@/lib/utils/formatters';
+import type { ImportedSessionResponse, ImportSessionPayload } from '@/lib/types';
 
 type ImportState = 'idle' | 'parsing' | 'preview' | 'importing' | 'success' | 'error';
 
@@ -24,7 +25,7 @@ interface ImportResults {
   failed: number;
   sessionIds: string[];
   /** Distinct track days the imported sessions landed in — usually exactly one. */
-  trackDayIds: string[];
+  trackDayLinks: TrackDayLink[];
   totalLaps: number;
   uniqueDrivers: number;
 }
@@ -75,20 +76,20 @@ export default function CsvImport() {
     setState('importing');
     setError(null);
 
-    const successful: string[] = [];
     const failed: string[] = [];
-    // Every response that created a session, including the 207 "laps partly
-    // failed" ones — the day exists in that case too, so it gets a link.
-    const responses: ImportedSessionResponse[] = [];
+    // One entry per session that actually imported — 201s and the 207 "laps
+    // partly failed" ones alike, since a 207 still created the session and its
+    // day. Every other outcome takes a `continue`/`catch` below, so this is
+    // exactly the set of successes; session ids and day links both derive from
+    // it rather than being accumulated in parallel and drifting apart.
+    // driverName rides along from the CSV row that produced the response.
+    const imported: Array<ImportedSessionResponse & { driverName: string }> = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
 
     // Import each session sequentially
     for (const session of sessions) {
       try {
-        // Track driver
-        uniqueDriverEmails.add(session.driverEmail);
-
         // First, lookup track by name to get trackId
         const trackResponse = await fetch(
           `/api/tracks?name=${encodeURIComponent(session.trackName)}`
@@ -138,8 +139,12 @@ export default function CsvImport() {
         }
 
         const data = await response.json();
-        successful.push(data.sessionId);
-        responses.push(data);
+        imported.push({ ...data, driverName: session.driverName });
+        // Counted HERE, not at the top of the loop: a driver whose only session
+        // failed the track lookup or the POST was attempted, not imported, and
+        // "3 drivers" over "landed in 2 track days" is a panel arguing with
+        // itself. Every count in this panel is of what succeeded.
+        uniqueDriverEmails.add(session.driverEmail);
         totalLaps += session.laps.length;
       } catch (err) {
         failed.push(
@@ -151,10 +156,10 @@ export default function CsvImport() {
     }
 
     setImportResults({
-      successful: successful.length,
+      successful: imported.length,
       failed: failed.length,
-      sessionIds: successful,
-      trackDayIds: uniqueTrackDayIds(responses),
+      sessionIds: imported.map((r) => r.sessionId),
+      trackDayLinks: uniqueTrackDayLinks(imported),
       totalLaps,
       uniqueDrivers: uniqueDriverEmails.size,
     });
@@ -163,7 +168,7 @@ export default function CsvImport() {
       setError(`Failed to import ${failed.length} session(s): ${failed.join(', ')}`);
     }
 
-    setState(successful.length > 0 ? 'success' : 'error');
+    setState(imported.length > 0 ? 'success' : 'error');
   };
 
   /**
@@ -186,11 +191,6 @@ export default function CsvImport() {
       router.push(`/sessions/${importResults.sessionIds[0]}`);
     }
   };
-
-  // Days the import landed in. Almost always one (a coach uploading one
-  // event's CSV); more than one when the file spans dates or drivers — track
-  // days are per driver, so two drivers at one event are two days.
-  const trackDayIds = importResults?.trackDayIds ?? [];
 
   return (
     <div className="space-y-6">
@@ -315,30 +315,40 @@ export default function CsvImport() {
               </div>
             )}
 
-            {/* Track day links. Deliberately unlabelled by date: the date here
-                would come from the CSV parse (noon in the SERVER's timezone),
-                while /days/[id] renders the authoritative track-local date from
-                the database — printing it risks this panel saying "Jul 11" and
-                the page it links to saying "Jul 12". Numbering is import order,
-                and only appears when there is more than one to tell apart. */}
-            {trackDayIds.length > 0 && (
+            {/* Days the import landed in. Almost always one (a coach uploading
+                one event's CSV); more than one when the file spans dates or
+                drivers — track days are per driver, so two drivers at one event
+                are two days.
+
+                Deliberately unlabelled by DATE: the date here would come from
+                the CSV parse (noon in the SERVER's timezone), while /days/[id]
+                renders the authoritative track-local date from the database —
+                printing it risks this panel saying "Jul 11" and the page it
+                links to saying "Jul 12".
+
+                Labelled by DRIVER instead, so several links are tellable apart
+                by a screen reader rather than being N identical "View track
+                day"s. A day is keyed on (driver, track, date), so the driver is
+                a fact about the id and cannot disagree with /days/[id]. No
+                ordinals: the order is CSV row order, not chronological. */}
+            {importResults.trackDayLinks.length > 0 && (
               <div className="space-y-3">
-                {trackDayIds.length > 1 && (
+                {importResults.trackDayLinks.length > 1 && (
                   <p className="text-sm text-neutral-400">
-                    These sessions landed in {trackDayIds.length} track days
+                    These sessions landed in {importResults.trackDayLinks.length} track days
                   </p>
                 )}
                 <div className="flex flex-wrap justify-center gap-3">
-                  {trackDayIds.map((id, index) => (
+                  {importResults.trackDayLinks.map(({ trackDayId, driverName }) => (
                     <Link
-                      key={id}
-                      href={`/days/${id}`}
+                      key={trackDayId}
+                      href={`/days/${trackDayId}`}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-800/50 text-sm text-gray-200 hover:text-white hover:border-gray-600 transition-colors"
                     >
                       <CalendarDays className="w-4 h-4 text-green-500" />
-                      {trackDayIds.length === 1
+                      {importResults.trackDayLinks.length === 1
                         ? 'View track day'
-                        : `View track day ${index + 1}`}
+                        : `View ${formatDriverName(driverName)}'s track day`}
                     </Link>
                   ))}
                 </div>

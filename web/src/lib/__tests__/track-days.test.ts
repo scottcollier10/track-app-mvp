@@ -7,7 +7,7 @@ import {
   displayedSigmaSeconds,
   formatConsistencyTrend,
   sessionDelta,
-  uniqueTrackDayIds,
+  uniqueTrackDayLinks,
 } from '@/lib/track-days';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 
@@ -225,29 +225,59 @@ describe('sessionDelta', () => {
   });
 });
 
-describe('uniqueTrackDayIds', () => {
-  it('collapses a whole CSV of sessions on one day to a single id', () => {
+describe('uniqueTrackDayLinks', () => {
+  /** What the import loop actually collects: an /api/import-session 201 body plus the CSV row's driver name. */
+  const imported = (
+    sessionId: string,
+    trackDayId: string | null | undefined,
+    driverName: string
+  ) => ({
+    sessionId,
+    trackDayId,
+    message: 'Session imported successfully',
+    driverName,
+  });
+
+  it('collapses a whole CSV of sessions on one day to a single link', () => {
     // The common case: a coach uploads one event, the route returns the same
     // track day for every session. Four identical links would be nonsense.
     expect(
-      uniqueTrackDayIds([
-        { trackDayId: 'day-1' },
-        { trackDayId: 'day-1' },
-        { trackDayId: 'day-1' },
+      uniqueTrackDayLinks([
+        imported('session-1', 'day-1', 'taylor.brooks'),
+        imported('session-2', 'day-1', 'taylor.brooks'),
+        imported('session-3', 'day-1', 'taylor.brooks'),
       ])
-    ).toEqual(['day-1']);
+    ).toEqual([{ trackDayId: 'day-1', driverName: 'taylor.brooks' }]);
   });
 
-  it('keeps distinct days in first-seen order', () => {
-    // Two drivers at the same event are two track days (days are per driver),
-    // and the panel numbers the links in this order.
+  it('pairs each day with its driver, so the links can be told apart', () => {
+    // Two drivers at the same event are two track days (days are per driver).
+    // The name is what distinguishes the links; it is raw here, and the panel
+    // runs it through formatDriverName like every other name in the app.
     expect(
-      uniqueTrackDayIds([
-        { trackDayId: 'day-2' },
-        { trackDayId: 'day-1' },
-        { trackDayId: 'day-2' },
-        { trackDayId: 'day-3' },
+      uniqueTrackDayLinks([
+        imported('session-1', 'day-a', 'taylor.brooks'),
+        imported('session-2', 'day-b', 'jamie rodriguez'),
+        imported('session-3', 'day-a', 'taylor.brooks'),
+        imported('session-4', 'day-b', 'jamie rodriguez'),
       ])
+    ).toEqual([
+      { trackDayId: 'day-a', driverName: 'taylor.brooks' },
+      { trackDayId: 'day-b', driverName: 'jamie rodriguez' },
+    ]);
+  });
+
+  it('keeps distinct days in first-seen (CSV ROW) order — NOT chronological', () => {
+    // Stable and deterministic, and nothing more: this file listed day-2's rows
+    // first, so day-2 comes back first even if it is the later date. Callers
+    // must not number these; "track day 1" would then name the second day.
+    expect(
+      uniqueTrackDayLinks([
+        imported('session-1', 'day-2', 'bree'),
+        imported('session-2', 'day-1', 'avery'),
+        imported('session-3', 'day-2', 'bree'),
+        imported('session-4', 'day-3', 'casey'),
+      ]).map((link) => link.trackDayId)
     ).toEqual(['day-2', 'day-1', 'day-3']);
   });
 
@@ -255,16 +285,16 @@ describe('uniqueTrackDayIds', () => {
     // A missing id is not supposed to happen; if the route ever changes shape,
     // a cast would produce a link that looks fine until it is clicked.
     expect(
-      uniqueTrackDayIds([
-        { trackDayId: 'day-1' },
-        {},
-        { trackDayId: null },
-        { trackDayId: '' },
+      uniqueTrackDayLinks([
+        imported('session-1', 'day-1', 'avery'),
+        imported('session-2', undefined, 'bree'),
+        imported('session-3', null, 'casey'),
+        imported('session-4', '', 'dana'),
       ])
-    ).toEqual(['day-1']);
+    ).toEqual([{ trackDayId: 'day-1', driverName: 'avery' }]);
   });
 
   it('returns an empty list when nothing imported', () => {
-    expect(uniqueTrackDayIds([])).toEqual([]);
+    expect(uniqueTrackDayLinks([])).toEqual([]);
   });
 });
