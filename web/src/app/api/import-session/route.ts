@@ -32,9 +32,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Checked here, before any write, so a bad date can't leave an orphan driver behind.
+    if (!payload.date || Number.isNaN(Date.parse(payload.date))) {
+      return NextResponse.json(
+        { error: 'Invalid session date' },
+        { status: 400 }
+      );
+    }
+
     const supabase = createServerSupabase();
 
-    // 1. Find or create driver by email
+    // 3. Find or create driver by email
     const { data: existingDriver } = await supabase
       .from('drivers')
       .select('*')
@@ -76,7 +84,7 @@ export async function POST(request: NextRequest) {
       driver = existingDriver;
     }
 
-    // 2. Verify track exists
+    // 4. Verify track exists
     const { data: track } = await supabase
       .from('tracks')
       .select('*')
@@ -98,22 +106,11 @@ export async function POST(request: NextRequest) {
       source: payload.source || 'csv_import',
     });
 
-    // 3. Resolve the track day (implicit — never created by hand)
-    let localDate: string;
-    try {
-      localDate = localDateForTimezone(payload.date, track.timezone);
-    } catch {
-      // payload.date is not validated above, so a malformed value lands here.
-      console.error('[Import Session] Invalid session date', {
-        driverId: driver.id,
-        date: payload.date,
-      });
-      return NextResponse.json(
-        { error: 'Invalid session date' },
-        { status: 400 }
-      );
-    }
+    // 5. Resolve the track day (implicit — never created by hand)
+    const localDate = localDateForTimezone(payload.date, track.timezone);
 
+    // Key columns ONLY. Any field added here is overwritten on every re-import
+    // (upsert -> ON CONFLICT DO UPDATE). Coach-authored day fields must never be listed.
     const trackDayInsert: TablesInsert<'track_days'> = {
       driver_id: driver.id,
       track_id: payload.trackId,
@@ -132,6 +129,7 @@ export async function POST(request: NextRequest) {
         trackId: payload.trackId,
         date: localDate,
         error: trackDayError?.message || 'Track day data missing',
+        code: trackDayError?.code,
       });
       return NextResponse.json(
         { error: 'Failed to resolve track day' },
@@ -139,7 +137,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create session
+    // 6. Create session
     const sessionInsert: TablesInsert<'sessions'> = {
       driver_id: driver.id,
       track_id: payload.trackId,
@@ -170,7 +168,7 @@ export async function POST(request: NextRequest) {
 
     const session = sessionData;
 
-    // 5. Create laps
+    // 7. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
       session_id: session.id,
       lap_number: lap.lapNumber,
@@ -204,6 +202,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log('[Import Session] Success', {
       sessionId: session.id,
+      trackDayId: trackDay.id,
       durationMs: duration,
       lapsCreated: lapsToInsert.length,
       source: session.source,
