@@ -6,13 +6,15 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp, CalendarDays } from 'lucide-react';
 import CsvUploader from './CsvUploader';
 import CsvPreview from './CsvPreview';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { parseSessionCsv, ParsedSession } from '@/lib/csv-parser';
+import { uniqueTrackDayIds, type ImportedSessionResponse } from '@/lib/track-days';
 import type { ImportSessionPayload } from '@/lib/types';
 
 type ImportState = 'idle' | 'parsing' | 'preview' | 'importing' | 'success' | 'error';
@@ -21,6 +23,8 @@ interface ImportResults {
   successful: number;
   failed: number;
   sessionIds: string[];
+  /** Distinct track days the imported sessions landed in — usually exactly one. */
+  trackDayIds: string[];
   totalLaps: number;
   uniqueDrivers: number;
 }
@@ -73,6 +77,9 @@ export default function CsvImport() {
 
     const successful: string[] = [];
     const failed: string[] = [];
+    // Every response that created a session, including the 207 "laps partly
+    // failed" ones — the day exists in that case too, so it gets a link.
+    const responses: ImportedSessionResponse[] = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
 
@@ -132,6 +139,7 @@ export default function CsvImport() {
 
         const data = await response.json();
         successful.push(data.sessionId);
+        responses.push(data);
         totalLaps += session.laps.length;
       } catch (err) {
         failed.push(
@@ -146,6 +154,7 @@ export default function CsvImport() {
       successful: successful.length,
       failed: failed.length,
       sessionIds: successful,
+      trackDayIds: uniqueTrackDayIds(responses),
       totalLaps,
       uniqueDrivers: uniqueDriverEmails.size,
     });
@@ -177,6 +186,11 @@ export default function CsvImport() {
       router.push(`/sessions/${importResults.sessionIds[0]}`);
     }
   };
+
+  // Days the import landed in. Almost always one (a coach uploading one
+  // event's CSV); more than one when the file spans dates or drivers — track
+  // days are per driver, so two drivers at one event are two days.
+  const trackDayIds = importResults?.trackDayIds ?? [];
 
   return (
     <div className="space-y-6">
@@ -298,6 +312,36 @@ export default function CsvImport() {
             {error && (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg max-w-2xl mx-auto">
                 <p className="text-sm text-red-300">{error}</p>
+              </div>
+            )}
+
+            {/* Track day links. Deliberately unlabelled by date: the date here
+                would come from the CSV parse (noon in the SERVER's timezone),
+                while /days/[id] renders the authoritative track-local date from
+                the database — printing it risks this panel saying "Jul 11" and
+                the page it links to saying "Jul 12". Numbering is import order,
+                and only appears when there is more than one to tell apart. */}
+            {trackDayIds.length > 0 && (
+              <div className="space-y-3">
+                {trackDayIds.length > 1 && (
+                  <p className="text-sm text-neutral-400">
+                    These sessions landed in {trackDayIds.length} track days
+                  </p>
+                )}
+                <div className="flex flex-wrap justify-center gap-3">
+                  {trackDayIds.map((id, index) => (
+                    <Link
+                      key={id}
+                      href={`/days/${id}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-800/50 text-sm text-gray-200 hover:text-white hover:border-gray-600 transition-colors"
+                    >
+                      <CalendarDays className="w-4 h-4 text-green-500" />
+                      {trackDayIds.length === 1
+                        ? 'View track day'
+                        : `View track day ${index + 1}`}
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
 

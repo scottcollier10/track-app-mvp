@@ -7,6 +7,7 @@ import {
   displayedSigmaSeconds,
   formatConsistencyTrend,
   sessionDelta,
+  uniqueTrackDayIds,
 } from '@/lib/track-days';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 
@@ -221,5 +222,49 @@ describe('sessionDelta', () => {
       sessionDelta({ bestLapMs: 95000, lapTimesMs: loose }, { bestLapMs: null, lapTimesMs: tight })
         .bestLapDeltaMs
     ).toBeNull();
+  });
+});
+
+describe('uniqueTrackDayIds', () => {
+  it('collapses a whole CSV of sessions on one day to a single id', () => {
+    // The common case: a coach uploads one event, the route returns the same
+    // track day for every session. Four identical links would be nonsense.
+    expect(
+      uniqueTrackDayIds([
+        { trackDayId: 'day-1' },
+        { trackDayId: 'day-1' },
+        { trackDayId: 'day-1' },
+      ])
+    ).toEqual(['day-1']);
+  });
+
+  it('keeps distinct days in first-seen order', () => {
+    // Two drivers at the same event are two track days (days are per driver),
+    // and the panel numbers the links in this order.
+    expect(
+      uniqueTrackDayIds([
+        { trackDayId: 'day-2' },
+        { trackDayId: 'day-1' },
+        { trackDayId: 'day-2' },
+        { trackDayId: 'day-3' },
+      ])
+    ).toEqual(['day-2', 'day-1', 'day-3']);
+  });
+
+  it('drops responses with no usable id rather than linking to /days/undefined', () => {
+    // A missing id is not supposed to happen; if the route ever changes shape,
+    // a cast would produce a link that looks fine until it is clicked.
+    expect(
+      uniqueTrackDayIds([
+        { trackDayId: 'day-1' },
+        {},
+        { trackDayId: null },
+        { trackDayId: '' },
+      ])
+    ).toEqual(['day-1']);
+  });
+
+  it('returns an empty list when nothing imported', () => {
+    expect(uniqueTrackDayIds([])).toEqual([]);
   });
 });

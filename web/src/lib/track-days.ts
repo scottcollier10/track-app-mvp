@@ -148,6 +148,35 @@ export function formatConsistencyTrend(trend: ConsistencyTrend | null): string |
   return `±${first}s → ±${last}s`;
 }
 
+/** The only field of an /api/import-session response the day links care about. */
+export interface ImportedSessionResponse {
+  trackDayId?: string | null;
+}
+
+/**
+ * The distinct track days a batch of imported sessions landed in, in the order
+ * they were first seen.
+ *
+ * Deduped because the import loop posts one session at a time and the route
+ * returns the SAME trackDayId for every session of the same driver/track/day —
+ * the common case (a coach uploading one event's CSV) is N responses carrying
+ * one id, which must render as one link and not N identical ones.
+ *
+ * Filtered, not cast: a response is only supposed to arrive without a
+ * trackDayId if the route changes shape, and the failure mode of casting is a
+ * link to /days/undefined, which looks like a working link until it is clicked.
+ *
+ * Note the count can exceed the number of calendar dates in the CSV — track
+ * days are per DRIVER, so two drivers at the same event on the same date are
+ * two days.
+ */
+export function uniqueTrackDayIds(responses: ImportedSessionResponse[]): string[] {
+  const ids = responses
+    .map((r) => r.trackDayId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  return Array.from(new Set(ids));
+}
+
 export interface SessionDelta {
   bestLapDeltaMs: number | null;
   consistencyDeltaSeconds: number | null;
