@@ -256,13 +256,31 @@ async function getSessionDayContext(
   trackDayId: string,
   sessionId: string
 ): Promise<SessionDayContext | null> {
-  const { data: day } = await getTrackDayWithSessions(trackDayId);
-  if (!day) return null;
+  const { data: day, error } = await getTrackDayWithSessions(trackDayId);
+  if (!day) {
+    // Degrading to the plain session page is correct, but doing it silently is
+    // not: an RLS denial or a broken embed would just make the day header
+    // vanish with no signal anywhere. getTrackDayWithSessions does not log.
+    console.error('[getSessionDayContext] Track day load failed', {
+      trackDayId,
+      sessionId,
+      error: error?.message || 'Track day not found',
+    });
+    return null;
+  }
 
   const index = day.sessions.findIndex((s) => s.id === sessionId);
   // -1 means the day is visible but this session is not among its sessions,
-  // which should be impossible. "Session 0 of 4" is worse than no header.
-  if (index === -1) return null;
+  // which should be impossible. "Session 0 of 4" is worse than no header —
+  // and impossible-but-happened is worth a log line, not a silent shrug.
+  if (index === -1) {
+    console.error('[getSessionDayContext] Session missing from its own track day', {
+      trackDayId,
+      sessionId,
+      daySessionCount: day.sessions.length,
+    });
+    return null;
+  }
 
   return {
     trackDayId: day.id,

@@ -158,19 +158,19 @@ export default async function SessionDetailPage({ params }: PageProps) {
                   <Link
                     href={`/sessions/${dayContext.prevSessionId}`}
                     aria-label="Previous session"
-                    className="text-accent-primary hover:text-accent-primary/80"
+                    className="text-accent-primary hover:text-accent-primary/80 p-2 -m-2"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Link>
                 )}
-                <span data-testid="session-day-position">
+                <span>
                   Session {dayContext.index + 1} of {dayContext.count}
                 </span>
                 {dayContext.nextSessionId && (
                   <Link
                     href={`/sessions/${dayContext.nextSessionId}`}
                     aria-label="Next session"
-                    className="text-accent-primary hover:text-accent-primary/80"
+                    className="text-accent-primary hover:text-accent-primary/80 p-2 -m-2"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Link>
@@ -178,8 +178,16 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </div>
             )}
 
+            {/* The DAY's date wins over the session's own timestamptz whenever we
+                have one. track_days.date is the track-LOCAL calendar date the URL
+                groups on — it is what decides which day this session belongs to.
+                session.date is an instant rendered in the RUNTIME's timezone, so a
+                02:00Z session west of UTC prints the previous day and this line
+                would contradict the back-link 50px above it. Only fall back to the
+                instant when there is no day to be authoritative. */}
             <p className="text-muted mt-2 text-sm md:text-base">
-              {formatDriverName(session.driver?.name || 'Unknown Driver')} • {formatDate(session.date)}
+              {formatDriverName(session.driver?.name || 'Unknown Driver')} •{' '}
+              {dayContext ? formatTrackDate(dayContext.date) : formatDate(session.date)}
             </p>
             {session.track?.location && (
               <p className="text-text-subtle mt-1 text-sm flex items-center gap-1">
