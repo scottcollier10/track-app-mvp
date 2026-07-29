@@ -12,10 +12,31 @@ import type { TrackDay, TrackDayDetail, TrackDayWithSessions } from '@/lib/types
 import type { TablesInsert } from '@/lib/types/database';
 
 /**
+ * Session ordering for every track-day query. This ordering IS the "Session 1..N"
+ * numbering rendered on the day page and in session prev/next nav — one comparator
+ * so the two views can never disagree.
+ *
+ * Sorts on sessions.date (TIMESTAMPTZ — the session's start time), not
+ * track_days.date (a plain calendar date, identical for every session in a day).
+ */
+function bySessionStart(a: { date: string }, b: { date: string }): number {
+  return new Date(a.date).getTime() - new Date(b.date).getTime();
+}
+
+/**
  * Get a single track day with its driver, track, ordered sessions and lap times.
  *
  * Sessions come back ordered by timestamp — that ordering IS the "Session 1..N"
  * numbering shown in the UI, so it must not be left to the database's whim.
+ *
+ * Deliberate asymmetry with getTrackDaysForDriver: a day with zero sessions is
+ * returned here, not treated as missing. The list view hides orphan days as
+ * noise, but a direct link to a row that genuinely exists must render honestly
+ * — 404-ing it would lie about a row the coach can actually see. Callers should
+ * render an empty state for `sessions.length === 0`, not an error.
+ *
+ * A missing (or RLS-invisible) id returns `{ data: null, error: null }`, so
+ * callers can call notFound() without mistaking absence for a query failure.
  */
 export async function getTrackDayWithSessions(
   id: string
@@ -34,17 +55,18 @@ export async function getTrackDayWithSessions(
       `
       )
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return { data: null, error: new Error(error.message) };
     }
 
-    // sessions.date is TIMESTAMPTZ (the session's start time), unlike
-    // track_days.date which is a plain calendar date.
-    data.sessions.sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    // Not found is not an error — maybeSingle gives null rows without a PGRST116.
+    if (!data) {
+      return { data: null, error: null };
+    }
+
+    data.sessions.sort(bySessionStart);
     data.sessions.forEach((s) =>
       s.laps.sort((a, b) => a.lap_number - b.lap_number)
     );
@@ -64,6 +86,11 @@ export async function getTrackDayWithSessions(
  * Get a driver's track days, newest day first, each with its ordered sessions.
  *
  * Driver is omitted from the embed — the caller already has one in context.
+ *
+ * Deliberate asymmetry with getTrackDayWithSessions: days with zero sessions are
+ * dropped here. They can only come from a partially-failed import, and in a list
+ * they are pure noise — a blank row the coach cannot act on. A direct link to one
+ * still renders (see getTrackDayWithSessions).
  */
 export async function getTrackDaysForDriver(
   driverId: string
@@ -87,12 +114,7 @@ export async function getTrackDaysForDriver(
       return { data: null, error: new Error(error.message) };
     }
 
-    // Same timestamp ordering as above — this is the Session 1..N numbering.
-    data.forEach((d) =>
-      d.sessions.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      )
-    );
+    data.forEach((d) => d.sessions.sort(bySessionStart));
 
     // Drop days with no sessions. An import can upsert the day and then fail to
     // insert the session, leaving a childless track_days row that would render
@@ -142,7 +164,7 @@ export async function resolveTrackDay(
     if (trackDayError || !trackDay) {
       // Logged here rather than at the call site: the Postgres `code` is the
       // useful part of an upsert failure and it does not survive the Error wrap.
-      console.error('[Import Session] Track day upsert failed', {
+      console.error('[Track Days] Track day upsert failed', {
         driverId,
         trackId,
         date: localDate,
@@ -157,6 +179,16 @@ export async function resolveTrackDay(
 
     return { data: trackDay, error: null };
   } catch (err) {
+    // Logged here, not at the call site: the route turns this into a bare 500,
+    // and this is the app's only ingestion path — it must never fail silently.
+    // (The upsert-failure branch above logs itself, so logging there too would
+    // double up.)
+    console.error('[Track Days] Track day resolve threw', {
+      driverId,
+      trackId,
+      date: localDate,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    });
     return {
       data: null,
       error: err instanceof Error ? err : new Error('Unknown error'),

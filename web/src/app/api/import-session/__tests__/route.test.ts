@@ -51,6 +51,12 @@ interface QueryBuilder {
  * builder, and awaiting it resolves to the table's canned result. Enough for
  * this route's chains (.select().eq().single(), .insert().select().single(),
  * and a bare .insert()).
+ *
+ * Limitation: `results` is keyed by table name only, so every chain against a
+ * table resolves to the same canned row — the `drivers` lookup and the `drivers`
+ * insert cannot be given different results. That makes the new-driver branch
+ * untestable without keying results per-chain. Widen this deliberately if you
+ * need it; do not assume the current stub can express it.
  */
 function makeSupabaseStub(): ReturnType<typeof createServerSupabase> {
   const stub = {
@@ -131,6 +137,16 @@ afterEach(() => {
 });
 
 describe('POST /api/import-session', () => {
+  it('returns 401 when there is no coach', async () => {
+    mockGetCurrentCoach.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(validPayload));
+
+    expect(res.status).toBe(401);
+    expect(mockResolveTrackDay).not.toHaveBeenCalled();
+    expect(mockCreateServerSupabase).not.toHaveBeenCalled();
+  });
+
   it('rejects a malformed date before any write happens', async () => {
     const res = await POST(makeRequest({ ...validPayload, date: 'not-a-date' }));
 
