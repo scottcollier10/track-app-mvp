@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { formatDate } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
-import SessionHistoryTable from '@/components/drivers/SessionHistoryTable';
+import TrackDayList from '@/components/drivers/TrackDayList';
 import type { SessionWithDetails } from '@/data/sessions';
 import type { Driver } from '@/data/drivers';
 import type { DriverProgressData } from '@/data/driverProgress';
@@ -397,7 +396,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
           </div>
         ) : null}
 
-        {/* Session History */}
+        {/* Track Days */}
         {filteredSessions.length === 0 ? (
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
             <p className="text-slate-400">
@@ -405,7 +404,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
             </p>
           </div>
         ) : (
-          <SessionHistoryTable sessions={filteredSessions} />
+          <TrackDayList sessions={filteredSessions} />
         )}
       </main>
     </div>

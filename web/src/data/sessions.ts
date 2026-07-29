@@ -17,6 +17,20 @@ export interface SessionWithDetails {
   lapCount: number;
   /** Lap times in ms, present when the query fetches lap details (getAllSessions) */
   lapTimesMs?: number[];
+  /**
+   * The session's track day, present when the query embeds it (getAllSessions).
+   *
+   * The `date` here is track_days.date — a PLAIN track-local calendar date, and
+   * the only honest label for a day. Carried rather than re-derived from
+   * `date` above (a timestamptz) so that a client rendering a day list and the
+   * day page it links to cannot disagree about which day it is: a session at
+   * 2026-07-12T03:30Z belongs to track day 2026-07-12, but formatting that
+   * instant in a Chicago browser prints "Jul 11". Render with formatTrackDate.
+   *
+   * Null for a session that predates the day model (backfilled since) or whose
+   * import failed to resolve one.
+   */
+  track_day?: { id: string; date: string } | null;
 }
 
 export interface SessionFull {
@@ -115,6 +129,7 @@ export async function getAllSessions(
         source,
         driver:drivers(id, name, email),
         track:tracks(id, name, location),
+        track_day:track_days(id, date),
         laps!left(lap_time_ms)
       `
     );
