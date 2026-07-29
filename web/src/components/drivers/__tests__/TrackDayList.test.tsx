@@ -11,6 +11,8 @@
  *  - the DATE: track_days.date is a plain track-local calendar date. Rendering
  *    the session timestamp instead puts this row one day off from the day page
  *    it links to. Jest pins TZ=America/Chicago so that bug is visible.
+ *  - the CUTOFF: it must drop whole days. Applied to sessions instead, it
+ *    splits one, and the row then contradicts the page it links to.
  *
  * Lap fixtures are chosen so σ is hand-checkable and no lap is dropped by
  * cleanLaps (nothing near 1.25x the median):
@@ -20,14 +22,14 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TrackDayList from '../TrackDayList';
-import type { SessionWithDetails } from '@/data/sessions';
+import type { SessionWithTrackDay } from '@/data/sessions';
 
 const WOBBLY = [91000, 92000, 91000, 92000, 91000, 92000]; // sd 0.5s
 const FLAT = [90500, 90500, 90500, 90500, 90500, 90500]; // sd 0.0s
 
 function makeSession(
-  overrides: Partial<SessionWithDetails> & Pick<SessionWithDetails, 'id' | 'date'>
-): SessionWithDetails {
+  overrides: Partial<SessionWithTrackDay> & Pick<SessionWithTrackDay, 'id' | 'date'>
+): SessionWithTrackDay {
   const lapTimesMs = overrides.lapTimesMs ?? [];
   return {
     total_time_ms: lapTimesMs.reduce((sum, t) => sum + t, 0),
@@ -47,12 +49,34 @@ function rows() {
 }
 
 /**
+ * The day's best lap is queried by test id, never by substring: "does the row
+ * contain '--'?" also passes when the σ trend renders a dash, so it would keep
+ * passing with the best-lap placeholder broken.
+ */
+function dayBestLap(row: HTMLElement) {
+  return row.querySelector('[data-testid="day-best-lap"]');
+}
+
+/**
  * A realistic HPDE day, in the order the driver page actually receives it:
  * NEWEST FIRST. σ runs 0.5s (S1) -> 0.0s (S4) chronologically — the driver
  * tightened up over the day.
  */
-const newestFirstDay: SessionWithDetails[] = [
+const newestFirstDay: SessionWithTrackDay[] = [
   makeSession({ id: 's4', date: '2026-07-12T21:00:00Z', lapTimesMs: FLAT }),
+  makeSession({ id: 's3', date: '2026-07-12T19:00:00Z', lapTimesMs: WOBBLY }),
+  makeSession({ id: 's2', date: '2026-07-12T17:00:00Z', lapTimesMs: WOBBLY }),
+  makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY }),
+];
+
+/**
+ * The same day, straddling midnight UTC: the last session is an evening run at
+ * Road America (America/Chicago), so its timestamp lands on the NEXT UTC day
+ * while it still belongs to track day 2026-07-12. A cutoff applied to sessions
+ * rather than to whole days cuts this day in half.
+ */
+const straddlingDay: SessionWithTrackDay[] = [
+  makeSession({ id: 's4', date: '2026-07-13T01:00:00Z', lapTimesMs: FLAT }), // 8pm Jul 12 local
   makeSession({ id: 's3', date: '2026-07-12T19:00:00Z', lapTimesMs: WOBBLY }),
   makeSession({ id: 's2', date: '2026-07-12T17:00:00Z', lapTimesMs: WOBBLY }),
   makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY }),
@@ -78,10 +102,19 @@ describe('TrackDayList', () => {
     expect(rows()[0].textContent).not.toContain('±0.0s → ±0.5s');
   });
 
+  it('makes the day page\'s qualifying-session claim, not a start-to-end-of-day one', () => {
+    // Same wording as the day page KPI, from one constant. Without it the pair
+    // of numbers reads as first session -> last session, which it is not when
+    // some sessions miss the lap gate.
+    render(<TrackDayList sessions={newestFirstDay} />);
+
+    expect(rows()[0]).toHaveTextContent('First to last qualifying session');
+  });
+
   it('shows the fastest lap of the whole day', () => {
     render(<TrackDayList sessions={newestFirstDay} />);
 
-    expect(rows()[0]).toHaveTextContent('1:30.500'); // FLAT beats WOBBLY's 91000
+    expect(dayBestLap(rows()[0])!.textContent).toBe('1:30.500'); // FLAT beats WOBBLY's 91000
   });
 
   it("labels the row with the track day's calendar date, not the session timestamp", () => {
@@ -114,6 +147,8 @@ describe('TrackDayList', () => {
     expect(rows()[0]).toHaveTextContent('1 session');
     expect(rows()[0].textContent).not.toContain('→');
     expect(rows()[0]).toHaveTextContent('Needs two sessions of 6+ laps');
+    // And no claim about qualifying sessions when there is no figure to qualify.
+    expect(rows()[0].textContent).not.toContain('First to last');
   });
 
   it('makes no consistency claim when only one session clears the lap gate', () => {
@@ -154,6 +189,31 @@ describe('TrackDayList', () => {
     expect(rows()[1]).toHaveTextContent('Jul 12, 2026');
   });
 
+  it('orders two tracks on the same date by track name', () => {
+    render(
+      <TrackDayList
+        sessions={[
+          makeSession({ id: 's2', date: '2026-07-12T17:00:00Z', lapTimesMs: WOBBLY }),
+          makeSession({
+            id: 's1',
+            date: '2026-07-12T15:00:00Z',
+            lapTimesMs: FLAT,
+            track: { id: 'track-2', name: 'Blackhawk Farms', location: 'South Beloit, IL' },
+            track_day: { id: 'day-2', date: '2026-07-12' },
+          }),
+        ]}
+      />
+    );
+
+    // The dates tie, so track name decides — and it must decide, not leave the
+    // two rows swapping places on the whim of Map insertion order.
+    expect(rows()).toHaveLength(2);
+    expect(rows()[0]).toHaveTextContent('Blackhawk Farms');
+    expect(rows()[0]).toHaveAttribute('href', '/days/day-2');
+    expect(rows()[1]).toHaveTextContent('Road America');
+    expect(rows()[1]).toHaveAttribute('href', '/days/day-1');
+  });
+
   it('still groups sessions with no track day, linking to the earliest session', () => {
     // Shouldn't exist after the backfill. If it does, the row is degraded, not
     // missing: it groups on a derived date+track key and drops to the session.
@@ -184,13 +244,12 @@ describe('TrackDayList', () => {
     );
 
     // Two rows, not one merged row that would claim a σ trend across a boundary
-    // the database never drew.
+    // the database never drew. Both keys tie on date and track name, so the
+    // order is decided by the group key — asserted directly, because "some
+    // order" is what the sort exists to rule out.
     expect(rows()).toHaveLength(2);
     rows().forEach((row) => expect(row).toHaveTextContent('1 session'));
-    expect(rows().map((r) => r.getAttribute('href')).sort()).toEqual([
-      '/days/day-1',
-      '/sessions/s2',
-    ]);
+    expect(rows().map((r) => r.getAttribute('href'))).toEqual(['/days/day-1', '/sessions/s2']);
   });
 
   it('renders a placeholder rather than a fake best lap when a day has none', () => {
@@ -200,7 +259,70 @@ describe('TrackDayList', () => {
       />
     );
 
-    expect(rows()[0]).toHaveTextContent('--');
+    // Exact text on the best-lap element itself: this row also renders "--" for
+    // its σ trend, so a substring check would pass with the placeholder broken.
+    expect(dayBestLap(rows()[0])!.textContent).toBe('--');
     expect(rows()[0].textContent).not.toContain('±');
+  });
+
+  describe('date cutoff', () => {
+    it('keeps every session of a day on the cutoff date, including ones timestamped past it', () => {
+      // The cutoff is the day this track day happened on, so the whole day
+      // stays — all four sessions and the full 0.5 -> 0.0 trend. Filtering
+      // sessions before grouping instead would drop the ones on the near side
+      // of the cutoff instant and leave this row claiming a smaller day with a
+      // different trend than /days/day-1 shows.
+      render(<TrackDayList sessions={straddlingDay} cutoffDate="2026-07-12" />);
+
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]).toHaveAttribute('href', '/days/day-1');
+      expect(rows()[0]).toHaveTextContent('4 sessions');
+      expect(rows()[0]).toHaveTextContent('±0.5s → ±0.0s');
+    });
+
+    it('drops the whole day when its date is before the cutoff, session timestamps notwithstanding', () => {
+      // One session of this day carries a 2026-07-13 timestamp. The day is
+      // 2026-07-12 and the cutoff is 2026-07-13, so the day goes — all of it.
+      // A session-level filter would keep that one session and render a row for
+      // a day the coach asked not to see, counting 1 session instead of 4.
+      render(<TrackDayList sessions={straddlingDay} cutoffDate="2026-07-13" />);
+
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+      expect(screen.getByText('No track days in the selected time period.')).toBeInTheDocument();
+    });
+
+    it('keeps days on or after the cutoff and drops earlier ones', () => {
+      render(
+        <TrackDayList
+          sessions={[
+            makeSession({
+              id: 's2',
+              date: '2026-08-02T15:00:00Z',
+              lapTimesMs: FLAT,
+              track_day: { id: 'day-2', date: '2026-08-02' },
+            }),
+            makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY }),
+          ]}
+          cutoffDate="2026-08-02"
+        />
+      );
+
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]).toHaveAttribute('href', '/days/day-2');
+    });
+
+    it('applies no bound at all when there is no cutoff', () => {
+      render(<TrackDayList sessions={straddlingDay} cutoffDate={null} />);
+
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]).toHaveTextContent('4 sessions');
+    });
+  });
+
+  it('says so when there are no track days at all, rather than showing a bare heading', () => {
+    render(<TrackDayList sessions={[]} />);
+
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByText(/No track days yet/)).toBeInTheDocument();
   });
 });

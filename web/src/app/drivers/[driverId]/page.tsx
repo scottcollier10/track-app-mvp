@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatDriverName } from '@/lib/utils/formatters';
 import TrackDayList from '@/components/drivers/TrackDayList';
-import type { SessionWithDetails } from '@/data/sessions';
+import type { SessionWithTrackDay } from '@/data/sessions';
 import type { Driver } from '@/data/drivers';
 import type { DriverProgressData } from '@/data/driverProgress';
 import ProgressStats from '@/components/drivers/ProgressStats';
@@ -15,6 +15,18 @@ import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 
 type DateFilter = 'last7' | 'last30' | 'last90' | 'thisYear' | 'allTime';
+
+/**
+ * A Date as the browser's LOCAL calendar date, "YYYY-MM-DD".
+ *
+ * Built from local parts on purpose: toISOString() would render the same
+ * instant in UTC, so any evening cutoff west of UTC would come back as the
+ * NEXT day and silently drop a track day from the list.
+ */
+function localCalendarDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 interface DriverProgressPageProps {
   params: {
@@ -27,8 +39,10 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [currentLevel, setCurrentLevel] = useState<RunGroupBand>('beginner');
-  const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
-  const [filteredSessions, setFilteredSessions] = useState<SessionWithDetails[]>([]);
+  const [sessions, setSessions] = useState<SessionWithTrackDay[]>([]);
+  const [filteredSessions, setFilteredSessions] = useState<SessionWithTrackDay[]>([]);
+  /** The same window as filteredSessions, at DAY granularity — see the filter effect. */
+  const [dayCutoffDate, setDayCutoffDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('last90');
@@ -89,10 +103,21 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
     fetchData();
   }, [driverId]);
 
-  // Apply date filter
+  // Apply date filter.
+  //
+  // TWO filters come out of this, deliberately at two different granularities:
+  //
+  //  - filteredSessions cuts at an INSTANT (now - N days). Per-session metrics
+  //    are a rolling window and a session either falls inside it or does not.
+  //  - dayCutoffDate cuts at a CALENDAR DATE, and TrackDayList applies it to
+  //    whole day groups. A track day is an indivisible unit: an instant cutoff
+  //    landing between two sessions of one day would leave the row claiming
+  //    "2 sessions" and a σ trend over that half, while the day page it links
+  //    to shows all 4 and a different trend.
   useEffect(() => {
     if (sessions.length === 0) {
       setFilteredSessions([]);
+      setDayCutoffDate(null);
       return;
     }
 
@@ -114,6 +139,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         break;
       case 'allTime':
         setFilteredSessions(sessions);
+        setDayCutoffDate(null);
         return;
     }
 
@@ -126,6 +152,7 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
       `[DriverProgressPage] Filtered to ${filtered.length} sessions (${dateFilter})`
     );
     setFilteredSessions(filtered);
+    setDayCutoffDate(localCalendarDate(startDate));
   }, [sessions, dateFilter]);
 
   // Phase 2: Fetch available tracks
@@ -396,16 +423,12 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
           </div>
         ) : null}
 
-        {/* Track Days */}
-        {filteredSessions.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.75)]">
-            <p className="text-slate-400">
-              No sessions found for the selected time period.
-            </p>
-          </div>
-        ) : (
-          <TrackDayList sessions={filteredSessions} />
-        )}
+        {/* Track Days.
+            Given the UNFILTERED sessions plus the day-granularity cutoff, not
+            filteredSessions: the list must group into days first and then drop
+            whole days, so a cutoff can never split one (see the filter effect).
+            It renders its own empty state. */}
+        <TrackDayList sessions={sessions} cutoffDate={dayCutoffDate} />
       </main>
     </div>
   );

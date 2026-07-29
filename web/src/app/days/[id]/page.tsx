@@ -9,7 +9,12 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { getTrackDayWithSessions } from '@/data/track-days';
-import { dayBestLapMs, dayConsistencyTrend, formatConsistencyTrend } from '@/lib/track-days';
+import {
+  CONSISTENCY_TREND_CLAIM,
+  dayBestLapMs,
+  dayConsistencyTrend,
+  formatConsistencyTrend,
+} from '@/lib/track-days';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
 import { formatTrackDate, formatLapMs } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
@@ -67,6 +72,7 @@ export default async function TrackDayPage({ params }: PageProps) {
   // chronologically, so caller ordering can never flip the trend's direction.
   const trend = dayConsistencyTrend(
     sessions.map((s) => ({
+      id: s.id,
       date: s.date,
       lapTimesMs: s.laps.map((l) => l.lap_time_ms),
     }))
@@ -118,7 +124,7 @@ export default async function TrackDayPage({ params }: PageProps) {
               value={formatConsistencyTrend(trend) ?? '--'}
               helper={
                 trend
-                  ? 'First to last qualifying session'
+                  ? CONSISTENCY_TREND_CLAIM
                   : `Needs two sessions of ${MIN_LAPS_FOR_INSIGHTS}+ laps`
               }
             />

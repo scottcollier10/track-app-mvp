@@ -32,6 +32,25 @@ describe('bySessionStart', () => {
       bySessionStart({ date: '2026-07-11T09:00:00-05:00' }, { date: '2026-07-11T13:00:00Z' })
     ).toBeGreaterThan(0);
   });
+
+  it('breaks a tied start time on session id, so the order never depends on row order', () => {
+    // Two sessions CAN share a timestamp (a date-only CSV column, a
+    // double-entered session). This ordering IS the "Session N of M" numbering,
+    // so an unbroken tie would let the day page and the session page number the
+    // same two sessions differently.
+    const tied = [
+      { id: 'b', date: '2026-07-11T09:00:00Z' },
+      { id: 'a', date: '2026-07-11T09:00:00Z' },
+    ];
+    expect([...tied].sort(bySessionStart).map((s) => s.id)).toEqual(['a', 'b']);
+    expect([...tied].reverse().sort(bySessionStart).map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('still ties when neither side carries an id', () => {
+    // Callers without an id (SessionForTrend) keep the old behaviour rather
+    // than each resolving the tie their own way.
+    expect(bySessionStart({ date: '2026-07-11T09:00:00Z' }, { date: '2026-07-11T09:00:00Z' })).toBe(0);
+  });
 });
 
 describe('localDateForTimezone', () => {

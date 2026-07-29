@@ -37,9 +37,23 @@ export function localDateForTimezone(isoTimestamp: string, timezone: string | nu
  *
  * Sorts on sessions.date (TIMESTAMPTZ — the session's start time), not
  * track_days.date (a plain calendar date, identical for every session in a day).
+ *
+ * Session id breaks a tie. Two sessions can share a start time (a CSV with a
+ * date-only column, a double-entered session), and without a tiebreak their
+ * "Session N" numbering falls back to whatever order the row set arrived in —
+ * which the day page and the session page have no reason to agree on. id is
+ * arbitrary but stable, which is the whole requirement. Optional because
+ * SessionForTrend callers may not carry one; when it is absent the tie simply
+ * stays unresolved rather than being resolved differently in each caller.
  */
-export function bySessionStart(a: { date: string }, b: { date: string }): number {
-  return new Date(a.date).getTime() - new Date(b.date).getTime();
+export function bySessionStart(
+  a: { date: string; id?: string },
+  b: { date: string; id?: string }
+): number {
+  return (
+    new Date(a.date).getTime() - new Date(b.date).getTime() ||
+    (a.id ?? '').localeCompare(b.id ?? '')
+  );
 }
 
 /** Fastest best lap across the day, in MILLISECONDS. Null when no session has a positive best lap. */
@@ -58,6 +72,8 @@ export interface ConsistencyTrend {
 export interface SessionForTrend {
   date: string;
   lapTimesMs: number[];
+  /** Optional, but pass it when you have one: it is bySessionStart's tiebreak. */
+  id?: string;
 }
 
 /**
@@ -104,6 +120,18 @@ export function displayedSigmaSeconds(seconds: number): number {
 export function displayedSigmaDeltaSeconds(prevSeconds: number, currSeconds: number): number {
   return displayedSigmaSeconds(currSeconds) - displayedSigmaSeconds(prevSeconds);
 }
+
+/**
+ * What a rendered σ trend actually claims.
+ *
+ * The pair of numbers is first -> last QUALIFYING session, not first -> last
+ * session of the day: on a four-session day where only S2 and S3 clear the lap
+ * gate, "±0.6s → ±0.4s" is a claim about the middle of the day. Every view that
+ * prints formatConsistencyTrend prints this beside it, from one definition, so
+ * the day page and the driver page's day list cannot drift into making
+ * different claims about identical numbers.
+ */
+export const CONSISTENCY_TREND_CLAIM = 'First to last qualifying session';
 
 /**
  * The day's σ trend as one string: "±0.6s → ±0.4s". Null when there is no

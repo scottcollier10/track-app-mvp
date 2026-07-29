@@ -33,6 +33,23 @@ export interface SessionWithDetails {
   track_day?: { id: string; date: string } | null;
 }
 
+/**
+ * A session from getAllSessions specifically: lap times and the track day are
+ * fetched, so they are PRESENT, not merely optional.
+ *
+ * The two optional fields above fail in different directions, which is why this
+ * exists. A missing lapTimesMs under-claims — no σ, no trend, nothing false on
+ * screen. A missing track_day MIS-RENDERS: every row of a day list becomes an
+ * orphan pointing at /sessions instead of /days, silently. getRecentSessions
+ * shares SessionWithDetails and embeds neither, so any consumer that needs the
+ * day (TrackDayList) takes THIS type and a getRecentSessions result fails to
+ * compile rather than rendering a wrong page.
+ */
+export type SessionWithTrackDay = SessionWithDetails & {
+  lapTimesMs: number[];
+  track_day: { id: string; date: string } | null;
+};
+
 export interface SessionFull {
   id: string;
   date: string;
@@ -115,7 +132,7 @@ export async function getRecentSessions(
  */
 export async function getAllSessions(
   filters?: SessionFilters
-): Promise<{ data: SessionWithDetails[] | null; error: Error | null }> {
+): Promise<{ data: SessionWithTrackDay[] | null; error: Error | null }> {
   try {
     const supabase = createServerSupabase();
 

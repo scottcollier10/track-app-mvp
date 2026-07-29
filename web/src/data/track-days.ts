@@ -76,6 +76,20 @@ export async function getTrackDayWithSessions(
  *
  * Driver is omitted from the embed — the caller already has one in context.
  *
+ * NO CALLERS TODAY. The driver page (/drivers/[driverId]) shows the same list
+ * and deliberately does not use this: it is a client component that already
+ * holds every session with its lap times, so it groups them client-side (see
+ * groupByTrackDay in components/drivers/TrackDayList) at no extra fetch. This
+ * exists for a SERVER caller that needs a driver's days without that payload.
+ *
+ * The two are not interchangeable, and a future caller swapping one for the
+ * other changes what renders:
+ *  - this drops days with zero sessions (below); the client grouping never sees
+ *    one, because it starts from sessions.
+ *  - this never produces orphan groups; the client grouping does, for a session
+ *    whose track_day_id is null, keyed on a derived date+track and linking to
+ *    the session instead of a day.
+ *
  * Deliberate asymmetry with getTrackDayWithSessions: days with zero sessions are
  * dropped here. They can only come from a partially-failed import, and in a list
  * they are pure noise — a blank row the coach cannot act on. A direct link to one
