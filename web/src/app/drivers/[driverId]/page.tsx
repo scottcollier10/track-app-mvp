@@ -40,8 +40,6 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
   const [driver, setDriver] = useState<Driver | null>(null);
   const [currentLevel, setCurrentLevel] = useState<RunGroupBand>('beginner');
   const [sessions, setSessions] = useState<SessionWithTrackDay[]>([]);
-  const [filteredSessions, setFilteredSessions] = useState<SessionWithTrackDay[]>([]);
-  /** The same window as filteredSessions, at DAY granularity — see the filter effect. */
   const [dayCutoffDate, setDayCutoffDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,20 +101,19 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
     fetchData();
   }, [driverId]);
 
-  // Apply date filter.
+  // Apply date filter, at CALENDAR DATE granularity.
   //
-  // TWO filters come out of this, deliberately at two different granularities:
+  // TrackDayList applies this to whole day groups, never to individual
+  // sessions. A track day is an indivisible unit: an instant cutoff landing
+  // between two sessions of one day would leave the row claiming "2 sessions"
+  // and a σ trend over that half, while the day page it links to shows all 4
+  // and a different trend.
   //
-  //  - filteredSessions cuts at an INSTANT (now - N days). Per-session metrics
-  //    are a rolling window and a session either falls inside it or does not.
-  //  - dayCutoffDate cuts at a CALENDAR DATE, and TrackDayList applies it to
-  //    whole day groups. A track day is an indivisible unit: an instant cutoff
-  //    landing between two sessions of one day would leave the row claiming
-  //    "2 sessions" and a σ trend over that half, while the day page it links
-  //    to shows all 4 and a different trend.
+  // The charts/stats below run their own INSTANT cutoff server-side (see the
+  // `after` param in the progress fetch) — that's correct for per-session
+  // metrics, which are a rolling window.
   useEffect(() => {
     if (sessions.length === 0) {
-      setFilteredSessions([]);
       setDayCutoffDate(null);
       return;
     }
@@ -138,20 +135,10 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         startDate = new Date(now.getFullYear(), 0, 1);
         break;
       case 'allTime':
-        setFilteredSessions(sessions);
         setDayCutoffDate(null);
         return;
     }
 
-    const filtered = sessions.filter((session) => {
-      const sessionDate = new Date(session.date);
-      return sessionDate >= startDate;
-    });
-
-    console.log(
-      `[DriverProgressPage] Filtered to ${filtered.length} sessions (${dateFilter})`
-    );
-    setFilteredSessions(filtered);
     setDayCutoffDate(localCalendarDate(startDate));
   }, [sessions, dateFilter]);
 
@@ -424,9 +411,9 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
         ) : null}
 
         {/* Track Days.
-            Given the UNFILTERED sessions plus the day-granularity cutoff, not
-            filteredSessions: the list must group into days first and then drop
-            whole days, so a cutoff can never split one (see the filter effect).
+            Given the UNFILTERED sessions plus a day-granularity cutoff: the
+            list must group into days first and then drop whole days, so a
+            cutoff can never split one (see the filter effect).
             It renders its own empty state. */}
         <TrackDayList sessions={sessions} cutoffDate={dayCutoffDate} />
       </main>
