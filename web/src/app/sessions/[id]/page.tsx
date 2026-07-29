@@ -1,5 +1,5 @@
 import { getSessionWithLaps } from '@/data/sessions';
-import { formatDate, formatLapMs, formatDurationMs } from '@/lib/time';
+import { formatDate, formatTrackDate, formatLapMs, formatDurationMs } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
 import { notFound } from 'next/navigation';
 import CoachNotes from '@/components/ui/CoachNotes';
@@ -20,7 +20,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import ShareSessionButton from '@/components/ui/ShareSessionButton';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
-import { MapPin, ArrowLeft } from 'lucide-react';
+import { MapPin, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
@@ -104,6 +104,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
 
   const showInsights = laps.length >= MIN_LAPS_FOR_INSIGHTS;
 
+  // Where this session sits in its track day. Null for a session with no day
+  // (shouldn't exist post-backfill), in which case the header falls back to the
+  // flat /sessions list exactly as before.
+  const dayContext = session.dayContext;
+
   return (
     <div className="relative min-h-screen text-slate-50">
       <HeroBurst />
@@ -113,13 +118,27 @@ export default async function SessionDetailPage({ params }: PageProps) {
           {/* Header */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Link
-                href="/sessions"
-                className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Sessions
-              </Link>
+              {/* Up one level in the navigation spine: driver -> day -> session.
+                  The label is the day's own track name and PLAIN calendar date,
+                  so it reads identically to the page it lands on (formatTrackDate,
+                  never formatDate — see @/lib/time). */}
+              {dayContext ? (
+                <Link
+                  href={`/days/${dayContext.trackDayId}`}
+                  className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  {dayContext.trackName} • {formatTrackDate(dayContext.date)}
+                </Link>
+              ) : (
+                <Link
+                  href="/sessions"
+                  className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Sessions
+                </Link>
+              )}
               <ShareSessionButton />
             </div>
             <div className="flex items-center gap-3 mb-2">
@@ -128,6 +147,37 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </h1>
               {session.source && <SourceBadge source={session.source} size="md" />}
             </div>
+
+            {/* "Session 2 of 4" + step through the day. Coaching happens BETWEEN
+                sessions, so a coach walking S1 -> S4 never has to bounce back to
+                the day page. The count comes from the same ordered list the day
+                page numbers its cards from, so the two cannot disagree. */}
+            {dayContext && (
+              <div className="flex items-center gap-2 text-sm text-muted">
+                {dayContext.prevSessionId && (
+                  <Link
+                    href={`/sessions/${dayContext.prevSessionId}`}
+                    aria-label="Previous session"
+                    className="text-accent-primary hover:text-accent-primary/80"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Link>
+                )}
+                <span data-testid="session-day-position">
+                  Session {dayContext.index + 1} of {dayContext.count}
+                </span>
+                {dayContext.nextSessionId && (
+                  <Link
+                    href={`/sessions/${dayContext.nextSessionId}`}
+                    aria-label="Next session"
+                    className="text-accent-primary hover:text-accent-primary/80"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+            )}
+
             <p className="text-muted mt-2 text-sm md:text-base">
               {formatDriverName(session.driver?.name || 'Unknown Driver')} • {formatDate(session.date)}
             </p>

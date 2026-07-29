@@ -5,6 +5,7 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
+import { getTrackDayWithSessions } from '@/data/track-days';
 
 export interface SessionWithDetails {
   id: string;
@@ -50,6 +51,39 @@ export type SessionWithTrackDay = SessionWithDetails & {
   track_day: { id: string; date: string } | null;
 };
 
+/**
+ * Where this session sits in its track day: "Session 2 of 4", plus the two
+ * sessions either side of it.
+ *
+ * `index` is 0-BASED — the position in the day's ordered session list. The UI
+ * renders `index + 1`. That ordering is bySessionStart's, and it is not
+ * recomputed here: getSessionWithLaps derives this from getTrackDayWithSessions,
+ * the same call the day page renders its "Session N" cards from, so the two
+ * pages cannot number the same day differently.
+ *
+ * `date` is the DAY's date — a plain track-local calendar date (YYYY-MM-DD),
+ * not the session's timestamptz. Render it with formatTrackDate, or the
+ * back-link label prints a different day than the page it links to.
+ *
+ * Null when the session has no track day (a pre-day-model import that escaped
+ * the backfill), when the day is missing/RLS-invisible, or when the session is
+ * somehow not among the day's sessions. Every one of those means "no honest
+ * position to claim" — the page drops the day chrome rather than guessing.
+ */
+export interface SessionDayContext {
+  trackDayId: string;
+  /** Plain track-local calendar date, YYYY-MM-DD. formatTrackDate, never formatDate. */
+  date: string;
+  trackName: string;
+  /** 0-based position in the day. Displayed as index + 1. */
+  index: number;
+  count: number;
+  /** Null at the first session of the day. */
+  prevSessionId: string | null;
+  /** Null at the last session of the day. */
+  nextSessionId: string | null;
+}
+
 export interface SessionFull {
   id: string;
   date: string;
@@ -58,6 +92,9 @@ export interface SessionFull {
   coach_notes: string | null;
   ai_coaching_summary: string | null;
   source?: string | null;
+  track_day_id: string | null;
+  /** This session's place in its day. Null means no day context to show. */
+  dayContext: SessionDayContext | null;
   driver: { id: string; name: string; email: string } | null;
   track: {
     id: string;
@@ -193,6 +230,52 @@ export async function getAllSessions(
 }
 
 /**
+ * Resolve a session's position in its track day.
+ *
+ * Deliberately built on getTrackDayWithSessions rather than its own
+ * `sessions.select('id, date').eq('track_day_id', ...)`:
+ *
+ *  - The day page renders "Session 1..N" off exactly this call's `data.sessions`
+ *    array. Reading the index out of that same array makes the two pages agree
+ *    STRUCTURALLY. A second query agrees only as long as both call sites
+ *    remember to sort by bySessionStart, and a plain SQL `order('date')` has no
+ *    tiebreak at all — two sessions sharing a start time would be numbered one
+ *    way on the day page and another here.
+ *  - It is also FEWER round trips, not more: the header needs the day's track
+ *    name and plain calendar date for the back-link, which a siblings-only query
+ *    would have to fetch separately.
+ *
+ * The cost is the day's laps riding along unused. That is one day's worth of
+ * rows (~4 sessions) — the same payload the day page already fetches per view.
+ *
+ * Any failure returns null. A day that will not load is missing NAVIGATION, and
+ * failing the whole session page over its chrome would hide the lap evidence
+ * that is the point of the page.
+ */
+async function getSessionDayContext(
+  trackDayId: string,
+  sessionId: string
+): Promise<SessionDayContext | null> {
+  const { data: day } = await getTrackDayWithSessions(trackDayId);
+  if (!day) return null;
+
+  const index = day.sessions.findIndex((s) => s.id === sessionId);
+  // -1 means the day is visible but this session is not among its sessions,
+  // which should be impossible. "Session 0 of 4" is worse than no header.
+  if (index === -1) return null;
+
+  return {
+    trackDayId: day.id,
+    date: day.date,
+    trackName: day.track.name,
+    index,
+    count: day.sessions.length,
+    prevSessionId: index > 0 ? day.sessions[index - 1].id : null,
+    nextSessionId: index < day.sessions.length - 1 ? day.sessions[index + 1].id : null,
+  };
+}
+
+/**
  * Get a single session with full details including laps
  */
 export async function getSessionWithLaps(
@@ -212,6 +295,7 @@ export async function getSessionWithLaps(
         coach_notes,
         ai_coaching_summary,
         source,
+        track_day_id,
         driver:drivers(id, name, email),
         track:tracks(id, name, location, length_meters, config)
       `
@@ -234,10 +318,15 @@ export async function getSessionWithLaps(
       return { data: null, error: new Error(lapsError.message) };
     }
 
+    const dayContext = session.track_day_id
+      ? await getSessionDayContext(session.track_day_id, session.id)
+      : null;
+
     return {
       data: {
         ...session,
         laps: laps || [],
+        dayContext,
       },
       error: null,
     };
