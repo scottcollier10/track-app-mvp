@@ -42,6 +42,27 @@ export function formatDate(date: string | Date): string {
 }
 
 /**
+ * Format a PLAIN calendar date ("YYYY-MM-DD") for display, in the same shape as
+ * formatDate. Example: "2024-01-15" -> "Jan 15, 2024"
+ *
+ * Use this for track_days.date and nothing else. That column is a track-LOCAL
+ * calendar date (see localDateForTimezone) with no instant attached, so it must
+ * never touch `new Date(string)` — that parses a bare date as UTC midnight and
+ * then renders it in the runtime timezone, printing "Jan 14, 2024" on any server
+ * west of UTC. Building the Date from parts skips the parse entirely.
+ *
+ * sessions.date is a real timestamptz and belongs to formatDate/formatDateTime.
+ */
+export function formatTrackDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
  * Format date with time
  * Example: "2024-01-15T14:30:00Z" -> "Jan 15, 2024, 2:30 PM"
  */

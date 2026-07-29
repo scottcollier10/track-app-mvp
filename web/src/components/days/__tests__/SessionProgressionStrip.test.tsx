@@ -56,6 +56,19 @@ function cards() {
   return screen.getAllByRole('link');
 }
 
+/**
+ * Delta chips are queried by test id, never by substring. "does card 1 contain
+ * '('?" is not the same question as "does card 1 render a delta": it passes for
+ * the wrong reason today and would miss a regressed negative delta, which
+ * renders as "1:32.500-1.500s" with no parenthesis at all.
+ */
+function bestLapDelta(card: HTMLElement) {
+  return card.querySelector('[data-testid="best-lap-delta"]');
+}
+function sigmaDelta(card: HTMLElement) {
+  return card.querySelector('[data-testid="sigma-delta"]');
+}
+
 describe('SessionProgressionStrip', () => {
   it('numbers sessions in the order given and links each to its session page', () => {
     render(<SessionProgressionStrip sessions={day} />);
@@ -87,9 +100,8 @@ describe('SessionProgressionStrip', () => {
   it('shows no delta on the first session, and signed best-lap deltas after it', () => {
     render(<SessionProgressionStrip sessions={day} />);
 
-    // Nothing to compare against.
-    expect(cards()[0].textContent).not.toContain('s-');
-    expect(cards()[0].textContent).not.toContain('+');
+    // Nothing to compare against: no chip at all, in either direction.
+    expect(bestLapDelta(cards()[0])).toBeNull();
 
     expect(cards()[1]).toHaveTextContent('-1.500s'); // 91000 - 92500
     expect(cards()[2]).toHaveTextContent('-0.500s'); // 90500 - 91000
@@ -107,9 +119,38 @@ describe('SessionProgressionStrip', () => {
     render(<SessionProgressionStrip sessions={day} />);
 
     // Session 2 follows a 3-lap session, so there is no σ pair to compare.
-    expect(cards()[1].textContent).not.toContain('(');
-    expect(cards()[2]).toHaveTextContent('(-0.5s)'); // 0.0 - 0.5
-    expect(cards()[3]).toHaveTextContent('(+0.5s)'); // 0.5 - 0.0
+    expect(sigmaDelta(cards()[1])).toBeNull();
+    expect(sigmaDelta(cards()[2])).toHaveTextContent('(-0.5s)'); // 0.0 - 0.5
+    expect(sigmaDelta(cards()[3])).toHaveTextContent('(+0.5s)'); // 0.5 - 0.0
+  });
+
+  it('derives the σ delta from the ROUNDED σ values it prints, not the raw ones', () => {
+    // Four σ that all render "±0.6s" but differ in the third decimal:
+    //   0.6491, 0.5510, 0.6397, 0.6200 (alternating-pair fixtures, sd = d/2 * sqrt(1.2))
+    // Off the RAW values the deltas read -0.1s, +0.1s and -0.0s — three chips
+    // contradicting the identical σ printed right beside them, one of them a
+    // signed zero. Off the rounded values every delta is an honest 0.0s.
+    const pair = (d: number) => [91000, 91000 + d, 91000, 91000 + d, 91000, 91000 + d];
+    render(
+      <SessionProgressionStrip
+        sessions={[
+          makeSession('session-1', 91000, pair(1185)), // σ 0.6491
+          makeSession('session-2', 91000, pair(1006)), // σ 0.5510, raw Δ -0.1
+          makeSession('session-3', 91000, pair(1168)), // σ 0.6397, raw Δ +0.1
+          makeSession('session-4', 91000, pair(1132)), // σ 0.6200, raw Δ -0.0
+        ]}
+      />
+    );
+
+    cards().forEach((card) => expect(card).toHaveTextContent('±0.6s'));
+    expect(sigmaDelta(cards()[0])).toBeNull();
+    [1, 2, 3].forEach((i) => expect(sigmaDelta(cards()[i])).toHaveTextContent('(0.0s)'));
+
+    // No sign of any kind on an unchanged σ — least of all a minus.
+    [1, 2, 3].forEach((i) => {
+      expect(sigmaDelta(cards()[i])!.textContent).not.toContain('-');
+      expect(sigmaDelta(cards()[i])!.textContent).not.toContain('+');
+    });
   });
 
   it('treats an identical best lap as neither faster nor slower', () => {
@@ -120,8 +161,8 @@ describe('SessionProgressionStrip', () => {
     );
 
     // A tie is not a loss: no + sign, and none of the warn colour.
-    expect(cards()[1]).toHaveTextContent('0.000s');
-    expect(cards()[1].textContent).not.toContain('+');
+    expect(bestLapDelta(cards()[1])).toHaveTextContent('0.000s');
+    expect(bestLapDelta(cards()[1])!.textContent).not.toContain('+');
     expect(container.querySelector('.text-status-warn')).toBeNull();
   });
 
@@ -132,7 +173,8 @@ describe('SessionProgressionStrip', () => {
     expect(cards()[0]).toHaveTextContent('Session 1');
     expect(cards()[0]).toHaveTextContent('1:31.000');
     expect(cards()[0]).toHaveTextContent('±0.5s');
-    expect(cards()[0].textContent).not.toContain('(');
+    expect(bestLapDelta(cards()[0])).toBeNull();
+    expect(sigmaDelta(cards()[0])).toBeNull();
   });
 
   it('renders a placeholder rather than a fake best lap when there is none', () => {

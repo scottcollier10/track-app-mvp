@@ -8,20 +8,9 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
+import { bySessionStart } from '@/lib/track-days';
 import type { TrackDay, TrackDayDetail, TrackDayWithSessions } from '@/lib/types';
 import type { TablesInsert } from '@/lib/types/database';
-
-/**
- * Session ordering for every track-day query. This ordering IS the "Session 1..N"
- * numbering rendered on the day page and in session prev/next nav — one comparator
- * so the two views can never disagree.
- *
- * Sorts on sessions.date (TIMESTAMPTZ — the session's start time), not
- * track_days.date (a plain calendar date, identical for every session in a day).
- */
-function bySessionStart(a: { date: string }, b: { date: string }): number {
-  return new Date(a.date).getTime() - new Date(b.date).getTime();
-}
 
 /**
  * Get a single track day with its driver, track, ordered sessions and lap times.

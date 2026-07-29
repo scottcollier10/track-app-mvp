@@ -12,12 +12,17 @@
  *  - Deltas are signed numbers. The app compares, the instructor concludes.
  *
  * `sessions` MUST arrive in chronological order — that order IS the "Session N"
- * numbering (see bySessionStart in @/data/track-days). Nothing is re-sorted here.
+ * numbering (see bySessionStart in @/lib/track-days). Nothing is re-sorted here.
  */
 import Link from 'next/link';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
-import { sessionDelta } from '@/lib/track-days';
+import {
+  SIGMA_DISPLAY_DECIMALS,
+  displayedSigmaDeltaSeconds,
+  displayedSigmaSeconds,
+  sessionDelta,
+} from '@/lib/track-days';
 import { formatLapMs } from '@/lib/time';
 import type { SessionWithLapTimes } from '@/lib/types';
 
@@ -35,10 +40,40 @@ function BestLapDelta({ deltaMs }: { deltaMs: number | null }) {
     deltaMs < 0 ? 'text-status-success' : deltaMs > 0 ? 'text-status-warn' : 'text-muted';
 
   return (
-    <span className={`ml-2 text-sm font-normal ${tone}`}>
+    <span data-testid="best-lap-delta" className={`ml-2 text-sm font-normal ${tone}`}>
       {/* toFixed already carries the minus sign; only a gain needs one added. */}
       {deltaMs > 0 ? '+' : ''}
       {seconds.toFixed(3)}s
+    </span>
+  );
+}
+
+/**
+ * Signed σ change vs the previous session, in seconds.
+ *
+ * Takes the two σ values, not a precomputed delta, because it must subtract the
+ * ROUNDED figures — the ones printed right next to it. Deriving it from raw σ
+ * puts two contradictory numbers on screen (0.649 and 0.551 both render "±0.6s",
+ * yet their raw difference renders "(-0.1s)") and produces the "-0.0s" signed
+ * zero at the same time.
+ *
+ * σ deltas carry no success/warn colouring, so the neutral-zero rule the best-lap
+ * chip applies reduces to one thing here: an unchanged σ gets no sign.
+ */
+function SigmaDelta({
+  prevSigmaSeconds,
+  currSigmaSeconds,
+}: {
+  prevSigmaSeconds: number | null;
+  currSigmaSeconds: number | null;
+}) {
+  if (prevSigmaSeconds === null || currSigmaSeconds === null) return null;
+  const delta = displayedSigmaDeltaSeconds(prevSigmaSeconds, currSigmaSeconds);
+
+  return (
+    <span data-testid="sigma-delta" className="ml-2 text-text-subtle">
+      ({delta > 0 ? '+' : ''}
+      {delta.toFixed(SIGMA_DISPLAY_DECIMALS)}s)
     </span>
   );
 }
@@ -48,19 +83,27 @@ export default function SessionProgressionStrip({
 }: {
   sessions: SessionWithLapTimes[];
 }) {
+  // σ per session, computed once so a card can reach the one before it. The
+  // honesty gate lives here: below the lap minimum we do not compute a σ at all,
+  // so there is nothing to accidentally render — and a null also means "no σ
+  // delta is earned", which is exactly sessionDelta's rule for the pair.
+  const sigmas = sessions.map((session) => {
+    const lapTimesMs = session.laps.map((l) => l.lap_time_ms);
+    return lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS
+      ? sessionConsistencySeconds(lapTimesMs)
+      : null;
+  });
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {sessions.map((session, i) => {
         const lapTimesMs = session.laps.map((l) => l.lap_time_ms);
-
-        // The honesty gate. Below the lap minimum we do not compute a σ at all,
-        // so there is nothing to accidentally render.
-        const sigma =
-          lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS
-            ? sessionConsistencySeconds(lapTimesMs)
-            : null;
+        const sigma = sigmas[i];
 
         const prev = i > 0 ? sessions[i - 1] : null;
+        // Only bestLapDeltaMs is read: the σ delta on screen is derived from the
+        // ROUNDED σ values instead (see SigmaDelta), so it cannot claim finer
+        // resolution than the σ printed beside it.
         const delta = prev
           ? sessionDelta(
               {
@@ -70,9 +113,6 @@ export default function SessionProgressionStrip({
               { bestLapMs: session.best_lap_ms, lapTimesMs }
             )
           : null;
-        // sessionDelta applies the same lap gate to BOTH sessions, so this is
-        // null unless a σ comparison is actually earned.
-        const sigmaDelta = delta?.consistencyDeltaSeconds ?? null;
 
         return (
           <Link
@@ -90,13 +130,11 @@ export default function SessionProgressionStrip({
             <p className="mt-1 text-sm text-muted">
               {sigma !== null ? (
                 <>
-                  ±{sigma.toFixed(1)}s
-                  {sigmaDelta !== null && (
-                    <span className="ml-2 text-text-subtle">
-                      ({sigmaDelta > 0 ? '+' : ''}
-                      {sigmaDelta.toFixed(1)}s)
-                    </span>
-                  )}
+                  ±{displayedSigmaSeconds(sigma).toFixed(SIGMA_DISPLAY_DECIMALS)}s
+                  <SigmaDelta
+                    prevSigmaSeconds={i > 0 ? sigmas[i - 1] : null}
+                    currSigmaSeconds={sigma}
+                  />
                 </>
               ) : (
                 // True whether the session is under the lap gate or has too few

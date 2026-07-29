@@ -9,9 +9,9 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { getTrackDayWithSessions } from '@/data/track-days';
-import { dayBestLapMs, dayConsistencyTrend } from '@/lib/track-days';
+import { dayBestLapMs, dayConsistencyTrend, formatConsistencyTrend } from '@/lib/track-days';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
-import { formatDate, formatLapMs } from '@/lib/time';
+import { formatTrackDate, formatLapMs } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
 import { Card } from '@/components/ui/Card';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -89,7 +89,9 @@ export default async function TrackDayPage({ params }: PageProps) {
             </Link>
             <h1 className="text-2xl font-semibold text-primary md:text-3xl">{day.track.name}</h1>
             <p className="mt-2 text-sm text-muted md:text-base">
-              {formatDate(day.date)} • {formatDriverName(day.driver.name)}
+              {/* track_days.date is a plain track-local calendar date, not an
+                  instant — formatTrackDate, never formatDate. */}
+              {formatTrackDate(day.date)} • {formatDriverName(day.driver.name)}
             </p>
             {day.track.location && (
               <p className="mt-1 flex items-center gap-1 text-sm text-text-subtle">
@@ -113,11 +115,7 @@ export default async function TrackDayPage({ params }: PageProps) {
             />
             <MetricCard
               label="Consistency Trend"
-              value={
-                trend
-                  ? `±${trend.firstSeconds.toFixed(1)}s → ±${trend.lastSeconds.toFixed(1)}s`
-                  : '--'
-              }
+              value={formatConsistencyTrend(trend) ?? '--'}
               helper={
                 trend
                   ? 'First to last qualifying session'

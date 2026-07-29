@@ -1,10 +1,38 @@
 import {
+  bySessionStart,
   localDateForTimezone,
   dayBestLapMs,
   dayConsistencyTrend,
+  displayedSigmaDeltaSeconds,
+  displayedSigmaSeconds,
+  formatConsistencyTrend,
   sessionDelta,
 } from '@/lib/track-days';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
+
+describe('bySessionStart', () => {
+  it('orders sessions by start time, oldest first', () => {
+    const sorted = [
+      { date: '2026-07-11T15:00:00Z' },
+      { date: '2026-07-11T09:00:00Z' },
+      { date: '2026-07-11T12:00:00Z' },
+    ].sort(bySessionStart);
+    expect(sorted.map((s) => s.date)).toEqual([
+      '2026-07-11T09:00:00Z',
+      '2026-07-11T12:00:00Z',
+      '2026-07-11T15:00:00Z',
+    ]);
+  });
+
+  it('compares instants, not strings — equal times in different offsets tie', () => {
+    // The reason this is a comparator and not a localeCompare: PostgREST hands
+    // back UTC today, but an offset-suffixed timestamp must still sort right.
+    expect(bySessionStart({ date: '2026-07-11T14:00:00Z' }, { date: '2026-07-11T09:00:00-05:00' })).toBe(0);
+    expect(
+      bySessionStart({ date: '2026-07-11T09:00:00-05:00' }, { date: '2026-07-11T13:00:00Z' })
+    ).toBeGreaterThan(0);
+  });
+});
 
 describe('localDateForTimezone', () => {
   it('converts a UTC timestamp to the track-local calendar date', () => {
@@ -93,6 +121,56 @@ describe('dayConsistencyTrend', () => {
   });
   it('returns null with fewer than two eligible sessions', () => {
     expect(dayConsistencyTrend([{ date: '2026-07-11T16:00:00Z', lapTimesMs: tight }])).toBeNull();
+  });
+});
+
+describe('displayedSigmaSeconds / displayedSigmaDeltaSeconds', () => {
+  it('snaps a σ to the one decimal it is displayed at', () => {
+    expect(displayedSigmaSeconds(0.6490512)).toBe(0.6);
+    expect(displayedSigmaSeconds(0.5510089)).toBe(0.6);
+  });
+
+  it('returns exactly zero when both σ render identically', () => {
+    // 0.649 and 0.551 both print "±0.6s"; their RAW difference prints "-0.1s".
+    expect(displayedSigmaDeltaSeconds(0.6490512, 0.5510089)).toBe(0);
+    // And no signed zero: a raw difference of -0.0197 must not become "-0.0s".
+    expect(Object.is(displayedSigmaDeltaSeconds(0.6397399, 0.6200219), -0)).toBe(false);
+    expect(displayedSigmaDeltaSeconds(0.6397399, 0.6200219).toFixed(1)).toBe('0.0');
+  });
+
+  it('keeps the sign of a change that is real at display resolution', () => {
+    expect(displayedSigmaDeltaSeconds(0.64, 0.44).toFixed(1)).toBe('-0.2');
+    expect(displayedSigmaDeltaSeconds(0.44, 0.64).toFixed(1)).toBe('0.2');
+  });
+});
+
+describe('formatConsistencyTrend', () => {
+  const tight = [90000, 90100, 90050, 90080, 90020, 90060];
+  const loose = [90000, 92000, 91000, 90500, 93000, 90800];
+
+  it('renders first -> last σ at display resolution', () => {
+    expect(formatConsistencyTrend({ firstSeconds: 0.6490512, lastSeconds: 0.4102 })).toBe(
+      '±0.6s → ±0.4s'
+    );
+  });
+
+  it('returns null when there is no honest trend to report', () => {
+    // dayConsistencyTrend already refuses to invent one; the formatter must not
+    // dress that up as "±0.0s → ±0.0s".
+    expect(formatConsistencyTrend(null)).toBeNull();
+    expect(
+      formatConsistencyTrend(dayConsistencyTrend([{ date: '2026-07-11T16:00:00Z', lapTimesMs: tight }]))
+    ).toBeNull();
+  });
+
+  it('formats a real day end to end', () => {
+    const trend = dayConsistencyTrend([
+      { date: '2026-07-11T16:00:00Z', lapTimesMs: tight },
+      { date: '2026-07-11T14:00:00Z', lapTimesMs: loose },
+    ]);
+    expect(formatConsistencyTrend(trend)).toBe(
+      `±${sessionConsistencySeconds(loose)!.toFixed(1)}s → ±${sessionConsistencySeconds(tight)!.toFixed(1)}s`
+    );
   });
 });
 
