@@ -10,6 +10,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { ImportSessionPayload } from '@/lib/types';
 import { localDateForTimezone } from '@/lib/track-days';
+import { resolveTrackDay } from '@/data/track-days';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
@@ -106,31 +107,18 @@ export async function POST(request: NextRequest) {
       source: payload.source || 'csv_import',
     });
 
-    // 5. Resolve the track day (implicit — never created by hand)
+    // 5. Resolve the track day (implicit — never created by hand).
+    // The upsert lives in @/data/track-days, along with the invariants that
+    // keep it safe on re-import (key columns only, ignoreDuplicates false).
     const localDate = localDateForTimezone(payload.date, track.timezone);
 
-    // Key columns ONLY. Any field added here is overwritten on every re-import
-    // (upsert -> ON CONFLICT DO UPDATE). Coach-authored day fields must never be listed.
-    const trackDayInsert: TablesInsert<'track_days'> = {
-      driver_id: driver.id,
-      track_id: payload.trackId,
-      date: localDate,
-    };
-
-    const { data: trackDay, error: trackDayError } = await supabase
-      .from('track_days')
-      .upsert(trackDayInsert, { onConflict: 'driver_id,track_id,date' })
-      .select()
-      .single();
+    const { data: trackDay, error: trackDayError } = await resolveTrackDay(
+      driver.id,
+      payload.trackId,
+      localDate
+    );
 
     if (trackDayError || !trackDay) {
-      console.error('[Import Session] Track day upsert failed', {
-        driverId: driver.id,
-        trackId: payload.trackId,
-        date: localDate,
-        error: trackDayError?.message || 'Track day data missing',
-        code: trackDayError?.code,
-      });
       return NextResponse.json(
         { error: 'Failed to resolve track day' },
         { status: 500 }
