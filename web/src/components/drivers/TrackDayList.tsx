@@ -37,6 +37,7 @@ import {
   localDateForTimezone,
 } from '@/lib/track-days';
 import { formatLapMs, formatTrackDate } from '@/lib/time';
+import { Button } from '@/components/ui/Button';
 
 interface DayGroup {
   key: string;
@@ -106,6 +107,7 @@ function groupByTrackDay(sessions: SessionWithTrackDay[]): DayGroup[] {
 export default function TrackDayList({
   sessions,
   cutoffDate,
+  onShowAllTime,
 }: {
   /** Every session in scope, UNFILTERED by date — see the grouping note below. */
   sessions: SessionWithTrackDay[];
@@ -114,6 +116,12 @@ export default function TrackDayList({
    * Null or undefined means no bound.
    */
   cutoffDate?: string | null;
+  /**
+   * Widens the caller's date filter to All Time. Optional: the date filter is
+   * the driver page's state, so a standalone render has nothing to widen — the
+   * empty state then states the same fact without offering the click.
+   */
+  onShowAllTime?: () => void;
 }) {
   // Group FIRST, then drop whole days. Filtering sessions before grouping lets a
   // cutoff land in the middle of a track day and split it: the row would say
@@ -126,9 +134,19 @@ export default function TrackDayList({
   // against a cutoff instant is what put "Jul 11" on a Jul 12 track day in the
   // first place (see formatTrackDate in @/lib/time). YYYY-MM-DD sorts
   // chronologically as a string, so no parsing is needed at all.
-  const days = groupByTrackDay(sessions).filter(
-    (day) => !cutoffDate || day.date >= cutoffDate
-  );
+  //
+  // Grouping first also leaves both counts in hand, which is what lets the
+  // empty state below say WHICH empty it is.
+  const allDays = groupByTrackDay(sessions);
+  const days = allDays.filter((day) => !cutoffDate || day.date >= cutoffDate);
+
+  // Two different empties, and reading one as the other costs a coach real
+  // trust: a driver whose days are all older than the window would otherwise
+  // look like a driver with no data. Days exist, the filter is hiding them, so
+  // say how many and offer the one click that shows them. The filter is NOT
+  // widened automatically — that would leave "Last 90 Days" highlighted while
+  // the list showed everything.
+  const hiddenByFilter = days.length === 0 && allDays.length > 0;
 
   return (
     <section className="space-y-4">
@@ -137,10 +155,30 @@ export default function TrackDayList({
       {days.length === 0 && (
         <div className="rounded-lg border border-subtle bg-surface p-8 text-center">
           <p className="text-muted">
-            {cutoffDate
+            {hiddenByFilter
               ? 'No track days in the selected time period.'
               : 'No track days yet. Import a session to start one.'}
           </p>
+
+          {hiddenByFilter && (
+            <>
+              <p className="mt-1 text-sm text-muted">
+                This driver has {allDays.length}{' '}
+                {allDays.length === 1 ? 'track day' : 'track days'} outside it.
+              </p>
+
+              {onShowAllTime && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-4"
+                  onClick={onShowAllTime}
+                >
+                  Show All Time
+                </Button>
+              )}
+            </>
+          )}
         </div>
       )}
 

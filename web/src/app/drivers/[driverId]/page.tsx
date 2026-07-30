@@ -414,8 +414,15 @@ export default function DriverProgressPage({ params }: DriverProgressPageProps) 
             Given the UNFILTERED sessions plus a day-granularity cutoff: the
             list must group into days first and then drop whole days, so a
             cutoff can never split one (see the filter effect).
-            It renders its own empty state. */}
-        <TrackDayList sessions={sessions} cutoffDate={dayCutoffDate} />
+            It renders its own empty state, including the case where days exist
+            but the filter above hides all of them — onShowAllTime lets that
+            state widen the filter, rather than this page widening it silently
+            and leaving a highlighted button that lies about what is listed. */}
+        <TrackDayList
+          sessions={sessions}
+          cutoffDate={dayCutoffDate}
+          onShowAllTime={() => setDateFilter('allTime')}
+        />
       </main>
     </div>
   );

@@ -13,13 +13,15 @@
  *    it links to. Jest pins TZ=America/Chicago so that bug is visible.
  *  - the CUTOFF: it must drop whole days. Applied to sessions instead, it
  *    splits one, and the row then contradicts the page it links to.
+ *  - the EMPTY STATE: "no days at all" and "no days in this window" look the
+ *    same and mean opposite things — see the 'which empty it is' block.
  *
  * Lap fixtures are chosen so σ is hand-checkable and no lap is dropped by
  * cleanLaps (nothing near 1.25x the median):
  *   [91000, 92000] x3 -> sample sd = sqrt(6*500^2/5) = 547.7ms = 0.5s
  *   [90500] x6        -> sd 0.0s
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TrackDayList from '../TrackDayList';
 import type { SessionWithTrackDay } from '@/data/sessions';
@@ -324,5 +326,101 @@ describe('TrackDayList', () => {
 
     expect(screen.queryAllByRole('link')).toHaveLength(0);
     expect(screen.getByText(/No track days yet/)).toBeInTheDocument();
+  });
+
+  /**
+   * Two empties that look identical and mean opposite things: "this driver has
+   * no data" and "your filter is hiding this driver's data". The default filter
+   * is Last 90 Days, so any driver last on track in the autumn opens on the
+   * second one — and reading it as the first is a coach concluding the app lost
+   * their data. The component holds both the pre-filter and post-filter day
+   * count (it groups, then drops whole days), so it can tell them apart.
+   */
+  describe('which empty it is', () => {
+    it('reports no days at all — not an empty window — when the driver has no sessions', () => {
+      // A cutoff is set, as the driver page always sets one, and it is NOT what
+      // makes this list empty. Keying the message off the cutoff instead of off
+      // the day count tells a brand-new driver to widen a filter that would
+      // show them nothing either way.
+      render(<TrackDayList sessions={[]} cutoffDate="2026-07-13" onShowAllTime={() => {}} />);
+
+      expect(screen.getByText(/No track days yet/)).toBeInTheDocument();
+      expect(screen.queryByText(/selected time period/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('names how many days sit outside the window, and offers the widening click', () => {
+      const onShowAllTime = jest.fn();
+      render(
+        <TrackDayList
+          sessions={[
+            makeSession({ id: 's2', date: '2026-07-12T17:00:00Z', lapTimesMs: FLAT }),
+            makeSession({
+              id: 's1',
+              date: '2026-06-01T15:00:00Z',
+              lapTimesMs: WOBBLY,
+              track_day: { id: 'day-0', date: '2026-06-01' },
+            }),
+          ]}
+          cutoffDate="2026-08-01"
+          onShowAllTime={onShowAllTime}
+        />
+      );
+
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+      expect(screen.getByText('No track days in the selected time period.')).toBeInTheDocument();
+      // Two days hidden, counted after grouping: the sessions number three
+      // across them, and "3 track days" would be a new wrong claim.
+      expect(screen.getByText('This driver has 2 track days outside it.')).toBeInTheDocument();
+
+      const widen = screen.getByRole('button', { name: /All Time/i });
+      fireEvent.click(widen);
+      expect(onShowAllTime).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not auto-widen the filter it was given', () => {
+      // The button asks; it does not act on its own. A component that widened
+      // the window itself on mount would render rows under a "Last 90 Days"
+      // button still highlighted.
+      const onShowAllTime = jest.fn();
+      render(
+        <TrackDayList
+          sessions={[makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY })]}
+          cutoffDate="2026-08-01"
+          onShowAllTime={onShowAllTime}
+        />
+      );
+
+      expect(onShowAllTime).not.toHaveBeenCalled();
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+      expect(screen.getByText('This driver has 1 track day outside it.')).toBeInTheDocument();
+    });
+
+    it('still says which empty it is with no widening callback supplied', () => {
+      // Standalone render: there is no filter to widen, so there is no button —
+      // but the text must not fall back to implying the driver has no data.
+      render(
+        <TrackDayList
+          sessions={[makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY })]}
+          cutoffDate="2026-08-01"
+        />
+      );
+
+      expect(screen.getByText('No track days in the selected time period.')).toBeInTheDocument();
+      expect(screen.getByText('This driver has 1 track day outside it.')).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByText(/No track days yet/)).not.toBeInTheDocument();
+    });
+
+    it('shows neither empty state when the window has days in it', () => {
+      render(
+        <TrackDayList sessions={straddlingDay} cutoffDate="2026-07-12" onShowAllTime={() => {}} />
+      );
+
+      expect(rows()).toHaveLength(1);
+      expect(screen.queryByText(/No track days/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/outside it/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
   });
 });
