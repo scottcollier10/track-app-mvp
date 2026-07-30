@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { ImportSessionPayload } from '@/lib/types';
+import { localDateForTimezone } from '@/lib/track-days';
+import { resolveTrackDay } from '@/data/track-days';
 import type { TablesInsert, Tables } from '@/lib/types/database';
 
 export async function POST(request: NextRequest) {
@@ -31,9 +33,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Checked here, before any write, so a bad date can't leave an orphan driver behind.
+    if (!payload.date || Number.isNaN(Date.parse(payload.date))) {
+      return NextResponse.json(
+        { error: 'Invalid session date' },
+        { status: 400 }
+      );
+    }
+
     const supabase = createServerSupabase();
 
-    // 1. Find or create driver by email
+    // 3. Find or create driver by email
     const { data: existingDriver } = await supabase
       .from('drivers')
       .select('*')
@@ -75,7 +85,7 @@ export async function POST(request: NextRequest) {
       driver = existingDriver;
     }
 
-    // 2. Verify track exists
+    // 4. Verify track exists
     const { data: track } = await supabase
       .from('tracks')
       .select('*')
@@ -97,10 +107,29 @@ export async function POST(request: NextRequest) {
       source: payload.source || 'csv_import',
     });
 
-    // 3. Create session
+    // 5. Resolve the track day (implicit — never created by hand).
+    // The upsert lives in @/data/track-days, along with the invariants that
+    // keep it safe on re-import (key columns only, ignoreDuplicates false).
+    const localDate = localDateForTimezone(payload.date, track.timezone);
+
+    const { data: trackDay, error: trackDayError } = await resolveTrackDay(
+      driver.id,
+      payload.trackId,
+      localDate
+    );
+
+    if (trackDayError || !trackDay) {
+      return NextResponse.json(
+        { error: 'Failed to resolve track day' },
+        { status: 500 }
+      );
+    }
+
+    // 6. Create session
     const sessionInsert: TablesInsert<'sessions'> = {
       driver_id: driver.id,
       track_id: payload.trackId,
+      track_day_id: trackDay.id,
       date: payload.date,
       total_time_ms: payload.totalTimeMs,
       best_lap_ms: payload.bestLapMs,
@@ -127,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     const session = sessionData;
 
-    // 4. Create laps
+    // 7. Create laps
     const lapsToInsert: TablesInsert<'laps'>[] = payload.laps.map((lap) => ({
       session_id: session.id,
       lap_number: lap.lapNumber,
@@ -145,10 +174,15 @@ export async function POST(request: NextRequest) {
         lapCount: lapsToInsert.length,
         error: lapsError.message,
       });
-      // Still return success since session was created
+      // Still return success since session was created.
+      // driverName is driver.name (the DB row), same as the 201 path below —
+      // the client labels its day link with it, and a label sourced from the
+      // CSV would spell the driver differently than /days/[id] does.
       return NextResponse.json(
         {
           sessionId: session.id,
+          trackDayId: trackDay.id,
+          driverName: driver.name,
           message: 'Session created but some laps failed to import',
           warning: lapsError.message,
         },
@@ -160,6 +194,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log('[Import Session] Success', {
       sessionId: session.id,
+      trackDayId: trackDay.id,
       durationMs: duration,
       lapsCreated: lapsToInsert.length,
       source: session.source,
@@ -168,6 +203,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         sessionId: session.id,
+        trackDayId: trackDay.id,
+        driverName: driver.name,
         message: 'Session imported successfully',
       },
       { status: 201 }

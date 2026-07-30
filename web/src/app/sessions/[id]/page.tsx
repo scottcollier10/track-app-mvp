@@ -1,5 +1,5 @@
 import { getSessionWithLaps } from '@/data/sessions';
-import { formatDate, formatLapMs, formatDurationMs } from '@/lib/time';
+import { formatDate, formatTrackDate, formatLapMs, formatDurationMs } from '@/lib/time';
 import { formatDriverName } from '@/lib/utils/formatters';
 import { notFound } from 'next/navigation';
 import CoachNotes from '@/components/ui/CoachNotes';
@@ -11,6 +11,7 @@ import {
   MIN_LAPS_FOR_INSIGHTS,
 } from '@/lib/insights';
 import { cleanLaps } from '@/lib/analytics-v2';
+import { SIGMA_DISPLAY_DECIMALS, validLapTimesMs } from '@/lib/track-days';
 import EmptyInsights from '@/components/analytics/EmptyInsights';
 import AICoachingCard from '@/components/coaching/AICoachingCard';
 import LapAnalysisChart from '@/components/charts/LapAnalysisChart';
@@ -20,7 +21,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import ShareSessionButton from '@/components/ui/ShareSessionButton';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
-import { MapPin, ArrowLeft } from 'lucide-react';
+import { MapPin, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
@@ -73,7 +74,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const laps = session.laps || [];
 
   // ---- One pass of honest statistics for the whole page ----
-  const lapTimes = laps.map(lap => lap.lap_time_ms).filter((t): t is number => t != null && t > 0);
+  const lapTimes = validLapTimesMs(laps);
   const insights = getSessionInsightsFromMs(lapTimes);
   const consistencySeconds = insights.consistencySeconds;
 
@@ -102,7 +103,15 @@ export default async function SessionDetailPage({ params }: PageProps) {
       : {}),
   }));
 
-  const showInsights = laps.length >= MIN_LAPS_FOR_INSIGHTS;
+  // Gated on lapTimes, not laps: every figure behind this gate (σ, pace trend)
+  // is computed from lapTimes, and counting raw rows instead let the page claim
+  // the six-lap minimum was met while reporting a σ over five laps.
+  const showInsights = lapTimes.length >= MIN_LAPS_FOR_INSIGHTS;
+
+  // Where this session sits in its track day. Null for a session with no day
+  // (shouldn't exist post-backfill), in which case the header falls back to the
+  // flat /sessions list exactly as before.
+  const dayContext = session.dayContext;
 
   return (
     <div className="relative min-h-screen text-slate-50">
@@ -113,13 +122,27 @@ export default async function SessionDetailPage({ params }: PageProps) {
           {/* Header */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Link
-                href="/sessions"
-                className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Sessions
-              </Link>
+              {/* Up one level in the navigation spine: driver -> day -> session.
+                  The label is the day's own track name and PLAIN calendar date,
+                  so it reads identically to the page it lands on (formatTrackDate,
+                  never formatDate — see @/lib/time). */}
+              {dayContext ? (
+                <Link
+                  href={`/days/${dayContext.trackDayId}`}
+                  className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  {dayContext.trackName} • {formatTrackDate(dayContext.date)}
+                </Link>
+              ) : (
+                <Link
+                  href="/sessions"
+                  className="text-accent-primary hover:text-accent-primary/80 text-sm flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Sessions
+                </Link>
+              )}
               <ShareSessionButton />
             </div>
             <div className="flex items-center gap-3 mb-2">
@@ -128,8 +151,47 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </h1>
               {session.source && <SourceBadge source={session.source} size="md" />}
             </div>
+
+            {/* "Session 2 of 4" + step through the day. Coaching happens BETWEEN
+                sessions, so a coach walking S1 -> S4 never has to bounce back to
+                the day page. The count comes from the same ordered list the day
+                page numbers its cards from, so the two cannot disagree. */}
+            {dayContext && (
+              <div className="flex items-center gap-2 text-sm text-muted">
+                {dayContext.prevSessionId && (
+                  <Link
+                    href={`/sessions/${dayContext.prevSessionId}`}
+                    aria-label="Previous session"
+                    className="text-accent-primary hover:text-accent-primary/80 p-2 -m-2"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Link>
+                )}
+                <span>
+                  Session {dayContext.index + 1} of {dayContext.count}
+                </span>
+                {dayContext.nextSessionId && (
+                  <Link
+                    href={`/sessions/${dayContext.nextSessionId}`}
+                    aria-label="Next session"
+                    className="text-accent-primary hover:text-accent-primary/80 p-2 -m-2"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {/* The DAY's date wins over the session's own timestamptz whenever we
+                have one. track_days.date is the track-LOCAL calendar date the URL
+                groups on — it is what decides which day this session belongs to.
+                session.date is an instant rendered in the RUNTIME's timezone, so a
+                02:00Z session west of UTC prints the previous day and this line
+                would contradict the back-link 50px above it. Only fall back to the
+                instant when there is no day to be authoritative. */}
             <p className="text-muted mt-2 text-sm md:text-base">
-              {formatDriverName(session.driver?.name || 'Unknown Driver')} • {formatDate(session.date)}
+              {formatDriverName(session.driver?.name || 'Unknown Driver')} •{' '}
+              {dayContext ? formatTrackDate(dayContext.date) : formatDate(session.date)}
             </p>
             {session.track?.location && (
               <p className="text-text-subtle mt-1 text-sm flex items-center gap-1">
@@ -223,7 +285,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                           </div>
                           <div className="text-lg font-semibold mb-1 text-primary">
                             {consistencySeconds !== null
-                              ? `±${consistencySeconds.toFixed(1)}s`
+                              ? `±${consistencySeconds.toFixed(SIGMA_DISPLAY_DECIMALS)}s`
                               : '--'}
                           </div>
                           <div className="text-xs text-text-subtle">
@@ -263,7 +325,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
                 ]}
               />
             ) : (
-              <EmptyInsights lapCount={laps.length} minimumRequired={MIN_LAPS_FOR_INSIGHTS} />
+              // lapTimes.length, because this panel explains the gate above and
+              // has to count what the gate counted — "requires 6 laps, you have
+              // 6" is what passing laps.length here would print.
+              <EmptyInsights lapCount={lapTimes.length} minimumRequired={MIN_LAPS_FOR_INSIGHTS} />
             )
           )}
 

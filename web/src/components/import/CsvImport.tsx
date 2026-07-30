@@ -6,14 +6,16 @@
  */
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp, CalendarDays } from 'lucide-react';
 import CsvUploader from './CsvUploader';
 import CsvPreview from './CsvPreview';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { parseSessionCsv, ParsedSession } from '@/lib/csv-parser';
-import type { ImportSessionPayload } from '@/lib/types';
+import { uniqueTrackDayLinks, type TrackDayLink } from '@/lib/track-days';
+import { formatDriverName } from '@/lib/utils/formatters';
+import type { ImportedSessionResponse, ImportSessionPayload } from '@/lib/types';
 
 type ImportState = 'idle' | 'parsing' | 'preview' | 'importing' | 'success' | 'error';
 
@@ -21,12 +23,16 @@ interface ImportResults {
   successful: number;
   failed: number;
   sessionIds: string[];
+  /** Distinct track days the imported sessions landed in — usually exactly one. */
+  trackDayLinks: TrackDayLink[];
+  /** Laps STORED, counted only over sessions the route confirmed a full 201 for. */
   totalLaps: number;
+  /** Sessions that came back 207 and are therefore left out of totalLaps. */
+  partialSessions: number;
   uniqueDrivers: number;
 }
 
 export default function CsvImport() {
-  const router = useRouter();
   const [state, setState] = useState<ImportState>('idle');
   const [fileName, setFileName] = useState<string>('');
   const [sessions, setSessions] = useState<ParsedSession[]>([]);
@@ -71,17 +77,23 @@ export default function CsvImport() {
     setState('importing');
     setError(null);
 
-    const successful: string[] = [];
     const failed: string[] = [];
+    // One entry per session that actually imported — 201s and the 207 "laps
+    // partly failed" ones alike, since a 207 still created the session and its
+    // day. Every other outcome takes a `continue`/`catch` below, so this is
+    // exactly the set of successes; session ids and day links both derive from
+    // it rather than being accumulated in parallel and drifting apart.
+    // The route's own response is the only thing stored here — in particular
+    // the driver name that labels the day links is drivers.name from the DB,
+    // not the CSV's name column, so a link's label matches the page it opens.
+    const imported: ImportedSessionResponse[] = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
+    let partialSessions = 0;
 
     // Import each session sequentially
     for (const session of sessions) {
       try {
-        // Track driver
-        uniqueDriverEmails.add(session.driverEmail);
-
         // First, lookup track by name to get trackId
         const trackResponse = await fetch(
           `/api/tracks?name=${encodeURIComponent(session.trackName)}`
@@ -130,9 +142,25 @@ export default function CsvImport() {
           continue;
         }
 
-        const data = await response.json();
-        successful.push(data.sessionId);
-        totalLaps += session.laps.length;
+        const data: ImportedSessionResponse = await response.json();
+        imported.push(data);
+        // Counted HERE, not at the top of the loop: a driver whose only session
+        // failed the track lookup or the POST was attempted, not imported, and
+        // "3 drivers" over "landed in 2 track days" is a panel arguing with
+        // itself. Every count in this panel is of what succeeded.
+        uniqueDriverEmails.add(session.driverEmail);
+        // Laps are counted only on a 201. A 207 means "session created but some
+        // laps failed", and its body says which session and which day — not how
+        // many of its laps landed. Adding the number SUBMITTED there is the one
+        // count on this panel that would be of what we sent rather than what
+        // stored. So the 207's laps are excluded and counted separately, and the
+        // panel says the lap figure leaves them out; a silent omission would be
+        // a total the coach has no way to know is short.
+        if (response.status === 207) {
+          partialSessions += 1;
+        } else {
+          totalLaps += session.laps.length;
+        }
       } catch (err) {
         failed.push(
           `${session.trackName} - ${session.driverName} (${
@@ -143,10 +171,12 @@ export default function CsvImport() {
     }
 
     setImportResults({
-      successful: successful.length,
+      successful: imported.length,
       failed: failed.length,
-      sessionIds: successful,
+      sessionIds: imported.map((r) => r.sessionId),
+      trackDayLinks: uniqueTrackDayLinks(imported),
       totalLaps,
+      partialSessions,
       uniqueDrivers: uniqueDriverEmails.size,
     });
 
@@ -154,7 +184,7 @@ export default function CsvImport() {
       setError(`Failed to import ${failed.length} session(s): ${failed.join(', ')}`);
     }
 
-    setState(successful.length > 0 ? 'success' : 'error');
+    setState(imported.length > 0 ? 'success' : 'error');
   };
 
   /**
@@ -167,15 +197,6 @@ export default function CsvImport() {
     setWarnings([]);
     setError(null);
     setImportResults(null);
-  };
-
-  /**
-   * Navigate to first imported session
-   */
-  const handleViewSessions = () => {
-    if (importResults && importResults.sessionIds.length > 0) {
-      router.push(`/sessions/${importResults.sessionIds[0]}`);
-    }
   };
 
   return (
@@ -293,6 +314,17 @@ export default function CsvImport() {
                   {importResults.failed} session(s) failed to import
                 </p>
               )}
+
+              {/* Why the lap figure above is smaller than the file. Stated
+                  rather than folded in silently: the route's 207 does not say
+                  how many of that session's laps landed, so the only honest
+                  lap total is one that leaves them out and says so. */}
+              {importResults.partialSessions > 0 && (
+                <p className="text-neutral-400 text-sm mt-3">
+                  Lap count excludes {importResults.partialSessions} session(s) whose laps
+                  failed to import
+                </p>
+              )}
             </div>
 
             {error && (
@@ -301,12 +333,80 @@ export default function CsvImport() {
               </div>
             )}
 
+            {/* Days the import landed in. Almost always one (a coach uploading
+                one event's CSV); more than one when the file spans dates or
+                drivers — track days are per driver, so two drivers at one event
+                are two days.
+
+                Deliberately unlabelled by DATE: the date here would come from
+                the CSV parse (noon in the SERVER's timezone), while /days/[id]
+                renders the authoritative track-local date from the database —
+                printing it risks this panel saying "Jul 11" and the page it
+                links to saying "Jul 12".
+
+                The single day is the panel's PRIMARY action, and it goes to the
+                day rather than to a session: the day is the navigation hub and
+                the session sits one click deeper from it (design decision #4;
+                "confirmation lands on the day page"). The debrief a coach came
+                here to do — session progression, focus items, day notes — is the
+                day page, and a session is one piece of evidence inside it. */}
+            {importResults.trackDayLinks.length === 1 && (
+              <div className="flex justify-center">
+                <Link href={`/days/${importResults.trackDayLinks[0].trackDayId}`}>
+                  <Button variant="primary" icon={CalendarDays}>
+                    View track day
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* Several days: there is no "the" day to promote, and choosing one
+                would mean choosing by CSV ROW ORDER, which is not chronological.
+                So these chips ARE this panel's primary affordance — nothing
+                outranks them now that the old session button is gone.
+
+                Labelled by DRIVER, so several links are tellable apart by a
+                screen reader rather than being N identical "View track day"s. A
+                day is keyed on (driver, track, date), so the driver is a fact
+                about the id and cannot disagree with /days/[id] — and the name
+                printed here is the one the route read back out of drivers.name,
+                not the CSV's name column, so the two pages spell it identically.
+                No ordinals: the order is CSV row order, not chronological. */}
+            {importResults.trackDayLinks.length > 1 && (
+              <div className="space-y-3">
+                <p className="text-sm text-neutral-400">
+                  These sessions landed in {importResults.trackDayLinks.length} track days
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {importResults.trackDayLinks.map(({ trackDayId, driverName }) => (
+                    <Link
+                      key={trackDayId}
+                      href={`/days/${trackDayId}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-800/50 text-sm text-gray-200 hover:text-white hover:border-gray-600 transition-colors"
+                    >
+                      <CalendarDays className="w-4 h-4 text-green-500" />
+                      {`View ${formatDriverName(driverName)}'s track day`}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback only. Every imported session has a day, so this is
+                unreachable unless the route stops returning trackDayId — and
+                then a panel with no way forward is worse than one that opens a
+                session. */}
+            {importResults.trackDayLinks.length === 0 && importResults.sessionIds.length > 0 && (
+              <div className="flex justify-center">
+                <Link href={`/sessions/${importResults.sessionIds[0]}`}>
+                  <Button variant="primary">View session</Button>
+                </Link>
+              </div>
+            )}
+
             <div className="flex justify-center space-x-3">
               <Button variant="ghost" onClick={handleReset}>
                 Import More
-              </Button>
-              <Button variant="primary" onClick={handleViewSessions}>
-                View Sessions
               </Button>
             </div>
           </div>

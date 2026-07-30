@@ -349,8 +349,11 @@ export type Database = {
           driver_id: string
           id: string
           notes: string | null
+          representativeness: string | null
+          representativeness_note: string | null
           source: string | null
           total_time_ms: number
+          track_day_id: string | null
           track_id: string
         }
         Insert: {
@@ -362,8 +365,11 @@ export type Database = {
           driver_id: string
           id?: string
           notes?: string | null
+          representativeness?: string | null
+          representativeness_note?: string | null
           source?: string | null
           total_time_ms: number
+          track_day_id?: string | null
           track_id: string
         }
         Update: {
@@ -375,8 +381,11 @@ export type Database = {
           driver_id?: string
           id?: string
           notes?: string | null
+          representativeness?: string | null
+          representativeness_note?: string | null
           source?: string | null
           total_time_ms?: number
+          track_day_id?: string | null
           track_id?: string
         }
         Relationships: [
@@ -388,7 +397,53 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sessions_track_day_id_fkey"
+            columns: ["track_day_id"]
+            isOneToOne: false
+            referencedRelation: "track_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sessions_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      track_days: {
+        Row: {
+          created_at: string | null
+          date: string
+          driver_id: string
+          id: string
+          track_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          driver_id: string
+          id?: string
+          track_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          driver_id?: string
+          id?: string
+          track_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "track_days_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "track_days_track_id_fkey"
             columns: ["track_id"]
             isOneToOne: false
             referencedRelation: "tracks"
@@ -405,6 +460,7 @@ export type Database = {
           location: string | null
           map_image_url: string | null
           name: string
+          timezone: string | null
         }
         Insert: {
           config?: string | null
@@ -414,6 +470,7 @@ export type Database = {
           location?: string | null
           map_image_url?: string | null
           name: string
+          timezone?: string | null
         }
         Update: {
           config?: string | null
@@ -423,6 +480,7 @@ export type Database = {
           location?: string | null
           map_image_url?: string | null
           name?: string
+          timezone?: string | null
         }
         Relationships: []
       }
