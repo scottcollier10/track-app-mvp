@@ -7,7 +7,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp, CalendarDays } from 'lucide-react';
 import CsvUploader from './CsvUploader';
 import CsvPreview from './CsvPreview';
@@ -34,7 +33,6 @@ interface ImportResults {
 }
 
 export default function CsvImport() {
-  const router = useRouter();
   const [state, setState] = useState<ImportState>('idle');
   const [fileName, setFileName] = useState<string>('');
   const [sessions, setSessions] = useState<ParsedSession[]>([]);
@@ -201,15 +199,6 @@ export default function CsvImport() {
     setImportResults(null);
   };
 
-  /**
-   * Navigate to first imported session
-   */
-  const handleViewSessions = () => {
-    if (importResults && importResults.sessionIds.length > 0) {
-      router.push(`/sessions/${importResults.sessionIds[0]}`);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Upload State */}
@@ -355,21 +344,39 @@ export default function CsvImport() {
                 printing it risks this panel saying "Jul 11" and the page it
                 links to saying "Jul 12".
 
-                Labelled by DRIVER instead, so several links are tellable apart
-                by a screen reader rather than being N identical "View track
-                day"s. A day is keyed on (driver, track, date), so the driver is
-                a fact about the id and cannot disagree with /days/[id] — and
-                the name printed here is the one the route read back out of
-                drivers.name, not the CSV's name column, so the two pages spell
-                it identically. No ordinals: the order is CSV row order, not
-                chronological. */}
-            {importResults.trackDayLinks.length > 0 && (
+                The single day is the panel's PRIMARY action, and it goes to the
+                day rather than to a session: the day is the navigation hub and
+                the session sits one click deeper from it (design decision #4;
+                "confirmation lands on the day page"). The debrief a coach came
+                here to do — session progression, focus items, day notes — is the
+                day page, and a session is one piece of evidence inside it. */}
+            {importResults.trackDayLinks.length === 1 && (
+              <div className="flex justify-center">
+                <Link href={`/days/${importResults.trackDayLinks[0].trackDayId}`}>
+                  <Button variant="primary" icon={CalendarDays}>
+                    View track day
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* Several days: there is no "the" day to promote, and choosing one
+                would mean choosing by CSV ROW ORDER, which is not chronological.
+                So these chips ARE this panel's primary affordance — nothing
+                outranks them now that the old session button is gone.
+
+                Labelled by DRIVER, so several links are tellable apart by a
+                screen reader rather than being N identical "View track day"s. A
+                day is keyed on (driver, track, date), so the driver is a fact
+                about the id and cannot disagree with /days/[id] — and the name
+                printed here is the one the route read back out of drivers.name,
+                not the CSV's name column, so the two pages spell it identically.
+                No ordinals: the order is CSV row order, not chronological. */}
+            {importResults.trackDayLinks.length > 1 && (
               <div className="space-y-3">
-                {importResults.trackDayLinks.length > 1 && (
-                  <p className="text-sm text-neutral-400">
-                    These sessions landed in {importResults.trackDayLinks.length} track days
-                  </p>
-                )}
+                <p className="text-sm text-neutral-400">
+                  These sessions landed in {importResults.trackDayLinks.length} track days
+                </p>
                 <div className="flex flex-wrap justify-center gap-3">
                   {importResults.trackDayLinks.map(({ trackDayId, driverName }) => (
                     <Link
@@ -378,21 +385,28 @@ export default function CsvImport() {
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-700 bg-gray-800/50 text-sm text-gray-200 hover:text-white hover:border-gray-600 transition-colors"
                     >
                       <CalendarDays className="w-4 h-4 text-green-500" />
-                      {importResults.trackDayLinks.length === 1
-                        ? 'View track day'
-                        : `View ${formatDriverName(driverName)}'s track day`}
+                      {`View ${formatDriverName(driverName)}'s track day`}
                     </Link>
                   ))}
                 </div>
               </div>
             )}
 
+            {/* Fallback only. Every imported session has a day, so this is
+                unreachable unless the route stops returning trackDayId — and
+                then a panel with no way forward is worse than one that opens a
+                session. */}
+            {importResults.trackDayLinks.length === 0 && importResults.sessionIds.length > 0 && (
+              <div className="flex justify-center">
+                <Link href={`/sessions/${importResults.sessionIds[0]}`}>
+                  <Button variant="primary">View session</Button>
+                </Link>
+              </div>
+            )}
+
             <div className="flex justify-center space-x-3">
               <Button variant="ghost" onClick={handleReset}>
                 Import More
-              </Button>
-              <Button variant="primary" onClick={handleViewSessions}>
-                View Sessions
               </Button>
             </div>
           </div>

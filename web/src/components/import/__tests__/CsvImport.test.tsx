@@ -15,15 +15,17 @@
  * The fix is that the label comes off the route's response. These tests drive
  * the component with a response that DISAGREES with the CSV, so re-attaching
  * the CSV name in the import loop fails here rather than shipping.
+ *
+ * The other thing under test is WHERE the panel sends the coach: the day, not a
+ * session. The day is the navigation hub and a session is one click deeper from
+ * it, so a primary action pointing at /sessions/... is a regression even though
+ * it would be a working link.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CsvImport from '../CsvImport';
 import { parseSessionCsv, type ParsedSession } from '@/lib/csv-parser';
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
-}));
 jest.mock('@/lib/csv-parser', () => ({ parseSessionCsv: jest.fn() }));
 
 const mockParseSessionCsv = parseSessionCsv as jest.MockedFunction<typeof parseSessionCsv>;
@@ -31,7 +33,8 @@ const mockParseSessionCsv = parseSessionCsv as jest.MockedFunction<typeof parseS
 /** What the ROUTE said about the session it just filed. */
 interface RouteReply {
   sessionId: string;
-  trackDayId: string;
+  /** Optional ONLY so the fallback test can model a route that stopped sending it. */
+  trackDayId?: string;
   /** drivers.name — deliberately not the CSV's driver_name in these fixtures. */
   driverName: string;
 }
@@ -82,6 +85,13 @@ function stubFetch(repliesByEmail: Record<string, RouteReply>, status = 201) {
   return fetchMock;
 }
 
+/** Every link the success panel offers, as [href, accessible text] pairs. */
+function panelLinks(): Array<[string | null, string]> {
+  return screen
+    .getAllByRole('link')
+    .map((a) => [a.getAttribute('href'), a.textContent ?? ''] as [string | null, string]);
+}
+
 /** Upload a file, wait for the preview, then click Import. */
 async function runImport(sessions: ParsedSession[]) {
   mockParseSessionCsv.mockResolvedValue({ success: true, sessions, warnings: [] });
@@ -127,8 +137,8 @@ describe('CsvImport success panel — track day links', () => {
     ]);
 
     // formatDriverName over drivers.name — the exact string /days/[id] renders.
-    const taylor = screen.getByText("View Taylor Brooks's track day");
-    const jamie = screen.getByText("View Jamie Rodriguez's track day");
+    const taylor = screen.getByRole('link', { name: "View Taylor Brooks's track day" });
+    const jamie = screen.getByRole('link', { name: "View Jamie Rodriguez's track day" });
     expect(taylor).toHaveAttribute('href', '/days/day-a');
     expect(jamie).toHaveAttribute('href', '/days/day-b');
 
@@ -188,7 +198,10 @@ describe('CsvImport success panel — track day links', () => {
 
     await runImport([parsedSession(), parsedSession({ bestLapMs: 90100 })]);
 
-    expect(screen.getByText('View track day')).toHaveAttribute('href', '/days/day-a');
+    expect(screen.getByRole('link', { name: 'View track day' })).toHaveAttribute(
+      'href',
+      '/days/day-a'
+    );
     expect(screen.queryByText(/Taylor/)).not.toBeInTheDocument();
   });
 
@@ -247,6 +260,89 @@ describe('CsvImport success panel — track day links', () => {
 
     await runImport([parsedSession()]);
 
-    expect(screen.getByText('View track day').textContent).not.toMatch(/\d/);
+    expect(screen.getByRole('link', { name: 'View track day' }).textContent).not.toMatch(/\d/);
+  });
+});
+
+describe('CsvImport success panel — where the confirmation lands', () => {
+  it('makes the DAY the primary action after a one-day import', async () => {
+    // The day is the navigation hub; the session is one click deeper from it.
+    // A primary button to /sessions/<first imported id> also picked that session
+    // by CSV row order, which is not chronological.
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        trackDayId: 'day-a',
+        driverName: 'taylor.brooks',
+      },
+    });
+
+    await runImport([parsedSession(), parsedSession({ bestLapMs: 90100 })]);
+
+    const primary = screen.getByRole('link', { name: 'View track day' });
+    expect(primary).toHaveAttribute('href', '/days/day-a');
+    // A real link (middle-click / open-in-new-tab), carrying the app's primary
+    // Button rather than this file's chip styling.
+    expect(primary.tagName).toBe('A');
+    expect(primary.querySelector('button')).toBeInTheDocument();
+
+    // Nothing on the panel routes to a session, and the old plural-but-singular
+    // "View Sessions" button is gone.
+    expect(screen.queryByText('View Sessions')).not.toBeInTheDocument();
+    expect(panelLinks().map(([href]) => href)).toEqual(['/days/day-a']);
+  });
+
+  it('leaves the per-day chips as the navigation when the file spans days', async () => {
+    // No single day to promote here, so nothing is promoted: picking one would
+    // mean picking by CSV row order.
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        trackDayId: 'day-a',
+        driverName: 'taylor.brooks',
+      },
+      'jamie.rodriguez@trackapp.demo': {
+        sessionId: 'session-2',
+        trackDayId: 'day-b',
+        driverName: 'jamie rodriguez',
+      },
+    });
+
+    await runImport([
+      parsedSession(),
+      parsedSession({
+        driverEmail: 'jamie.rodriguez@trackapp.demo',
+        driverName: 'RODRIGUEZ, J. (car 7)',
+      }),
+    ]);
+
+    expect(
+      screen.getByText('These sessions landed in 2 track days')
+    ).toBeInTheDocument();
+    expect(panelLinks()).toEqual([
+      ['/days/day-a', "View Taylor Brooks's track day"],
+      ['/days/day-b', "View Jamie Rodriguez's track day"],
+    ]);
+    expect(screen.queryByText('View Sessions')).not.toBeInTheDocument();
+  });
+
+  it('still offers a way forward when the route returned no track day', async () => {
+    // Shouldn't happen — every imported session has a day. But a success panel
+    // with no link out is a dead end, so the session stays as the fallback.
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        driverName: 'taylor.brooks',
+      },
+    });
+
+    await runImport([parsedSession()]);
+
+    expect(screen.getByRole('link', { name: 'View session' })).toHaveAttribute(
+      'href',
+      '/sessions/session-1'
+    );
+    // Never a link to /days/undefined, which looks fine until it is clicked.
+    expect(panelLinks().map(([href]) => href)).toEqual(['/sessions/session-1']);
   });
 });
