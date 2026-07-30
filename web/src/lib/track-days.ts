@@ -177,6 +177,14 @@ export interface TrackDayLink {
  * response carrying it, and the same driver /days/[id] renders. Unlike a date,
  * this label cannot contradict the page it links to.
  *
+ * It is read off the RESPONSE (`drivers.name`, straight from the row the
+ * session was filed under), never off the CSV row that produced it. Same
+ * driver either way, but not necessarily the same string: a driver created by
+ * an import is named from the email local part, and an existing driver's row
+ * can have been named differently from whatever the file's name column says.
+ * Sourcing it from the CSV would let this chip and /days/[id] spell one driver
+ * two ways.
+ *
  * Filtered, not cast: a response is only supposed to arrive without a
  * trackDayId if the route changes shape, and the failure mode of casting is a
  * link to /days/undefined, which looks like a working link until it is clicked.
@@ -185,9 +193,7 @@ export interface TrackDayLink {
  * days are per DRIVER, so two drivers at the same event on the same date are
  * two days.
  */
-export function uniqueTrackDayLinks(
-  imports: Array<ImportedSessionResponse & { driverName: string }>
-): TrackDayLink[] {
+export function uniqueTrackDayLinks(imports: ImportedSessionResponse[]): TrackDayLink[] {
   const byId = new Map<string, TrackDayLink>();
   for (const imported of imports) {
     const { trackDayId, driverName } = imported;

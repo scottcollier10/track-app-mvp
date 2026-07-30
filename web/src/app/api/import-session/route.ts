@@ -174,11 +174,15 @@ export async function POST(request: NextRequest) {
         lapCount: lapsToInsert.length,
         error: lapsError.message,
       });
-      // Still return success since session was created
+      // Still return success since session was created.
+      // driverName is driver.name (the DB row), same as the 201 path below —
+      // the client labels its day link with it, and a label sourced from the
+      // CSV would spell the driver differently than /days/[id] does.
       return NextResponse.json(
         {
           sessionId: session.id,
           trackDayId: trackDay.id,
+          driverName: driver.name,
           message: 'Session created but some laps failed to import',
           warning: lapsError.message,
         },
@@ -200,6 +204,7 @@ export async function POST(request: NextRequest) {
       {
         sessionId: session.id,
         trackDayId: trackDay.id,
+        driverName: driver.name,
         message: 'Session imported successfully',
       },
       { status: 201 }

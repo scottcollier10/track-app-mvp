@@ -226,7 +226,13 @@ describe('sessionDelta', () => {
 });
 
 describe('uniqueTrackDayLinks', () => {
-  /** What the import loop actually collects: an /api/import-session 201 body plus the CSV row's driver name. */
+  /**
+   * What the import loop actually collects: an /api/import-session body,
+   * nothing else. driverName is the route's — `drivers.name` read back off the
+   * row the session was filed under — never the name column of the CSV row
+   * that produced the request. Same driver either way; not always the same
+   * string, and only the DB one matches the /days/[id] page the link opens.
+   */
   const imported = (
     sessionId: string,
     trackDayId: string | null | undefined,
@@ -234,8 +240,8 @@ describe('uniqueTrackDayLinks', () => {
   ) => ({
     sessionId,
     trackDayId,
-    message: 'Session imported successfully',
     driverName,
+    message: 'Session imported successfully',
   });
 
   it('collapses a whole CSV of sessions on one day to a single link', () => {
@@ -252,8 +258,10 @@ describe('uniqueTrackDayLinks', () => {
 
   it('pairs each day with its driver, so the links can be told apart', () => {
     // Two drivers at the same event are two track days (days are per driver).
-    // The name is what distinguishes the links; it is raw here, and the panel
-    // runs it through formatDriverName like every other name in the app.
+    // The name is what distinguishes the links; it is raw drivers.name here,
+    // and the panel runs it through formatDriverName like every other name in
+    // the app. src/components/import/__tests__/CsvImport.test.tsx covers the
+    // rendered chip, including the case where the CSV spelled it differently.
     expect(
       uniqueTrackDayLinks([
         imported('session-1', 'day-a', 'taylor.brooks'),

@@ -82,8 +82,10 @@ export default function CsvImport() {
     // day. Every other outcome takes a `continue`/`catch` below, so this is
     // exactly the set of successes; session ids and day links both derive from
     // it rather than being accumulated in parallel and drifting apart.
-    // driverName rides along from the CSV row that produced the response.
-    const imported: Array<ImportedSessionResponse & { driverName: string }> = [];
+    // The route's own response is the only thing stored here — in particular
+    // the driver name that labels the day links is drivers.name from the DB,
+    // not the CSV's name column, so a link's label matches the page it opens.
+    const imported: ImportedSessionResponse[] = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
 
@@ -138,8 +140,8 @@ export default function CsvImport() {
           continue;
         }
 
-        const data = await response.json();
-        imported.push({ ...data, driverName: session.driverName });
+        const data: ImportedSessionResponse = await response.json();
+        imported.push(data);
         // Counted HERE, not at the top of the loop: a driver whose only session
         // failed the track lookup or the POST was attempted, not imported, and
         // "3 drivers" over "landed in 2 track days" is a panel arguing with
@@ -329,8 +331,11 @@ export default function CsvImport() {
                 Labelled by DRIVER instead, so several links are tellable apart
                 by a screen reader rather than being N identical "View track
                 day"s. A day is keyed on (driver, track, date), so the driver is
-                a fact about the id and cannot disagree with /days/[id]. No
-                ordinals: the order is CSV row order, not chronological. */}
+                a fact about the id and cannot disagree with /days/[id] — and
+                the name printed here is the one the route read back out of
+                drivers.name, not the CSV's name column, so the two pages spell
+                it identically. No ordinals: the order is CSV row order, not
+                chronological. */}
             {importResults.trackDayLinks.length > 0 && (
               <div className="space-y-3">
                 {importResults.trackDayLinks.length > 1 && (

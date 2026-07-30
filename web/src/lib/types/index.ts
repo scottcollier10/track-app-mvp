@@ -67,14 +67,24 @@ export interface ImportSessionPayload {
  * ImportSessionPayload's contract, kept beside it so a route change has one
  * place to land.
  *
- * `trackDayId` is returned by BOTH success paths: 201, and the 207 "session
- * created but some laps failed" path, which still created the session and so
- * still has a day worth linking to. The import panel's day links depend on
- * that; `web/src/app/api/import-session/__tests__/route.test.ts` covers both.
+ * `trackDayId` and `driverName` are returned by BOTH success paths: 201, and
+ * the 207 "session created but some laps failed" path, which still created the
+ * session and so still has a day worth linking to. The import panel's day links
+ * depend on both; `web/src/app/api/import-session/__tests__/route.test.ts`
+ * covers both paths.
  */
 export interface ImportedSessionResponse {
   sessionId: string;
   trackDayId?: string | null;
+  /**
+   * `drivers.name` as stored in the DB for the driver this session was filed
+   * under — NOT the name column of the CSV row that produced it. The two can
+   * differ (a driver created by an import is named from the email local part,
+   * and an existing driver's row may simply have been named differently), and
+   * anything labelling a link to /days/[id] has to spell the driver the way
+   * that page will.
+   */
+  driverName: string;
   message?: string;
   /** 207 only — why some laps did not import. */
   warning?: string;

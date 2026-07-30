@@ -188,14 +188,42 @@ describe('POST /api/import-session', () => {
 
     expect(json.sessionId).toBe('session-1');
     expect(json.trackDayId).toBe('day-1');
+
+    // The DB's drivers.name, which is what /days/[id] renders. The client
+    // labels its day link with this instead of the CSV's name column so the
+    // link and the page it opens spell the driver the same way.
+    expect(json.driverName).toBe('driver');
   });
 
-  it('still returns the track day id on the 207 partial-laps path', async () => {
+  it('returns the DB driver name, not anything derived from the request', async () => {
+    // The payload carries no name at all — only driverEmail — and the stored
+    // row is named differently from the email's local part. A response that
+    // echoed the request (or a client that labelled the link from the CSV)
+    // would say "driver"; the day page says "Taylor Brooks".
+    results.drivers = {
+      data: { id: 'driver-1', email: 'driver@example.com', name: 'Taylor Brooks' },
+      error: null,
+    };
+
+    const res = await POST(makeRequest(validPayload));
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.driverName).toBe('Taylor Brooks');
+  });
+
+  it('still returns the track day id and driver name on the 207 partial-laps path', async () => {
     // The session (and therefore its day) exists even when the laps insert
     // fails, so the import panel links to it exactly as it does for a 201.
-    // Without this, the 207 branch could stop returning trackDayId and nothing
-    // would notice: the client reads it off an untyped `await response.json()`.
+    // Without this, the 207 branch could stop returning trackDayId/driverName
+    // and nothing would notice: the client reads them off `response.json()`.
+    // Both paths must read the same driver row — a 207 link labelled one way
+    // and a 201 link labelled another is the same bug in a rarer branch.
     results.laps = { data: null, error: { message: 'laps insert failed' } };
+    results.drivers = {
+      data: { id: 'driver-1', email: 'driver@example.com', name: 'Taylor Brooks' },
+      error: null,
+    };
 
     const res = await POST(makeRequest(validPayload));
     const json = await res.json();
@@ -203,5 +231,6 @@ describe('POST /api/import-session', () => {
     expect(res.status).toBe(207);
     expect(json.trackDayId).toBe('day-1');
     expect(json.sessionId).toBe('session-1');
+    expect(json.driverName).toBe('Taylor Brooks');
   });
 });
