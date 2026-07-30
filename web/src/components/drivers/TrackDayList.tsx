@@ -14,9 +14,13 @@
  * fetch. It is handed UNFILTERED sessions plus a day-granularity cutoff, never
  * a pre-filtered list — see the filter in the component body for why.
  *
- * Two rules this component must never break:
+ * Three rules this component must never break:
  *  - σ claims come only from dayConsistencyTrend, which owns the
  *    >=MIN_LAPS_FOR_INSIGHTS gate. No σ math is reimplemented here.
+ *  - `session.lapTimesMs` is validLapTimesMs's output (see getAllSessions), so
+ *    the gate counts exactly the laps σ is computed from. It is passed through
+ *    untouched — filtering or re-deriving it here is what let this row drop a
+ *    session the day page still counted.
  *  - The trend is a signed pair of numbers, not a verdict. The app compares,
  *    the instructor concludes.
  */

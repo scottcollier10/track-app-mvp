@@ -14,6 +14,7 @@ import {
   dayBestLapMs,
   dayConsistencyTrend,
   formatConsistencyTrend,
+  validLapTimesMs,
 } from '@/lib/track-days';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
 import { formatTrackDate, formatLapMs } from '@/lib/time';
@@ -70,11 +71,15 @@ export default async function TrackDayPage({ params }: PageProps) {
 
   // Feed dates in and let the helper sort: it reports first -> last
   // chronologically, so caller ordering can never flip the trend's direction.
+  //
+  // validLapTimesMs, not a raw laps.map: a 0 lap time reaches the database (see
+  // its docblock), and mapping the rows straight through computed this KPI's σ
+  // over laps the >=MIN_LAPS_FOR_INSIGHTS gate had already refused elsewhere.
   const trend = dayConsistencyTrend(
     sessions.map((s) => ({
       id: s.id,
       date: s.date,
-      lapTimesMs: s.laps.map((l) => l.lap_time_ms),
+      lapTimesMs: validLapTimesMs(s.laps),
     }))
   );
 

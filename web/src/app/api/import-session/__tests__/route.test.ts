@@ -91,7 +91,12 @@ function makeRequest(body: unknown): NextRequest {
 const validPayload = {
   driverEmail: 'driver@example.com',
   trackId: 'track-1',
-  date: '2026-07-28T14:30:00Z',
+  // 03:30Z, deliberately: in the track's America/New_York this is 23:30 the
+  // PREVIOUS day, so the track-local date and the UTC date differ. A timestamp
+  // whose two dates agree (14:30Z) passes whether the route reads
+  // tracks.timezone or ignores it — and ignoring it is the untested path, since
+  // tracks.timezone is uniformly NULL in production today.
+  date: '2026-07-28T03:30:00Z',
   totalTimeMs: 600000,
   bestLapMs: 95000,
   laps: [
@@ -104,8 +109,9 @@ const trackDay = {
   id: 'day-1',
   driver_id: 'driver-1',
   track_id: 'track-1',
-  date: '2026-07-28',
-  created_at: '2026-07-28T00:00:00Z',
+  // The TRACK-LOCAL date of validPayload.date, not its UTC date.
+  date: '2026-07-27',
+  created_at: '2026-07-27T00:00:00Z',
 };
 
 beforeEach(() => {
@@ -174,8 +180,11 @@ describe('POST /api/import-session', () => {
 
     expect(res.status).toBe(201);
 
-    // The day is resolved from the track-local calendar date, not the raw timestamp.
-    expect(mockResolveTrackDay).toHaveBeenCalledWith('driver-1', 'track-1', '2026-07-28');
+    // The day is resolved from the TRACK-LOCAL calendar date, not the raw
+    // timestamp. 2026-07-28T03:30Z is still 2026-07-27 in the track's
+    // America/New_York, so a route that dropped tracks.timezone would file this
+    // session under '2026-07-28' and fail here.
+    expect(mockResolveTrackDay).toHaveBeenCalledWith('driver-1', 'track-1', '2026-07-27');
 
     // The FK must reach the row. A refactor that quietly drops it fails here.
     expect(inserts.sessions).toHaveLength(1);

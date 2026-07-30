@@ -6,6 +6,7 @@
 
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getTrackDayWithSessions } from '@/data/track-days';
+import { validLapTimesMs } from '@/lib/track-days';
 
 export interface SessionWithDetails {
   id: string;
@@ -16,7 +17,13 @@ export interface SessionWithDetails {
   driver: { id: string; name: string; email: string } | null;
   track: { id: string; name: string; location: string | null } | null;
   lapCount: number;
-  /** Lap times in ms, present when the query fetches lap details (getAllSessions) */
+  /**
+   * Lap times in ms, present when the query fetches lap details (getAllSessions).
+   *
+   * validLapTimesMs's output, so it is both the σ input and exactly what the
+   * >=MIN_LAPS_FOR_INSIGHTS gate counts. `lapCount` above is the raw number of
+   * lap ROWS and can be larger; the two answer different questions.
+   */
   lapTimesMs?: number[];
   /**
    * The session's track day, present when the query embeds it (getAllSessions).
@@ -214,9 +221,10 @@ export async function getAllSessions(
     const sessionsWithCounts = (sessions || []).map((session) => ({
       ...session,
       lapCount: session.laps?.length || 0,
-      lapTimesMs: (session.laps || [])
-        .map((lap) => lap.lap_time_ms)
-        .filter((time): time is number => time !== null && time > 0),
+      // validLapTimesMs, not a filter written out here: this array is a σ input
+      // and the thing the lap gate counts, and every other site derives it from
+      // the same helper. See its docblock for what a second derivation cost.
+      lapTimesMs: validLapTimesMs(session.laps || []),
       laps: undefined, // Remove the nested laps object
     }));
 

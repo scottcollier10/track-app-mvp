@@ -8,8 +8,10 @@ import {
   formatConsistencyTrend,
   sessionDelta,
   uniqueTrackDayLinks,
+  validLapTimesMs,
 } from '@/lib/track-days';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
+import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
 
 describe('bySessionStart', () => {
   it('orders sessions by start time, oldest first', () => {
@@ -67,6 +69,80 @@ describe('localDateForTimezone', () => {
   });
   it('throws on an invalid timestamp rather than defaulting to today', () => {
     expect(() => localDateForTimezone('garbage', 'America/Chicago')).toThrow(RangeError);
+  });
+});
+
+describe('validLapTimesMs', () => {
+  it('keeps positive lap times in order and drops the rest', () => {
+    expect(
+      validLapTimesMs([
+        { lap_time_ms: 91000 },
+        { lap_time_ms: 0 },
+        { lap_time_ms: 92000 },
+        { lap_time_ms: -5000 },
+        { lap_time_ms: null },
+        { lap_time_ms: 91500 },
+      ])
+    ).toEqual([91000, 92000, 91500]);
+  });
+
+  it('returns an empty array for a session with no laps', () => {
+    expect(validLapTimesMs([])).toEqual([]);
+  });
+
+  /**
+   * The bug this helper exists to close: a SIX-lap session with one 0.
+   *
+   * csv-parser only rejects a lap time that fails parseInt, so "0" survives
+   * ("0" is truthy, so it clears the missing-field check too), the import route
+   * adds no positivity check, and laps.lap_time_ms carries no CHECK > 0. Such a
+   * session used to render three ways — dropped from the driver page's trend
+   * (5 laps), σ computed WITH the zero on the day page, and σ over 5 laps behind
+   * a satisfied 6-lap gate on the session page.
+   *
+   * Every site now gates on and computes σ from this one array, so all of them
+   * make the SAME call: five countable laps, no σ claim.
+   */
+  it('is the one array every σ gate counts, so a six-lap session with one 0 claims nothing', () => {
+    const sixLapsOneZero = [91000, 0, 92000, 91000, 92000, 91000].map((lap_time_ms, i) => ({
+      lap_number: i + 1,
+      lap_time_ms,
+    }));
+    const sixGood = [91000, 92000, 91000, 92000, 91000, 92000];
+
+    const lapTimesMs = validLapTimesMs(sixLapsOneZero);
+    expect(sixLapsOneZero).toHaveLength(6);
+    expect(lapTimesMs).toEqual([91000, 92000, 91000, 92000, 91000]);
+
+    // The session page's gate (lapTimes.length >= MIN_LAPS_FOR_INSIGHTS) — the
+    // one that used to be satisfied by the raw row count.
+    expect(lapTimesMs.length).toBeLessThan(MIN_LAPS_FOR_INSIGHTS);
+
+    // The driver page's day list and the day page's KPI: both feed this array to
+    // dayConsistencyTrend, so neither session qualifies as an endpoint...
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: sixGood },
+      ])
+    ).toBeNull();
+
+    // ...and the progression strip's per-card delta agrees.
+    expect(
+      sessionDelta(
+        { bestLapMs: 91000, lapTimesMs },
+        { bestLapMs: 91000, lapTimesMs: sixGood }
+      ).consistencyDeltaSeconds
+    ).toBeNull();
+
+    // Sanity: the same six laps with no zero DO clear the gate, so the null
+    // above is the zero's doing and not a broken fixture.
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs: sixGood },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: sixGood },
+      ])
+    ).not.toBeNull();
   });
 });
 

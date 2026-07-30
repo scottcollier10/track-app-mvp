@@ -192,6 +192,46 @@ describe('CsvImport success panel — track day links', () => {
     expect(screen.queryByText(/Taylor/)).not.toBeInTheDocument();
   });
 
+  it('counts only laps a 201 confirmed, and says the total leaves a 207 out', async () => {
+    // The 207 body says the session and its day exist; it does NOT say how many
+    // of that session's laps landed. Counting the two laps submitted would make
+    // this the one figure on the panel that reports what was SENT.
+    stubFetch(
+      {
+        'taylor.brooks@trackapp.demo': {
+          sessionId: 'session-1',
+          trackDayId: 'day-a',
+          driverName: 'taylor.brooks',
+        },
+      },
+      207
+    );
+
+    await runImport([parsedSession()]);
+
+    expect(screen.getByText(/Imported/)).toHaveTextContent('0 laps');
+    expect(
+      screen.getByText(/Lap count excludes 1 session\(s\) whose laps failed to import/)
+    ).toBeInTheDocument();
+  });
+
+  it('counts the laps of a clean 201 and adds no caveat', async () => {
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        trackDayId: 'day-a',
+        driverName: 'taylor.brooks',
+      },
+    });
+
+    // Two sessions of two laps each; the route inserts every lap it was sent on
+    // a 201, so submitted and stored are the same number here.
+    await runImport([parsedSession(), parsedSession({ bestLapMs: 90100 })]);
+
+    expect(screen.getByText(/Imported/)).toHaveTextContent('4 laps');
+    expect(screen.queryByText(/Lap count excludes/)).not.toBeInTheDocument();
+  });
+
   it('does not print a DATE next to a day link', async () => {
     // Deliberate: the only date the client has is the CSV parse, anchored at
     // noon in the SERVER's zone, while /days/[id] renders the authoritative

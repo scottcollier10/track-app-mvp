@@ -184,4 +184,41 @@ describe('SessionProgressionStrip', () => {
     expect(cards()[0]).toHaveTextContent('0 laps');
     expect(cards()[0].textContent).not.toContain('±');
   });
+
+  it('treats a 0 best lap as no best lap, like the day KPI beside it', () => {
+    // dayBestLapMs requires > 0 and the session page uses a truthy check, so a
+    // !== null guard here was the one place a 0 rendered as "0:00.000".
+    render(<SessionProgressionStrip sessions={[makeSession('session-1', 0, WOBBLY)]} />);
+
+    expect(cards()[0]).toHaveTextContent('--');
+    expect(cards()[0].textContent).not.toContain('0:00.000');
+  });
+
+  /**
+   * A 0 lap time reaches the database (csv-parser only rejects a lap time that
+   * fails parseInt; nothing downstream checks positivity), and this card used to
+   * be the site that computed σ INCLUDING it while the driver page dropped the
+   * session from its trend and the session page claimed a satisfied 6-lap gate
+   * over 5 laps. All three now count validLapTimesMs, so all three refuse.
+   */
+  it('makes no consistency claim for six laps when one of them is a 0', () => {
+    const sixLapsOneZero = [91000, 0, 92000, 91000, 92000, 91000];
+    render(
+      <SessionProgressionStrip
+        sessions={[
+          makeSession('session-1', 91000, sixLapsOneZero),
+          makeSession('session-2', 91000, FLAT),
+        ]}
+      />
+    );
+
+    // Five countable laps, so no σ — and therefore no σ pair for card 2 either.
+    expect(cards()[0].textContent).not.toContain('±');
+    expect(cards()[0]).toHaveTextContent('Too few laps for a consistency figure');
+    expect(sigmaDelta(cards()[1])).toBeNull();
+
+    // The lap count still reports the ROWS recorded, which is the same figure
+    // the session page's "Laps" card shows one click away.
+    expect(cards()[0]).toHaveTextContent('6 laps');
+  });
 });

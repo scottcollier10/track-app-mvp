@@ -26,7 +26,10 @@ interface ImportResults {
   sessionIds: string[];
   /** Distinct track days the imported sessions landed in — usually exactly one. */
   trackDayLinks: TrackDayLink[];
+  /** Laps STORED, counted only over sessions the route confirmed a full 201 for. */
   totalLaps: number;
+  /** Sessions that came back 207 and are therefore left out of totalLaps. */
+  partialSessions: number;
   uniqueDrivers: number;
 }
 
@@ -88,6 +91,7 @@ export default function CsvImport() {
     const imported: ImportedSessionResponse[] = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
+    let partialSessions = 0;
 
     // Import each session sequentially
     for (const session of sessions) {
@@ -147,7 +151,18 @@ export default function CsvImport() {
         // "3 drivers" over "landed in 2 track days" is a panel arguing with
         // itself. Every count in this panel is of what succeeded.
         uniqueDriverEmails.add(session.driverEmail);
-        totalLaps += session.laps.length;
+        // Laps are counted only on a 201. A 207 means "session created but some
+        // laps failed", and its body says which session and which day — not how
+        // many of its laps landed. Adding the number SUBMITTED there is the one
+        // count on this panel that would be of what we sent rather than what
+        // stored. So the 207's laps are excluded and counted separately, and the
+        // panel says the lap figure leaves them out; a silent omission would be
+        // a total the coach has no way to know is short.
+        if (response.status === 207) {
+          partialSessions += 1;
+        } else {
+          totalLaps += session.laps.length;
+        }
       } catch (err) {
         failed.push(
           `${session.trackName} - ${session.driverName} (${
@@ -163,6 +178,7 @@ export default function CsvImport() {
       sessionIds: imported.map((r) => r.sessionId),
       trackDayLinks: uniqueTrackDayLinks(imported),
       totalLaps,
+      partialSessions,
       uniqueDrivers: uniqueDriverEmails.size,
     });
 
@@ -307,6 +323,17 @@ export default function CsvImport() {
               {importResults.failed > 0 && (
                 <p className="text-red-400 text-sm mt-3">
                   {importResults.failed} session(s) failed to import
+                </p>
+              )}
+
+              {/* Why the lap figure above is smaller than the file. Stated
+                  rather than folded in silently: the route's 207 does not say
+                  how many of that session's laps landed, so the only honest
+                  lap total is one that leaves them out and says so. */}
+              {importResults.partialSessions > 0 && (
+                <p className="text-neutral-400 text-sm mt-3">
+                  Lap count excludes {importResults.partialSessions} session(s) whose laps
+                  failed to import
                 </p>
               )}
             </div>

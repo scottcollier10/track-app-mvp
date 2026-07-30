@@ -11,6 +11,7 @@ import {
   MIN_LAPS_FOR_INSIGHTS,
 } from '@/lib/insights';
 import { cleanLaps } from '@/lib/analytics-v2';
+import { SIGMA_DISPLAY_DECIMALS, validLapTimesMs } from '@/lib/track-days';
 import EmptyInsights from '@/components/analytics/EmptyInsights';
 import AICoachingCard from '@/components/coaching/AICoachingCard';
 import LapAnalysisChart from '@/components/charts/LapAnalysisChart';
@@ -73,7 +74,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const laps = session.laps || [];
 
   // ---- One pass of honest statistics for the whole page ----
-  const lapTimes = laps.map(lap => lap.lap_time_ms).filter((t): t is number => t != null && t > 0);
+  const lapTimes = validLapTimesMs(laps);
   const insights = getSessionInsightsFromMs(lapTimes);
   const consistencySeconds = insights.consistencySeconds;
 
@@ -102,7 +103,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
       : {}),
   }));
 
-  const showInsights = laps.length >= MIN_LAPS_FOR_INSIGHTS;
+  // Gated on lapTimes, not laps: every figure behind this gate (σ, pace trend)
+  // is computed from lapTimes, and counting raw rows instead let the page claim
+  // the six-lap minimum was met while reporting a σ over five laps.
+  const showInsights = lapTimes.length >= MIN_LAPS_FOR_INSIGHTS;
 
   // Where this session sits in its track day. Null for a session with no day
   // (shouldn't exist post-backfill), in which case the header falls back to the
@@ -281,7 +285,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
                           </div>
                           <div className="text-lg font-semibold mb-1 text-primary">
                             {consistencySeconds !== null
-                              ? `±${consistencySeconds.toFixed(1)}s`
+                              ? `±${consistencySeconds.toFixed(SIGMA_DISPLAY_DECIMALS)}s`
                               : '--'}
                           </div>
                           <div className="text-xs text-text-subtle">
@@ -321,7 +325,10 @@ export default async function SessionDetailPage({ params }: PageProps) {
                 ]}
               />
             ) : (
-              <EmptyInsights lapCount={laps.length} minimumRequired={MIN_LAPS_FOR_INSIGHTS} />
+              // lapTimes.length, because this panel explains the gate above and
+              // has to count what the gate counted — "requires 6 laps, you have
+              // 6" is what passing laps.length here would print.
+              <EmptyInsights lapCount={lapTimes.length} minimumRequired={MIN_LAPS_FOR_INSIGHTS} />
             )
           )}
 

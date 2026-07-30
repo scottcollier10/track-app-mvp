@@ -22,6 +22,7 @@ import {
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
   sessionDelta,
+  validLapTimesMs,
 } from '@/lib/track-days';
 import { formatLapMs } from '@/lib/time';
 import type { SessionWithLapTimes } from '@/lib/types';
@@ -87,8 +88,12 @@ export default function SessionProgressionStrip({
   // honesty gate lives here: below the lap minimum we do not compute a σ at all,
   // so there is nothing to accidentally render — and a null also means "no σ
   // delta is earned", which is exactly sessionDelta's rule for the pair.
+  //
+  // The gate and the σ both read validLapTimesMs, so the count being gated on is
+  // the count σ was computed from. A raw laps.map gated on six rows while σ ran
+  // over five of them whenever one lap time was 0.
   const sigmas = sessions.map((session) => {
-    const lapTimesMs = session.laps.map((l) => l.lap_time_ms);
+    const lapTimesMs = validLapTimesMs(session.laps);
     return lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS
       ? sessionConsistencySeconds(lapTimesMs)
       : null;
@@ -97,7 +102,7 @@ export default function SessionProgressionStrip({
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {sessions.map((session, i) => {
-        const lapTimesMs = session.laps.map((l) => l.lap_time_ms);
+        const lapTimesMs = validLapTimesMs(session.laps);
         const sigma = sigmas[i];
 
         const prev = i > 0 ? sessions[i - 1] : null;
@@ -108,7 +113,7 @@ export default function SessionProgressionStrip({
           ? sessionDelta(
               {
                 bestLapMs: prev.best_lap_ms,
-                lapTimesMs: prev.laps.map((l) => l.lap_time_ms),
+                lapTimesMs: validLapTimesMs(prev.laps),
               },
               { bestLapMs: session.best_lap_ms, lapTimesMs }
             )
@@ -123,7 +128,12 @@ export default function SessionProgressionStrip({
             <p className="text-sm text-muted">Session {i + 1}</p>
 
             <p className="mt-1 text-xl font-semibold text-primary">
-              {session.best_lap_ms !== null ? formatLapMs(session.best_lap_ms) : '--'}
+              {/* > 0, not !== null: a 0 best lap would print "0:00.000" here
+                  while dayBestLapMs skips it for the KPI directly above and the
+                  session page prints "--" for it. Same row, one rule. */}
+              {session.best_lap_ms !== null && session.best_lap_ms > 0
+                ? formatLapMs(session.best_lap_ms)
+                : '--'}
               <BestLapDelta deltaMs={delta?.bestLapDeltaMs ?? null} />
             </p>
 
@@ -143,8 +153,13 @@ export default function SessionProgressionStrip({
               )}
             </p>
 
+            {/* Lap ROWS recorded, deliberately not lapTimesMs.length: this is
+                the same figure the session page's "Laps" card shows, and the two
+                must not disagree one click apart. The σ line above already says
+                when a session cannot support a consistency figure, without
+                putting a second, smaller lap count next to this one. */}
             <p className="mt-1 text-xs text-text-subtle">
-              {lapTimesMs.length} {lapTimesMs.length === 1 ? 'lap' : 'laps'}
+              {session.laps.length} {session.laps.length === 1 ? 'lap' : 'laps'}
             </p>
           </Link>
         );

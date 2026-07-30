@@ -57,6 +57,35 @@ export function bySessionStart(
   );
 }
 
+/**
+ * The lap times that COUNT, in MILLISECONDS — the app's one definition of "a
+ * lap", used for every honesty gate and every σ input.
+ *
+ * A 0 or negative lap time is not a lap, and nothing downstream treats it as
+ * one: sessionConsistencySeconds drops it before computing σ. But the
+ * >=MIN_LAPS_FOR_INSIGHTS gate is applied by the CALLER, not by
+ * sessionConsistencySeconds, so a caller that counts laps σ never saw makes the
+ * gate stop describing the figure it guards — "±0.4s, 6 laps" over a σ of five.
+ *
+ * That is reachable, not hypothetical: csv-parser only rejects a lap time that
+ * fails parseInt ("0" and "-5000" both survive, and "0" is truthy so it clears
+ * the missing-field check too), the import route adds no positivity check, and
+ * laps.lap_time_ms has no CHECK > 0. One such session used to render three ways
+ * — dropped from the driver page's trend, σ computed WITH the zero on the day
+ * page, and σ over five laps behind a satisfied six-lap gate on the session
+ * page.
+ *
+ * So the gate and the σ read the same array, from here. Two derivations is how
+ * they drifted apart, and one is how they stay together.
+ *
+ * This is a narrower question than cleanLaps() answers — "is this a lap at all",
+ * not "is this a representative lap" — so the two sets are deliberately
+ * different and neither replaces the other.
+ */
+export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): number[] {
+  return laps.map((lap) => lap.lap_time_ms).filter((ms): ms is number => ms !== null && ms > 0);
+}
+
 /** Fastest best lap across the day, in MILLISECONDS. Null when no session has a positive best lap. */
 export function dayBestLapMs(sessions: Array<{ bestLapMs: number | null }>): number | null {
   const bests = sessions
@@ -72,6 +101,7 @@ export interface ConsistencyTrend {
 
 export interface SessionForTrend {
   date: string;
+  /** MUST come from validLapTimesMs — the gate below counts this array. */
   lapTimesMs: number[];
   /** Optional, but pass it when you have one: it is bySessionStart's tiebreak. */
   id?: string;
