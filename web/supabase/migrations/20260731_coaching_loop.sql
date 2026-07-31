@@ -55,8 +55,11 @@ comment on table public.focus_item_assessments is
 -- Note: an ON CONFLICT DO UPDATE that changes nothing still fires BEFORE
 -- UPDATE triggers, so a no-op re-submit marks the cell "corrected". That is
 -- intentional: a re-submit IS a coach re-review.
+-- Empty search_path per the standing Supabase lint; now() resolves via
+-- pg_catalog, which is always searched implicitly.
 create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = '' as $$
 begin
   new.updated_at = now();
   return new;
