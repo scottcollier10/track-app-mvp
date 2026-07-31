@@ -16,12 +16,14 @@
 
 ---
 
-## Task 1: Timezone no-op migration
+## Task 1: Timezone migration (amended: re-buckets 4 diagnosed sessions)
 
 **Files:**
 - Create: `web/supabase/migrations/20260731_track_timezones.sql`
 
-No app code, no Jest test — the migration's DO block IS the test. Settled decision: this must prove itself a no-op.
+No app code, no Jest test — the migration's DO block IS the test.
+
+> **AMENDED 2026-07-31 after the prod run:** the "prove a pure no-op" premise held for noon-anchored rows only. Applied to prod, the assertion correctly RAISED (transaction rolled back, prod unchanged): 4 sessions were UTC-bucketed — 2 pre-noon-anchor date-only Laguna Seca imports stored as midnight UTC (= 4pm previous day Pacific), and 2 real evening-Pacific timestamps (Buttonwillow/Sonoma) that UTC-bucket to the next day, the exact scenario the timezone decision's rationale predicted. Diagnosed 2026-07-31, owner-approved: re-bucket those four now, while lossless — no coach-authored day data exists yet (Task 2's migration has not been applied, so prod `track_days` has no `notes` column). The migration now asserts the mismatch set is EXACTLY the diagnosed four before moving anything, moves only them (keys-only day inserts, scoped emptied-day deletes), and still RAISEs on anything unexpected. The SQL below is the original no-op version, kept for history; the file in the repo is the authoritative amended version.
 
 **Step 1: Write the migration**
 
@@ -99,9 +101,10 @@ select count(*) as mismatched from public.sessions s
   join public.track_days td on td.id = s.track_day_id
   join public.tracks t on t.id = s.track_id
  where (s.date at time zone coalesce(t.timezone,'UTC'))::date <> td.date;
--- expected: mismatched = 0
+-- expected: mismatched = 0 AFTER the move (the migration re-buckets the 4
+-- diagnosed sessions; this verifies the result, not a no-op)
 ```
-Record outputs in the PR description. If the DO block raised: STOP the plan, report.
+Record outputs in the PR description, plus the DO block's `raise notice` lines (sessions moved / day rows created / old day rows deleted) — that NOTICE output is the audit record of the re-bucket. If the DO block raised: STOP the plan, report.
 
 ---
 
