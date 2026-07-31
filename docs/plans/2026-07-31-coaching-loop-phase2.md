@@ -49,8 +49,22 @@ update public.tracks set timezone = 'America/Chicago'
 --    opinion instead of the app's.
 do $$
 declare
+  unnamed integer;
   moved integer;
 begin
+  -- Guard against a vacuous pass: a track name the UPDATEs missed leaves
+  -- timezone NULL, coalesce(...,'UTC') kicks in below, and the assertion
+  -- passes for exactly the wrong reason. Any session-bearing track still
+  -- NULL here means the IN list is wrong — fail loudly, not silently.
+  select count(distinct t.id) into unnamed
+    from public.tracks t
+    join public.sessions s on s.track_id = t.id
+   where t.timezone is null;
+
+  if unnamed > 0 then
+    raise exception '% session-bearing track(s) still have NULL timezone — the name lists above missed them. STOP and report.', unnamed;
+  end if;
+
   select count(*) into moved
     from public.sessions s
     join public.track_days td on td.id = s.track_day_id
@@ -63,7 +77,9 @@ begin
 end $$;
 ```
 
-Note the track names must match `tracks.name` values exactly — verify against `web/supabase/migrations/20240101_initial_schema.sql` seed and `20260728_*` seeds before finalizing (e.g. confirm whether the row is `Thunderhill` or `Thunderhill Raceway Park`; adjust the IN list to the actual stored names).
+Two facts verified 2026-07-31, do not re-litigate but re-verify if schema changed:
+- The track names must match `tracks.name` exactly — check against the seeds in `20240101_initial_schema.sql` and `20260728_*` before finalizing the IN lists. The NULL-timezone assertion above is the machine-checked backstop, but the names should still be right on the first run.
+- `sessions.date` is **TIMESTAMPTZ** (`20240101_initial_schema.sql:42`), so `AT TIME ZONE` converts stored-UTC to local wall time — the correct semantics. (On date/timestamp it would instead *interpret* the value in that zone and the `::date` cast would depend on session TimeZone.) The Phase 1 backfill used this identical expression (`20260728_track_days.sql:45,56`), which is why the simple form is also the established one. If `sessions.date`'s type ever changes, this expression must be revisited.
 
 **Step 2: Verify the SQL locally for syntax only**
 
@@ -128,9 +144,14 @@ comment on table public.focus_items is
 create table public.focus_item_assessments (
   id uuid primary key default uuid_generate_v4(),
   focus_item_id uuid not null references public.focus_items(id) on delete cascade,
-  -- RESTRICT: an assessment is a permanent coach judgment. Purge scripts must
-  -- delete assessments BEFORE sessions.
-  session_id uuid not null references public.sessions(id) on delete restrict,
+  -- Deliberately DEFAULT (NO ACTION), not RESTRICT: both block deleting a
+  -- session that has assessments (an assessment is a permanent coach judgment;
+  -- purge scripts must delete assessments BEFORE sessions) — but NO ACTION
+  -- checks at end-of-statement, so a cascading driver delete that removes
+  -- sessions AND assessments (via drivers -> focus_items -> assessments)
+  -- succeeds regardless of cascade evaluation order. RESTRICT checks
+  -- immediately and can fail that same delete. Demo purge flows delete drivers.
+  session_id uuid not null references public.sessions(id),
   judgment text not null
     check (judgment in ('improved','keep_working','no_change','regressed')),
   note text,
@@ -334,7 +355,9 @@ All follow `web/src/app/api/add-note/route.ts` exactly: `getCurrentCoach()` → 
 Per-route contracts:
 1. **POST /api/focus-items** `{ driverId, text, createdAfterSessionId? }`. Reject empty/whitespace text. `createdAfterSessionId` passes through as given — absent means honestly null, the route NEVER infers an origin session.
 2. **PATCH /api/focus-items/[id]** `{ status? , text? }` — at least one. Validate status against the four values; reject empty text. Sets `updated_at`. Status transitions carry NO session anchor and create NO assessment row.
-3. **PUT /api/focus-items/[id]/assessments** `{ sessionId, judgment, note? }` — `.upsert({ focus_item_id, session_id, judgment, note, updated_at: new Date().toISOString() }, { onConflict: 'focus_item_id,session_id' })`. This is the correction path AND the creation path: one write, the cell. Validate judgment enum.
+3. **PUT /api/focus-items/[id]/assessments** `{ sessionId, judgment, note? }` — upsert with `{ onConflict: 'focus_item_id,session_id' }`. This is the correction path AND the creation path: one write, the cell. Validate judgment enum. Two contract rules:
+   - **Cross-driver integrity:** RLS only proves both rows belong to the coach — it does NOT stop assessing driver A's focus item against driver B's session, which corrupts the coaching story undetectably. The existence check must select both rows and assert `session.driver_id === focusItem.driver_id`, else 400.
+   - **Note preservation:** the upsert payload's columns are exactly what `ON CONFLICT DO UPDATE SET` overwrites. Build the payload conditionally: **omit the `note` key entirely when the request body omits it** (preserves the existing note on a judgment-only correction); include `note: null` only when the body explicitly sends null (clears it). Payload always includes `focus_item_id, session_id, judgment, updated_at: new Date().toISOString()`.
 4. **PATCH /api/sessions/[id]/context** `{ representativeness, note? }` — validate against the three values or null (null = clear back to representative); when `representative`/null, null the note too.
 5. **PATCH /api/days/[id]/notes** `{ notes }` — string or null. Plain update of `track_days.notes`.
 
@@ -360,7 +383,7 @@ Per-route contracts:
 - Sheet opens from a "Debrief" action on EVERY session card (retroactive assessment is legitimate). Four zones:
   1. `ContextFlagChips` — three chips + note input when partial/not. Writes PATCH context.
   2. Delta block — baseline from `deltaBaselineIndex` over the day's sessions, named: "vs Session {n}"; when baseline is partial, propagate: "vs Session {n} · partial — {note}". Best lap Δ + σ Δ (both sides through `canClaimConsistency`), lap counts. Sector deltas ONLY when both sessions' laps carry `sector_data` (reuse `idealLapMs` per session from `@/lib/analytics-v2`; delta of ideal laps, signed, labeled "ideal-lap Δ"). Empty state: "No comparison baseline yet — first session of the day" / "— no earlier representative session". NEVER zeros.
-  3. Assess — items from `focusItemsForSession`: `reviewed` rendered with current judgment, tappable to correct (PUT upsert-cell); `inPlay` not yet reviewed rendered with four judgment buttons + note. Each tap writes immediately.
+  3. Assess — items from `focusItemsForSession`: `reviewed` rendered with current judgment, tappable to correct (PUT upsert-cell); `inPlay` not yet reviewed rendered with four judgment buttons + note. Each tap writes immediately. **A judgment-correction tap sends `{ sessionId, judgment }` with NO `note` key** — the route's omit-preserves rule keeps the existing note; the note field sends its own write (with the note) only when edited.
   4. Add focus item — text input; POST with `createdAfterSessionId` = this session id.
 - EVERY write control renders pending → saved/failed with a retry affordance (the hook). Optimistic is not hopeful.
 - **Revalidation (the cure ships with the cause):** after any successful context-flag write, call `router.refresh()` so the server-rendered day page recomputes baselines, day-best, trend, annotation. The sheet's own delta block re-derives from refreshed props.
@@ -399,7 +422,7 @@ Sheet may be a simple fixed-bottom overlay; match existing Card/Tailwind idioms.
 - Modify: `web/src/app/days/[id]/page.tsx` (zone 3, below FocusPanel)
 - Test: `web/src/components/days/__tests__/DayNotes.test.tsx`
 
-Textarea prefilled from `track_days.notes`, debounced save (~800ms after typing stops) to PATCH notes, explicit saved / saving / failed-with-retry state via the Task 5 hook. Empty saves as null. Label: "Day notes". No summary UI, no AI anything — the Phase 3 slot renders above this later.
+Textarea prefilled from `track_days.notes`, debounced save (~800ms after typing stops) to PATCH notes, **plus a flush on blur and on unmount** — navigating away within the debounce window must not drop the last edit. Explicit saved / saving / failed-with-retry state via the Task 5 hook. Empty saves as null. Label: "Day notes". No summary UI, no AI anything — the Phase 3 slot renders above this later.
 
 Steps: failing test (debounced PATCH payload; failed→retry) → implement → wire → jest + tsc → commit `feat(days): day notes scratchpad`.
 
