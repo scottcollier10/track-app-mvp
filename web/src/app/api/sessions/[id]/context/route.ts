@@ -74,8 +74,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const isDefault =
       representativeness === null || representativeness === 'representative';
 
+    // NULL is the one stored encoding of "representative" (types/index.ts
+    // documents it). Accepting the string is API input convenience; storing
+    // it would fork the encoding and let a future === null check silently
+    // split the population.
     const updateData: TablesUpdate<'sessions'> = {
-      representativeness,
+      representativeness: isDefault ? null : representativeness,
       representativeness_note: isDefault ? null : (note ?? null),
     };
 

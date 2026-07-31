@@ -49,7 +49,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updateData: TablesUpdate<'track_days'> = { notes };
+    // One stored encoding of "no notes": empty/whitespace-only becomes null
+    // (same rule as the context route's null normalization). Non-empty notes
+    // are stored as sent -- coaches own their formatting.
+    const updateData: TablesUpdate<'track_days'> = {
+      notes: notes === null || notes.trim() === '' ? null : notes,
+    };
 
     const { data: updated, error } = await supabase
       .from('track_days')

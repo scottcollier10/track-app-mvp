@@ -79,9 +79,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // NEVER write updated_at here: the DB set_updated_at trigger owns that
-    // column. A route writing it too means two writers of one field, and a
-    // skewed client clock could make updated_at < created_at, breaking the
-    // corrected-cell claim the DB guarantees.
+    // column. A route writing it too means two writers of one field
+    // disagreeing (client clock vs DB clock).
     const updateData: TablesUpdate<'focus_items'> = {};
     if (status !== undefined) {
       updateData.status = status;
