@@ -6,6 +6,7 @@ import CoachNotes from '@/components/ui/CoachNotes';
 import Sparkline from '@/components/analytics/Sparkline';
 import Link from 'next/link';
 import {
+  canClaimConsistency,
   getSessionInsightsFromMs,
   INSIGHT_HELPERS,
   MIN_LAPS_FOR_INSIGHTS,
@@ -103,10 +104,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
       : {}),
   }));
 
-  // Gated on lapTimes, not laps: every figure behind this gate (σ, pace trend)
-  // is computed from lapTimes, and counting raw rows instead let the page claim
-  // the six-lap minimum was met while reporting a σ over five laps.
-  const showInsights = lapTimes.length >= MIN_LAPS_FOR_INSIGHTS;
+  // canClaimConsistency over lapTimes, not raw laps: every figure behind this
+  // gate (σ, pace trend) is computed from lapTimes (validLapTimesMs output),
+  // and counting raw rows instead let the page claim the six-lap minimum was
+  // met while reporting a σ over five laps.
+  const showInsights = canClaimConsistency(lapTimes);
 
   // Where this session sits in its track day. Null for a session with no day
   // (shouldn't exist post-backfill), in which case the header falls back to the

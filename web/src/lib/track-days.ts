@@ -1,9 +1,9 @@
 /**
  * Track-day helpers. Pure functions only — day grouping math lives here,
- * honesty gates reuse MIN_LAPS_FOR_INSIGHTS and sessionConsistencySeconds.
+ * honesty gates reuse canClaimConsistency and sessionConsistencySeconds.
  */
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
-import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import { canClaimConsistency } from '@/lib/insights';
 import type { ImportedSessionResponse } from '@/lib/types';
 
 /** Track-local calendar date as YYYY-MM-DD. Throws RangeError on an unparseable timestamp; a null/invalid IANA name falls back to UTC. */
@@ -63,7 +63,7 @@ export function bySessionStart(
  *
  * A 0 or negative lap time is not a lap, and nothing downstream treats it as
  * one: sessionConsistencySeconds drops it before computing σ. But the
- * >=MIN_LAPS_FOR_INSIGHTS gate is applied by the CALLER, not by
+ * canClaimConsistency gate is applied by the CALLER, not by
  * sessionConsistencySeconds, so a caller that counts laps σ never saw makes the
  * gate stop describing the figure it guards — "±0.4s, 6 laps" over a σ of five.
  *
@@ -86,9 +86,47 @@ export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): nu
   return laps.map((lap) => lap.lap_time_ms).filter((ms): ms is number => ms !== null && ms > 0);
 }
 
-/** Fastest best lap across the day, in MILLISECONDS. Null when no session has a positive best lap. */
-export function dayBestLapMs(sessions: Array<{ bestLapMs: number | null }>): number | null {
-  const bests = sessions
+/**
+ * The predicate behind representativeSessions and deltaBaselineIndex — kept
+ * private so "does this session count?" has exactly one answer, whichever
+ * entry point asked.
+ */
+function countsTowardDayAggregates(session: { representativeness?: string | null }): boolean {
+  return session.representativeness !== 'not_representative';
+}
+
+/**
+ * The sessions a day aggregate is allowed to count — the ONE exclusion rule.
+ *
+ * Only an explicit 'not_representative' flag excludes. null (unflagged — every
+ * pre-P2 session) and 'partial' count in FULL: a partial session is real
+ * evidence with a caveat the UI renders as a chip, not evidence to hide, and
+ * treating null as anything but "counts" would change every historical day the
+ * moment this shipped.
+ *
+ * The field is optional so a caller (or an old fixture) without the column
+ * behaves exactly like an unflagged session — absence and null are the same
+ * case, never a third behavior.
+ */
+export function representativeSessions<T extends { representativeness?: string | null }>(
+  sessions: T[]
+): T[] {
+  return sessions.filter(countsTowardDayAggregates);
+}
+
+/**
+ * Fastest best lap across the day's COUNTED sessions, in MILLISECONDS. Null
+ * when no counted session has a positive best lap.
+ *
+ * The representativeness filter is applied here, not by callers: the day page
+ * KPI and the driver page's day list both render this number, and a filter
+ * applied at one call site and forgotten at the other would put two different
+ * "best laps of the day" one click apart.
+ */
+export function dayBestLapMs(
+  sessions: Array<{ bestLapMs: number | null; representativeness?: string | null }>
+): number | null {
+  const bests = representativeSessions(sessions)
     .map((s) => s.bestLapMs)
     .filter((b): b is number => b !== null && b > 0);
   return bests.length ? Math.min(...bests) : null;
@@ -105,11 +143,14 @@ export interface SessionForTrend {
   lapTimesMs: number[];
   /** Optional, but pass it when you have one: it is bySessionStart's tiebreak. */
   id?: string;
+  /** Absent behaves as null (counts) — see representativeSessions. */
+  representativeness?: string | null;
 }
 
 /**
- * σ (SECONDS) of the chronologically first and last sessions that clear the lap
- * gate; null if <2 qualify.
+ * σ (SECONDS) of the chronologically first and last COUNTED sessions that clear
+ * the lap gate; null if <2 qualify. A not_representative session cannot be
+ * either endpoint — same rule, same place, as dayBestLapMs above.
  *
  * Sorts by bySessionStart itself — caller order is irrelevant. That is
  * deliberate: callers hand it newest-first data (the driver page query orders
@@ -117,13 +158,46 @@ export interface SessionForTrend {
  * tightened up all day that they got looser.
  */
 export function dayConsistencyTrend(sessions: SessionForTrend[]): ConsistencyTrend | null {
-  const sigmas = [...sessions]
+  const sigmas = representativeSessions(sessions)
     .sort(bySessionStart)
-    .filter((s) => s.lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS)
+    .filter((s) => canClaimConsistency(s.lapTimesMs))
     .map((s) => sessionConsistencySeconds(s.lapTimesMs))
     .filter((s): s is number => s !== null);
   if (sigmas.length < 2) return null;
   return { firstSeconds: sigmas[0], lastSeconds: sigmas[sigmas.length - 1] };
+}
+
+/**
+ * The caption a day aggregate carries when the representativeness filter
+ * removed something: "(3 of 4 sessions)". Null when every session counted —
+ * annotating the full set would imply a filter that did nothing.
+ *
+ * One formatter, because the day page KPI and the driver page's day list print
+ * the same aggregate and must caption it identically or not at all.
+ */
+export function dayAggregateAnnotation(total: number, counted: number): string | null {
+  return counted < total ? `(${counted} of ${total} sessions)` : null;
+}
+
+/**
+ * The index a delta at `index` is measured against: the NEAREST EARLIER session
+ * that counts (countsTowardDayAggregates — the same rule every day aggregate
+ * applies). Null at the first session, and null when every earlier session is
+ * excluded: "no baseline" is the honest answer, never "compare against the
+ * flagged one anyway" — a delta vs a not_representative session is exactly the
+ * misleading comparison the flag exists to prevent.
+ *
+ * `sessions` must be in day order (bySessionStart's) — the index arithmetic is
+ * meaningless in any other order.
+ */
+export function deltaBaselineIndex(
+  sessions: Array<{ representativeness?: string | null }>,
+  index: number
+): number | null {
+  for (let i = index - 1; i >= 0; i--) {
+    if (countsTowardDayAggregates(sessions[i])) return i;
+  }
+  return null;
 }
 
 /**
@@ -246,17 +320,15 @@ export interface SessionForDelta {
 /**
  * Change from prev to curr, signed as `curr - prev` (negative = faster lap / tighter σ).
  * bestLapDeltaMs is MILLISECONDS, null if either best lap is null.
- * consistencyDeltaSeconds is SECONDS, null unless both sessions clear the lap gate and both σ resolve.
+ * consistencyDeltaSeconds is SECONDS, null unless both sessions clear
+ * canClaimConsistency and both σ resolve.
  */
 export function sessionDelta(prev: SessionForDelta, curr: SessionForDelta): SessionDelta {
   const bestLapDeltaMs =
     prev.bestLapMs !== null && curr.bestLapMs !== null ? curr.bestLapMs - prev.bestLapMs : null;
 
   let consistencyDeltaSeconds: number | null = null;
-  if (
-    prev.lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS &&
-    curr.lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS
-  ) {
+  if (canClaimConsistency(prev.lapTimesMs) && canClaimConsistency(curr.lapTimesMs)) {
     const prevSigma = sessionConsistencySeconds(prev.lapTimesMs);
     const currSigma = sessionConsistencySeconds(curr.lapTimesMs);
     if (prevSigma !== null && currSigma !== null) {
@@ -264,4 +336,81 @@ export function sessionDelta(prev: SessionForDelta, curr: SessionForDelta): Sess
     }
   }
   return { bestLapDeltaMs, consistencyDeltaSeconds };
+}
+
+/**
+ * The full tagged union focusItemsForSession returns. An item may appear in
+ * BOTH groups (an active item assessed at this session); callers own the
+ * presentation split (`inPlay \ reviewed` etc.), never the eligibility rules.
+ */
+export interface FocusItemEligibility<I> {
+  reviewed: I[];
+  inPlay: I[];
+}
+
+/**
+ * Which focus items belong to a session's debrief — the one definition, so the
+ * session page and the day page cannot show a coach two different lists of
+ * "what this driver was working on".
+ *
+ * `reviewed` — items with an assessment AT this session, whatever their current
+ * status. An assessment is a record of a review that happened; an item achieved
+ * or dropped since still shows the review that led there. Ordered by item
+ * creation time (id tiebreak), so two renders cannot disagree on order.
+ *
+ * `inPlay` — active items that were in play COMING IN to this session:
+ *
+ *  - Non-null origin (created_after_session_id) found in `originSessions`:
+ *    the origin must be STRICTLY earlier by bySessionStart. An item is coaching
+ *    output OF its origin session — advice for the next one — so it is never
+ *    "in play" during the session that produced it, and bySessionStart's id
+ *    tiebreak decides tied timestamps the same way the Session N numbering does.
+ *
+ *  - Null origin, or an origin id missing from the map (unknown origin — same
+ *    fallback): the item's created_at, as a TRACK-LOCAL calendar date, must be
+ *    <= the day's date. The same-day TIE IS INCLUDED deliberately: imported
+ *    session timestamps are noon-anchored, so comparing wall clocks would make
+ *    "created before this session?" a coin flip for an item written the same
+ *    day — ties resolve toward showing the coach their own item.
+ */
+export function focusItemsForSession<
+  I extends {
+    id: string;
+    status: string;
+    created_at: string;
+    created_after_session_id: string | null;
+  }
+>(args: {
+  items: I[];
+  /** Assessments AT this session — not "ever assessed". */
+  assessedItemIds: Set<string>;
+  session: { id: string; date: string };
+  /** id -> session, for origin ordering. Missing ids fall back to the date rule. */
+  originSessions: Map<string, { id: string; date: string }>;
+  /** track_days.date of the session's day — a plain track-local calendar date. */
+  dayDate: string;
+  trackTimezone: string | null;
+}): FocusItemEligibility<I> {
+  const { items, assessedItemIds, session, originSessions, dayDate, trackTimezone } = args;
+
+  const byCreation = [...items].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime() ||
+      a.id.localeCompare(b.id)
+  );
+
+  const inPlayComingIn = (item: I): boolean => {
+    const origin = item.created_after_session_id
+      ? originSessions.get(item.created_after_session_id)
+      : undefined;
+    if (origin) {
+      return bySessionStart(origin, session) < 0;
+    }
+    return localDateForTimezone(item.created_at, trackTimezone) <= dayDate;
+  };
+
+  return {
+    reviewed: byCreation.filter((item) => assessedItemIds.has(item.id)),
+    inPlay: byCreation.filter((item) => item.status === 'active' && inPlayComingIn(item)),
+  };
 }

@@ -67,19 +67,26 @@ export default async function TrackDayPage({ params }: PageProps) {
 
   // A day with zero sessions is a real row (a partially-failed import), so it
   // renders — it just has nothing to compare.
-  const bestLapMs = dayBestLapMs(sessions.map((s) => ({ bestLapMs: s.best_lap_ms })));
+  //
+  // representativeness rides along untouched: the exclusion rule lives in the
+  // aggregate helpers (representativeSessions), never at a call site, so this
+  // page and the driver page's day list cannot filter differently.
+  const bestLapMs = dayBestLapMs(
+    sessions.map((s) => ({ bestLapMs: s.best_lap_ms, representativeness: s.representativeness }))
+  );
 
   // Feed dates in and let the helper sort: it reports first -> last
   // chronologically, so caller ordering can never flip the trend's direction.
   //
   // validLapTimesMs, not a raw laps.map: a 0 lap time reaches the database (see
   // its docblock), and mapping the rows straight through computed this KPI's σ
-  // over laps the >=MIN_LAPS_FOR_INSIGHTS gate had already refused elsewhere.
+  // over laps the canClaimConsistency gate had already refused elsewhere.
   const trend = dayConsistencyTrend(
     sessions.map((s) => ({
       id: s.id,
       date: s.date,
       lapTimesMs: validLapTimesMs(s.laps),
+      representativeness: s.representativeness,
     }))
   );
 

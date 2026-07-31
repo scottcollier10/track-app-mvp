@@ -9,7 +9,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { getSessionInsightsFromMs, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import {
+  canClaimConsistency,
+  getSessionInsightsFromMs,
+  MIN_LAPS_FOR_INSIGHTS,
+} from '@/lib/insights';
+import { validLapTimesMs } from '@/lib/track-days';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
 const COACHING_MODEL = 'claude-sonnet-4-6';
@@ -103,7 +108,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (laps.length < MIN_LAPS_FOR_INSIGHTS) {
+    // Countable laps (validLapTimesMs), not raw rows: this route used to gate
+    // on laps.length while the σ it reports ran over the positive lap times
+    // only — a six-row session with one 0 cleared the gate here and was refused
+    // by the session page. One array now feeds both the gate and the insights.
+    const countableLapTimesMs = validLapTimesMs(laps);
+    if (!canClaimConsistency(countableLapTimesMs)) {
       return NextResponse.json(
         {
           success: false,
@@ -120,9 +130,8 @@ export async function POST(request: NextRequest) {
       .eq('driver_id', session.driver_id)
       .single();
 
-    // 6. Calculate insights
-    const lapTimesMs = laps.map((lap) => lap.lap_time_ms);
-    const insights = getSessionInsightsFromMs(lapTimesMs);
+    // 6. Calculate insights — from the same countable array the gate counted.
+    const insights = getSessionInsightsFromMs(countableLapTimesMs);
 
     // 7. Format data for prompt
     const driverName = session.drivers?.name || 'Driver';

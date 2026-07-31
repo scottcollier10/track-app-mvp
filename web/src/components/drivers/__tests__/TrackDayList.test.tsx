@@ -42,6 +42,7 @@ function makeSession(
     lapCount: lapTimesMs.length,
     lapTimesMs,
     track_day: { id: 'day-1', date: '2026-07-12' },
+    representativeness: null,
     ...overrides,
   };
 }

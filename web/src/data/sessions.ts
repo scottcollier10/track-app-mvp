@@ -21,10 +21,18 @@ export interface SessionWithDetails {
    * Lap times in ms, present when the query fetches lap details (getAllSessions).
    *
    * validLapTimesMs's output, so it is both the σ input and exactly what the
-   * >=MIN_LAPS_FOR_INSIGHTS gate counts. `lapCount` above is the raw number of
+   * canClaimConsistency gate counts. `lapCount` above is the raw number of
    * lap ROWS and can be larger; the two answer different questions.
    */
   lapTimesMs?: number[];
+  /**
+   * sessions.representativeness, present when the query fetches it
+   * (getAllSessions). NULL = unflagged, which counts fully; only
+   * 'not_representative' excludes a session from day aggregates — and only the
+   * aggregate helpers apply that rule (see representativeSessions in
+   * @/lib/track-days). This field is carried, never interpreted, here.
+   */
+  representativeness?: string | null;
   /**
    * The session's track day, present when the query embeds it (getAllSessions).
    *
@@ -56,6 +64,12 @@ export interface SessionWithDetails {
 export type SessionWithTrackDay = SessionWithDetails & {
   lapTimesMs: number[];
   track_day: { id: string; date: string } | null;
+  /**
+   * Required here for the same reason track_day is: a missing flag fails
+   * SILENTLY — every session counts, and a day list quietly disagrees with the
+   * day page about which sessions its aggregates describe.
+   */
+  representativeness: string | null;
 };
 
 /**
@@ -188,6 +202,7 @@ export async function getAllSessions(
         total_time_ms,
         best_lap_ms,
         source,
+        representativeness,
         driver:drivers(id, name, email),
         track:tracks(id, name, location),
         track_day:track_days(id, date),

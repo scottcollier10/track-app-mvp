@@ -1,11 +1,15 @@
 import {
   bySessionStart,
   localDateForTimezone,
+  dayAggregateAnnotation,
   dayBestLapMs,
   dayConsistencyTrend,
+  deltaBaselineIndex,
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
+  focusItemsForSession,
   formatConsistencyTrend,
+  representativeSessions,
   sessionDelta,
   uniqueTrackDayLinks,
   validLapTimesMs,
@@ -114,7 +118,7 @@ describe('validLapTimesMs', () => {
     expect(sixLapsOneZero).toHaveLength(6);
     expect(lapTimesMs).toEqual([91000, 92000, 91000, 92000, 91000]);
 
-    // The session page's gate (lapTimes.length >= MIN_LAPS_FOR_INSIGHTS) — the
+    // The session page's gate (canClaimConsistency over lapTimes) — the
     // one that used to be satisfied by the raw row count.
     expect(lapTimesMs.length).toBeLessThan(MIN_LAPS_FOR_INSIGHTS);
 
@@ -267,6 +271,211 @@ describe('formatConsistencyTrend', () => {
     expect(formatConsistencyTrend(trend)).toBe(
       `±${sessionConsistencySeconds(loose)!.toFixed(1)}s → ±${sessionConsistencySeconds(tight)!.toFixed(1)}s`
     );
+  });
+});
+
+// The one exclusion rule: only not_representative excludes. partial and null count.
+describe('representativeSessions', () => {
+  it('excludes only not_representative; null and partial count fully', () => {
+    const sessions = [
+      { id: 's1', representativeness: 'representative' },
+      { id: 's2', representativeness: 'partial' },
+      { id: 's3', representativeness: null },
+      { id: 's4', representativeness: 'not_representative' },
+    ];
+    expect(representativeSessions(sessions).map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+  });
+});
+
+describe('day aggregates under representativeness', () => {
+  const tight = [90000, 90100, 90050, 90080, 90020, 90060];
+  const loose = [90000, 92000, 91000, 90500, 93000, 90800];
+  const mid = [90000, 90400, 90200, 90300, 90100, 90500];
+
+  it('pre-P2 days (all-null flags) produce byte-identical aggregates', () => {
+    // The no-op pin: a session flagged null (every pre-P2 session) must compute
+    // exactly what the same session computed before the field existed.
+    expect(
+      dayBestLapMs([
+        { bestLapMs: 95200, representativeness: null },
+        { bestLapMs: 94100, representativeness: null },
+      ])
+    ).toBe(dayBestLapMs([{ bestLapMs: 95200 }, { bestLapMs: 94100 }]));
+
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs: loose, representativeness: null },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: tight, representativeness: null },
+      ])
+    ).toEqual(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs: loose },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: tight },
+      ])
+    );
+  });
+
+  it('dayBestLapMs ignores a not_representative session holding the fastest lap', () => {
+    expect(
+      dayBestLapMs([
+        { bestLapMs: 90000, representativeness: 'not_representative' },
+        { bestLapMs: 94100, representativeness: null },
+        { bestLapMs: 95000, representativeness: 'partial' },
+      ])
+    ).toBe(94100);
+  });
+
+  it('dayConsistencyTrend skips not_representative sessions when picking first/last qualifying', () => {
+    // Chronologically loose -> mid -> tight, but the loose opener is flagged:
+    // the trend must start at mid, not loose.
+    const trend = dayConsistencyTrend([
+      { date: '2026-07-11T09:00:00Z', lapTimesMs: loose, representativeness: 'not_representative' },
+      { date: '2026-07-11T12:00:00Z', lapTimesMs: mid, representativeness: null },
+      { date: '2026-07-11T15:00:00Z', lapTimesMs: tight, representativeness: 'partial' },
+    ]);
+    expect(trend).not.toBeNull();
+    expect(trend!.firstSeconds).toBeCloseTo(sessionConsistencySeconds(mid)!, 4);
+    expect(trend!.lastSeconds).toBeCloseTo(sessionConsistencySeconds(tight)!, 4);
+
+    // And when the exclusion leaves fewer than two qualifying sessions, there is
+    // no honest trend at all.
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T09:00:00Z', lapTimesMs: loose, representativeness: 'not_representative' },
+        { date: '2026-07-11T12:00:00Z', lapTimesMs: mid, representativeness: null },
+      ])
+    ).toBeNull();
+  });
+
+  it('dayAggregateAnnotation renders "(3 of 4 sessions)" only for strict subsets, null otherwise', () => {
+    expect(dayAggregateAnnotation(4, 3)).toBe('(3 of 4 sessions)');
+    expect(dayAggregateAnnotation(4, 4)).toBeNull();
+    expect(dayAggregateAnnotation(1, 1)).toBeNull();
+    expect(dayAggregateAnnotation(0, 0)).toBeNull();
+  });
+});
+
+describe('deltaBaselineIndex', () => {
+  it('returns nearest earlier non-excluded session index; null for session 1 or when all priors are excluded', () => {
+    const day = [
+      { representativeness: null },
+      { representativeness: 'not_representative' },
+      { representativeness: 'partial' },
+      { representativeness: null },
+    ];
+    // Session 1 has nothing earlier to compare against.
+    expect(deltaBaselineIndex(day, 0)).toBeNull();
+    // Session 2's neighbour is fine.
+    expect(deltaBaselineIndex(day, 1)).toBe(0);
+    // Session 3 skips its flagged neighbour back to session 1.
+    expect(deltaBaselineIndex(day, 2)).toBe(0);
+    // Session 4's neighbour is partial — partial counts.
+    expect(deltaBaselineIndex(day, 3)).toBe(2);
+
+    // Every prior excluded: no baseline, never "compare against the flagged one".
+    expect(
+      deltaBaselineIndex(
+        [{ representativeness: 'not_representative' }, { representativeness: null }],
+        1
+      )
+    ).toBeNull();
+  });
+});
+
+describe('focusItemsForSession', () => {
+  // A two-session day at a Chicago track. s1 is the morning session, s2 the
+  // afternoon — origin ordering between them is bySessionStart's.
+  const s1 = { id: 's1', date: '2026-07-12T15:00:00Z' };
+  const s2 = { id: 's2', date: '2026-07-12T20:00:00Z' };
+  const originSessions = new Map([
+    ['s1', s1],
+    ['s2', s2],
+  ]);
+  const dayDate = '2026-07-12';
+  const trackTimezone = 'America/Chicago';
+
+  const item = (
+    id: string,
+    status: string,
+    created_at: string,
+    created_after_session_id: string | null
+  ) => ({ id, status, created_at, created_after_session_id });
+
+  const eligibility = (
+    items: ReturnType<typeof item>[],
+    session: { id: string; date: string },
+    assessedItemIds: Set<string> = new Set()
+  ) =>
+    focusItemsForSession({
+      items,
+      assessedItemIds,
+      session,
+      originSessions,
+      dayDate,
+      trackTimezone,
+    });
+
+  it('origin-session item appears from the next session onward, never in its origin session', () => {
+    const originS1 = item('fi-1', 'active', '2026-07-12T15:30:00Z', 's1');
+    expect(eligibility([originS1], s1).inPlay).toEqual([]);
+    expect(eligibility([originS1], s2).inPlay).toEqual([originS1]);
+  });
+
+  it('null-origin item created the same local date is inPlay (tie included)', () => {
+    // 18:00Z is 1pm in Chicago — same local date as the day. The tie counts.
+    const sameDay = item('fi-2', 'active', '2026-07-12T18:00:00Z', null);
+    expect(eligibility([sameDay], s1).inPlay).toEqual([sameDay]);
+  });
+
+  it('null-origin item created after the day date is not inPlay', () => {
+    // 18:00Z on the 13th is the NEXT Chicago date — the item did not exist yet
+    // as far as this day is concerned.
+    const later = item('fi-3', 'active', '2026-07-13T18:00:00Z', null);
+    expect(eligibility([later], s2).inPlay).toEqual([]);
+  });
+
+  it('item assessed at this session and since achieved is reviewed but not inPlay', () => {
+    const achieved = item('fi-4', 'achieved', '2026-07-10T18:00:00Z', 's1');
+    const result = eligibility([achieved], s2, new Set(['fi-4']));
+    expect(result.reviewed).toEqual([achieved]);
+    expect(result.inPlay).toEqual([]);
+  });
+
+  it('paused/dropped items are neither, unless assessed at this session', () => {
+    const paused = item('fi-5', 'paused', '2026-07-10T18:00:00Z', 's1');
+    const dropped = item('fi-6', 'dropped', '2026-07-10T19:00:00Z', 's1');
+
+    const untouched = eligibility([paused, dropped], s2);
+    expect(untouched.reviewed).toEqual([]);
+    expect(untouched.inPlay).toEqual([]);
+
+    // Assessed AT this session, the coach's review still shows regardless of
+    // where the item's status has moved since.
+    const assessed = eligibility([paused, dropped], s2, new Set(['fi-6']));
+    expect(assessed.reviewed).toEqual([dropped]);
+    expect(assessed.inPlay).toEqual([]);
+  });
+
+  it('an active item both assessed here and in play coming in lands in BOTH groups', () => {
+    const working = item('fi-7', 'active', '2026-07-12T15:30:00Z', 's1');
+    const result = eligibility([working], s2, new Set(['fi-7']));
+    expect(result.reviewed).toEqual([working]);
+    expect(result.inPlay).toEqual([working]);
+  });
+
+  it('an origin id missing from the map falls back to the created-date rule', () => {
+    // The origin session was deleted (or not fetched): unknown origin, same
+    // fallback as a null origin. Created on the day -> inPlay; created after -> not.
+    const orphanSameDay = item('fi-8', 'active', '2026-07-12T18:00:00Z', 's-gone');
+    const orphanLater = item('fi-9', 'active', '2026-07-13T18:00:00Z', 's-gone');
+    expect(eligibility([orphanSameDay, orphanLater], s1).inPlay).toEqual([orphanSameDay]);
+  });
+
+  it('orders reviewed items by creation time', () => {
+    const older = item('fi-b', 'achieved', '2026-07-10T10:00:00Z', 's1');
+    const newer = item('fi-a', 'active', '2026-07-12T15:30:00Z', 's1');
+    const result = eligibility([newer, older], s2, new Set(['fi-a', 'fi-b']));
+    expect(result.reviewed.map((i) => i.id)).toEqual(['fi-b', 'fi-a']);
   });
 });
 

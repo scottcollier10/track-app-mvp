@@ -7,8 +7,9 @@
  * signed change from the session before it.
  *
  * Two rules this component must never break:
- *  - σ is only claimed at >= MIN_LAPS_FOR_INSIGHTS laps, and always comes from
- *    sessionConsistencySeconds. The math is never reimplemented here.
+ *  - σ is only claimed when canClaimConsistency allows it, and always comes
+ *    from sessionConsistencySeconds. Neither the gate nor the math is
+ *    reimplemented here.
  *  - Deltas are signed numbers. The app compares, the instructor concludes.
  *
  * `sessions` MUST arrive in chronological order — that order IS the "Session N"
@@ -16,7 +17,7 @@
  */
 import Link from 'next/link';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
-import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import { canClaimConsistency } from '@/lib/insights';
 import {
   SIGMA_DISPLAY_DECIMALS,
   displayedSigmaDeltaSeconds,
@@ -89,14 +90,12 @@ export default function SessionProgressionStrip({
   // so there is nothing to accidentally render — and a null also means "no σ
   // delta is earned", which is exactly sessionDelta's rule for the pair.
   //
-  // The gate and the σ both read validLapTimesMs, so the count being gated on is
-  // the count σ was computed from. A raw laps.map gated on six rows while σ ran
-  // over five of them whenever one lap time was 0.
+  // canClaimConsistency and the σ both read validLapTimesMs, so the count being
+  // gated on is the count σ was computed from. A raw laps.map gated on six rows
+  // while σ ran over five of them whenever one lap time was 0.
   const sigmas = sessions.map((session) => {
     const lapTimesMs = validLapTimesMs(session.laps);
-    return lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS
-      ? sessionConsistencySeconds(lapTimesMs)
-      : null;
+    return canClaimConsistency(lapTimesMs) ? sessionConsistencySeconds(lapTimesMs) : null;
   });
 
   return (
