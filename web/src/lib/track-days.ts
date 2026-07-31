@@ -194,6 +194,9 @@ export function deltaBaselineIndex(
   sessions: Array<{ representativeness?: string | null }>,
   index: number
 ): number | null {
+  // Callers pass a render-loop index; an out-of-range one has no "earlier
+  // session" to name, and null is the same honest answer index 0 gets.
+  if (!Number.isInteger(index) || index < 0 || index >= sessions.length) return null;
   for (let i = index - 1; i >= 0; i--) {
     if (countsTowardDayAggregates(sessions[i])) return i;
   }

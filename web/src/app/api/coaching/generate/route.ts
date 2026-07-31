@@ -133,13 +133,16 @@ export async function POST(request: NextRequest) {
     // 6. Calculate insights — from the same countable array the gate counted.
     const insights = getSessionInsightsFromMs(countableLapTimesMs);
 
-    // 7. Format data for prompt
+    // 7. Format data for prompt. The prompt speaks countable laps end-to-end:
+    // "Total Laps" is countableLapTimesMs.length, not laps.length, so it names
+    // the same count the gate and σ above were computed over — a 7-row session
+    // with one uncountable row says "Total Laps: 6", matching the 6-lap σ.
     const driverName = session.drivers?.name || 'Driver';
     const trackName = session.tracks?.name || 'Unknown Track';
     const experienceLevel = profile?.experience_level || 'intermediate';
     const totalSessions = profile?.total_sessions || 0;
     const sessionDate = new Date(session.date).toLocaleDateString();
-    const lapCount = laps.length;
+    const lapCount = countableLapTimesMs.length;
     const bestLapTime = session.best_lap_ms ? formatLapTime(session.best_lap_ms) : 'N/A';
     const consistencyText =
       insights.consistencySeconds !== null
@@ -147,8 +150,17 @@ export async function POST(request: NextRequest) {
         : 'not enough clean laps to measure';
     const paceTrend = insights.paceTrendLabel;
 
-    // Build lap times table
+    // Build lap times table — countable laps only, so the prompt cannot show
+    // the model a lap σ never saw. The filter mirrors validLapTimesMs (the
+    // app's one definition of a countable lap) but keeps whole ROWS, because
+    // the table needs lap_number labels and validLapTimesMs returns bare times.
+    // The prompt tells the model "Be specific with numbers and lap references";
+    // a raw row here would render "Lap 3: 0:00.000" (or NaN for a null time)
+    // and invite the model to cite that phantom lap in coach-visible text.
+    // Lap numbers stay AS RECORDED — a coach's "lap 5" must still be lap 5
+    // even when an earlier lap was uncountable, so no renumbering.
     const lapTimesTable = laps
+      .filter((lap) => lap.lap_time_ms !== null && lap.lap_time_ms > 0)
       .map((lap) => {
         const lapNum = lap.lap_number;
         const lapTime = formatLapTime(lap.lap_time_ms);

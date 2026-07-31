@@ -380,6 +380,18 @@ describe('deltaBaselineIndex', () => {
       )
     ).toBeNull();
   });
+
+  it('returns null for an out-of-range index instead of naming a session that is not earlier', () => {
+    const day = [{ representativeness: null }, { representativeness: null }];
+    // Callers pass a render-loop index; an index past the end has no "earlier
+    // session" to name, and null is the same honest answer index 0 gets. Before
+    // the guard, sessions.length walked back to a REAL index (a phantom
+    // baseline) and sessions.length + 5 dereferenced undefined and threw.
+    expect(deltaBaselineIndex(day, day.length)).toBeNull();
+    expect(deltaBaselineIndex(day, day.length + 5)).toBeNull();
+    expect(deltaBaselineIndex(day, 1.5)).toBeNull();
+    expect(deltaBaselineIndex(day, -3)).toBeNull();
+  });
 });
 
 describe('focusItemsForSession', () => {
@@ -469,6 +481,32 @@ describe('focusItemsForSession', () => {
     const orphanSameDay = item('fi-8', 'active', '2026-07-12T18:00:00Z', 's-gone');
     const orphanLater = item('fi-9', 'active', '2026-07-13T18:00:00Z', 's-gone');
     expect(eligibility([orphanSameDay, orphanLater], s1).inPlay).toEqual([orphanSameDay]);
+  });
+
+  it('tied origin/session timestamps are decided by the id tiebreak, both directions', () => {
+    // Noon-anchored imports make tied timestamps common, and bySessionStart's
+    // id tiebreak is arbitrary-but-stable. This pins that BOTH outcomes are
+    // deterministic — not that either ordering is "right": an origin whose id
+    // sorts before the session's is strictly earlier (item in play), and one
+    // whose id sorts after is not.
+    const tiedDate = '2026-07-12T19:00:00Z';
+    const run = (originId: string, sessionId: string) => {
+      const origin = { id: originId, date: tiedDate };
+      const session = { id: sessionId, date: tiedDate };
+      const tied = item('fi-tie', 'active', '2026-07-12T19:05:00Z', originId);
+      return focusItemsForSession({
+        items: [tied],
+        assessedItemIds: new Set<string>(),
+        session,
+        originSessions: new Map([[originId, origin]]),
+        dayDate,
+        trackTimezone,
+      }).inPlay;
+    };
+    // Origin id sorts BEFORE the session id -> origin is "earlier" -> in play.
+    expect(run('s-a', 's-b').map((i) => i.id)).toEqual(['fi-tie']);
+    // Same timestamps, ids swapped -> origin is "later" -> not in play.
+    expect(run('s-b', 's-a')).toEqual([]);
   });
 
   it('orders reviewed items by creation time', () => {
