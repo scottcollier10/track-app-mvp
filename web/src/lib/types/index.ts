@@ -13,6 +13,9 @@ export type Session = Database['public']['Tables']['sessions']['Row'];
 export type Lap = Database['public']['Tables']['laps']['Row'];
 export type CoachingNote = Database['public']['Tables']['coaching_notes']['Row'];
 export type TrackDay = Database['public']['Tables']['track_days']['Row'];
+export type FocusItem = Database['public']['Tables']['focus_items']['Row'];
+export type FocusItemAssessment =
+  Database['public']['Tables']['focus_item_assessments']['Row'];
 
 // Extended types with relations
 export interface SessionWithRelations extends Session {
@@ -40,6 +43,12 @@ export interface TrackDayDetail extends TrackDayWithSessions {
 
 /** DB CHECK constraint on sessions.representativeness. NULL = representative. */
 export type Representativeness = 'representative' | 'partial' | 'not_representative';
+
+/** DB CHECK constraint on focus_items.status. */
+export type FocusItemStatus = 'active' | 'achieved' | 'paused' | 'dropped';
+
+/** DB CHECK constraint on focus_item_assessments.judgment. */
+export type AssessmentJudgment = 'improved' | 'keep_working' | 'no_change' | 'regressed';
 
 export interface LapWithDelta extends Lap {
   delta_ms?: number;

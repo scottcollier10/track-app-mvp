@@ -170,6 +170,96 @@ export type Database = {
           },
         ]
       }
+      focus_item_assessments: {
+        Row: {
+          created_at: string
+          focus_item_id: string
+          id: string
+          judgment: string
+          note: string | null
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          focus_item_id: string
+          id?: string
+          judgment: string
+          note?: string | null
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          focus_item_id?: string
+          id?: string
+          judgment?: string
+          note?: string | null
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_item_assessments_focus_item_id_fkey"
+            columns: ["focus_item_id"]
+            isOneToOne: false
+            referencedRelation: "focus_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_item_assessments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_items: {
+        Row: {
+          created_after_session_id: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          status: string
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          created_after_session_id?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          status?: string
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          created_after_session_id?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          status?: string
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_items_created_after_session_id_fkey"
+            columns: ["created_after_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_items_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       laps: {
         Row: {
           created_at: string | null
@@ -418,6 +508,7 @@ export type Database = {
           date: string
           driver_id: string
           id: string
+          notes: string | null
           track_id: string
         }
         Insert: {
@@ -425,6 +516,7 @@ export type Database = {
           date: string
           driver_id: string
           id?: string
+          notes?: string | null
           track_id: string
         }
         Update: {
@@ -432,6 +524,7 @@ export type Database = {
           date?: string
           driver_id?: string
           id?: string
+          notes?: string | null
           track_id?: string
         }
         Relationships: [
