@@ -1,4 +1,5 @@
 import {
+  assessmentsInSessionOrder,
   bySessionStart,
   localDateForTimezone,
   dayAggregateAnnotation,
@@ -8,6 +9,7 @@ import {
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
   focusItemsForSession,
+  focusPanelGroups,
   formatConsistencyTrend,
   representativeSessions,
   sessionDelta,
@@ -514,6 +516,119 @@ describe('focusItemsForSession', () => {
     const newer = item('fi-a', 'active', '2026-07-12T15:30:00Z', 's1');
     const result = eligibility([newer, older], s2, new Set(['fi-a', 'fi-b']));
     expect(result.reviewed.map((i) => i.id)).toEqual(['fi-b', 'fi-a']);
+  });
+});
+
+describe('focusPanelGroups', () => {
+  const item = (id: string, status: string, created_at = '2026-07-10T12:00:00Z') => ({
+    id,
+    status,
+    created_at,
+  });
+
+  const groups = (
+    items: ReturnType<typeof item>[],
+    assessedThisDayItemIds: Set<string> = new Set()
+  ) => focusPanelGroups({ items, assessedThisDayItemIds });
+
+  it('puts active items in Active regardless of same-day evidence', () => {
+    const working = item('fi-1', 'active');
+    const alsoWorking = item('fi-2', 'active');
+    const result = groups([working, alsoWorking], new Set(['fi-1']));
+    expect(result.active.map((i) => i.id)).toEqual(['fi-1', 'fi-2']);
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive).toEqual([]);
+  });
+
+  it('puts achieved/dropped items WITH a same-day assessment in Resolved this day', () => {
+    const achieved = item('fi-1', 'achieved');
+    const dropped = item('fi-2', 'dropped');
+    const result = groups([achieved, dropped], new Set(['fi-1', 'fi-2']));
+    expect(result.resolvedThisDay.map((i) => i.id)).toEqual(['fi-1', 'fi-2']);
+    expect(result.pausedInactive).toEqual([]);
+  });
+
+  it('INTENDED GAP: a dropped item with no same-day assessment goes to Paused/inactive, not Resolved this day', () => {
+    // "Resolved this day" means resolved-WITH-same-day-evidence. An item
+    // dropped from the panel (no assessment on this day's sessions) has no
+    // evidence tying it to this day, so it appears in no day's resolved group —
+    // it stays findable under Paused/inactive instead. Do not "fix" this by
+    // inferring the day from updated_at; the transition log that would make it
+    // honest was explicitly rejected.
+    const dropped = item('fi-1', 'dropped');
+    const result = groups([dropped]);
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive.map((i) => i.id)).toEqual(['fi-1']);
+  });
+
+  it('a paused item is never Resolved this day, assessed on this day or not', () => {
+    // Paused is not resolved: only achieved/dropped can be. A same-day
+    // assessment on a paused item does not promote it.
+    const paused = item('fi-1', 'paused');
+    const result = groups([paused], new Set(['fi-1']));
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive.map((i) => i.id)).toEqual(['fi-1']);
+  });
+
+  it('every non-active item lands SOMEWHERE — nothing is ever invisible', () => {
+    const items = [
+      item('fi-1', 'active'),
+      item('fi-2', 'achieved'), // same-day evidence -> resolved
+      item('fi-3', 'achieved'), // no evidence -> paused/inactive
+      item('fi-4', 'paused'),
+      item('fi-5', 'dropped'),
+    ];
+    const result = groups(items, new Set(['fi-2']));
+    const placed = [
+      ...result.active,
+      ...result.resolvedThisDay,
+      ...result.pausedInactive,
+    ].map((i) => i.id);
+    expect(placed.sort()).toEqual(['fi-1', 'fi-2', 'fi-3', 'fi-4', 'fi-5']);
+    // And exactly once each: the three groups partition the items.
+    expect(placed).toHaveLength(items.length);
+  });
+
+  it('orders every group by creation time with id tiebreak, caller order irrelevant', () => {
+    const result = groups([
+      item('fi-b', 'active', '2026-07-10T12:00:00Z'),
+      item('fi-a', 'active', '2026-07-10T12:00:00Z'),
+      item('fi-c', 'active', '2026-07-09T12:00:00Z'),
+    ]);
+    expect(result.active.map((i) => i.id)).toEqual(['fi-c', 'fi-a', 'fi-b']);
+  });
+});
+
+describe('assessmentsInSessionOrder', () => {
+  const sessions = new Map([
+    ['s1', { id: 's1', date: '2026-07-12T15:00:00Z' }],
+    ['s2', { id: 's2', date: '2026-07-12T20:00:00Z' }],
+    ['s3', { id: 's3', date: '2026-07-19T15:00:00Z' }],
+  ]);
+
+  it('orders assessments chronologically by their SESSION start, not row order', () => {
+    const ordered = assessmentsInSessionOrder(
+      [{ session_id: 's3' }, { session_id: 's1' }, { session_id: 's2' }],
+      sessions
+    );
+    expect(ordered.map((a) => a.session_id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('sorts assessments whose session is unknown last, deterministically', () => {
+    // RESTRICT on session delete means the session row exists; an unknown id
+    // here is a fetch gap. Unknowns go last so the known timeline stays honest,
+    // ordered among themselves by session id — stable, never render-order.
+    const ordered = assessmentsInSessionOrder(
+      [{ session_id: 's-zz' }, { session_id: 's2' }, { session_id: 's-aa' }],
+      sessions
+    );
+    expect(ordered.map((a) => a.session_id)).toEqual(['s2', 's-aa', 's-zz']);
+  });
+
+  it('does not mutate the input array', () => {
+    const input = [{ session_id: 's2' }, { session_id: 's1' }];
+    assessmentsInSessionOrder(input, sessions);
+    expect(input.map((a) => a.session_id)).toEqual(['s2', 's1']);
   });
 });
 

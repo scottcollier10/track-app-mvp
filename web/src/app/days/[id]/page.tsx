@@ -26,6 +26,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 import SessionProgressionStrip from '@/components/days/SessionProgressionStrip';
+import FocusPanel from '@/components/days/FocusPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,6 +178,16 @@ export default async function TrackDayPage({ params }: PageProps) {
               </Card>
             )}
           </div>
+
+          {/* Zone 2 — the focus panel: read/manage only. Assessments happen in
+              a session's debrief sheet (above), never here. */}
+          <FocusPanel
+            driverId={day.driver_id}
+            daySessionIds={sessions.map((s) => s.id)}
+            focusItems={day.focusItems}
+            originSessions={day.originSessions}
+            assessmentSessions={day.assessmentSessions}
+          />
         </div>
       </div>
     </div>

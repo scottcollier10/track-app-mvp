@@ -31,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { sessionConsistencySeconds, idealLapMs, type LapSectors } from '@/lib/analytics-v2';
 import { canClaimConsistency } from '@/lib/insights';
 import {
+  JUDGMENT_LABELS,
   SIGMA_DISPLAY_DECIMALS,
   deltaBaselineIndex,
   displayedSigmaDeltaSeconds,
@@ -67,12 +68,11 @@ export interface DebriefSession extends Session {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
-const JUDGMENTS: Array<{ value: AssessmentJudgment; label: string }> = [
-  { value: 'improved', label: 'Improved' },
-  { value: 'keep_working', label: 'Keep working' },
-  { value: 'no_change', label: 'No change' },
-  { value: 'regressed', label: 'Regressed' },
-];
+// Button order is a local presentation choice (best -> worst); the labels come
+// from JUDGMENT_LABELS so the sheet, panel and banner spell judgments identically.
+const JUDGMENTS: Array<{ value: AssessmentJudgment; label: string }> = (
+  ['improved', 'keep_working', 'no_change', 'regressed'] as const
+).map((value) => ({ value, label: JUDGMENT_LABELS[value] }));
 
 /**
  * Coerce one lap's sector_data (raw Json) into the LapSectors idealLapMs

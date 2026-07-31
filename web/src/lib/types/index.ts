@@ -59,15 +59,39 @@ export interface FocusItemWithAssessments extends FocusItem {
 }
 
 /**
+ * A session a focus item references (as its origin, or as the anchor of one of
+ * its assessments), carrying its DAY — mirrors the exact
+ * `sessions(id, date, track_day:track_days(date, track:tracks(name)))` select.
+ *
+ * `track_day` is what the focus panel's origin label is read from: the day's
+ * plain track-local calendar date and its track's name. The session's own
+ * `date` (a timestamptz) exists for bySessionStart ordering ONLY — deriving a
+ * label date from it renders in the runtime's timezone and can name the wrong
+ * day. Null for a pre-day-model session that escaped the backfill; the label
+ * then says nothing rather than inferring.
+ */
+export interface FocusOriginSession {
+  id: string;
+  date: string;
+  track_day: { date: string; track: { name: string } } | null;
+}
+
+/**
  * Everything the day page's debrief flow needs in one fetch: the day, plus the
  * driver's focus items with assessments, plus the ORIGIN sessions those items'
- * created_after_session_id values point at. Origins are fetched by id, not
- * assumed to be among this day's sessions — an item created after a session at
- * another track day is still in play here.
+ * created_after_session_id values point at, plus the sessions their
+ * assessments anchor to. Origins are fetched by id, not assumed to be among
+ * this day's sessions — an item created after a session at another track day
+ * is still in play here, and its assessments can come from other days too.
  */
 export interface TrackDayDebrief extends TrackDayDetail {
   focusItems: FocusItemWithAssessments[];
-  originSessions: Pick<Session, 'id' | 'date'>[];
+  originSessions: FocusOriginSession[];
+  /**
+   * id+date of every session the items' assessments point at — what orders
+   * the focus panel's judgment timelines (assessmentsInSessionOrder).
+   */
+  assessmentSessions: Pick<Session, 'id' | 'date'>[];
 }
 
 /** DB CHECK constraint on sessions.representativeness. NULL = representative. */

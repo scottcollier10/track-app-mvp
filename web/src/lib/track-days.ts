@@ -4,7 +4,11 @@
  */
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import { canClaimConsistency } from '@/lib/insights';
-import type { ImportedSessionResponse } from '@/lib/types';
+import type {
+  AssessmentJudgment,
+  FocusItemStatus,
+  ImportedSessionResponse,
+} from '@/lib/types';
 
 /** Track-local calendar date as YYYY-MM-DD. Throws RangeError on an unparseable timestamp; a null/invalid IANA name falls back to UTC. */
 export function localDateForTimezone(isoTimestamp: string, timezone: string | null): string {
@@ -396,11 +400,7 @@ export function focusItemsForSession<
 }): FocusItemEligibility<I> {
   const { items, assessedItemIds, session, originSessions, dayDate, trackTimezone } = args;
 
-  const byCreation = [...items].sort(
-    (a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime() ||
-      a.id.localeCompare(b.id)
-  );
+  const byCreation = [...items].sort(byItemCreation);
 
   const inPlayComingIn = (item: I): boolean => {
     const origin = item.created_after_session_id
@@ -417,3 +417,122 @@ export function focusItemsForSession<
     inPlay: byCreation.filter((item) => item.status === 'active' && inPlayComingIn(item)),
   };
 }
+
+/**
+ * The one comparator behind every focus-item list rendered anywhere: creation
+ * time, id tiebreak. focusItemsForSession and focusPanelGroups both sort with
+ * it, so the debrief sheet and the focus panel cannot order the same items two
+ * ways.
+ */
+function byItemCreation(
+  a: { id: string; created_at: string },
+  b: { id: string; created_at: string }
+): number {
+  return (
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * The focus panel's three groups. Together they PARTITION the driver's items —
+ * every item lands in exactly one group, because "never deleted by workflow"
+ * also has to mean never invisible.
+ */
+export interface FocusPanelGroups<I> {
+  /** status === 'active', whatever this day's evidence says. */
+  active: I[];
+  /** Achieved/dropped WITH an assessment on one of this day's sessions. */
+  resolvedThisDay: I[];
+  /** Every other non-active item — driver-scoped, NOT day-filtered. */
+  pausedInactive: I[];
+}
+
+/**
+ * How the day page's focus panel groups a driver's items — the one definition,
+ * kept beside focusItemsForSession for the same reason: components assemble
+ * inputs from the embeds, they never own grouping rules.
+ *
+ * INTENDED GAP, do not "fix": `resolvedThisDay` really means
+ * resolved-AND-ASSESSED-on-this-day. An item dropped via the panel with no
+ * assessment on any of this day's sessions has no evidence tying its
+ * resolution to this day, so it appears in NO day's resolved group — it goes
+ * straight to `pausedInactive`, where it stays findable. The transition log
+ * that could date the resolution honestly was explicitly rejected (a new
+ * table + write path + backfill guesses, to power one banner); inferring the
+ * day from updated_at would be the app guessing.
+ *
+ * Paused is never "resolved": only achieved/dropped can be, so a paused item
+ * sits in `pausedInactive` even when it WAS assessed on this day.
+ */
+export function focusPanelGroups<I extends { id: string; status: string; created_at: string }>(args: {
+  items: I[];
+  /**
+   * Item ids with an assessment on ONE OF THIS DAY'S sessions — assembled by
+   * the caller from the embeds, exactly like focusItemsForSession's
+   * assessedItemIds.
+   */
+  assessedThisDayItemIds: Set<string>;
+}): FocusPanelGroups<I> {
+  const { items, assessedThisDayItemIds } = args;
+  const byCreation = [...items].sort(byItemCreation);
+
+  const isResolvedThisDay = (item: I): boolean =>
+    (item.status === 'achieved' || item.status === 'dropped') &&
+    assessedThisDayItemIds.has(item.id);
+
+  return {
+    active: byCreation.filter((item) => item.status === 'active'),
+    resolvedThisDay: byCreation.filter(isResolvedThisDay),
+    pausedInactive: byCreation.filter(
+      (item) => item.status !== 'active' && !isResolvedThisDay(item)
+    ),
+  };
+}
+
+/**
+ * A focus item's assessments in the order the coaching happened: by the START
+ * of the session each judgment was given at (bySessionStart — the same
+ * comparator behind every "Session N"), never by assessment row order or
+ * created_at, which retroactive debriefs scramble.
+ *
+ * An assessment whose session is not in the map shouldn't exist — session
+ * deletion is RESTRICTed precisely so judgments keep their anchor — so a miss
+ * here is a fetch gap. Those sort LAST, ordered among themselves by session
+ * id: the known timeline stays honest and the stragglers stay deterministic.
+ */
+export function assessmentsInSessionOrder<A extends { session_id: string }>(
+  assessments: A[],
+  sessionsById: Map<string, { id: string; date: string }>
+): A[] {
+  return [...assessments].sort((a, b) => {
+    const sessionA = sessionsById.get(a.session_id);
+    const sessionB = sessionsById.get(b.session_id);
+    if (sessionA && sessionB) return bySessionStart(sessionA, sessionB);
+    if (sessionA) return -1;
+    if (sessionB) return 1;
+    return a.session_id.localeCompare(b.session_id);
+  });
+}
+
+/**
+ * Display copy for the four judgments — one definition, because the debrief
+ * sheet's buttons, the evidence banner and the focus panel's timeline all
+ * print the same coach-authored judgment and must spell it identically.
+ */
+export const JUDGMENT_LABELS: Record<AssessmentJudgment, string> = {
+  improved: 'Improved',
+  keep_working: 'Keep working',
+  no_change: 'No change',
+  regressed: 'Regressed',
+};
+
+/**
+ * Display copy for the four item statuses, for the same one-spelling reason
+ * as JUDGMENT_LABELS.
+ */
+export const FOCUS_STATUS_LABELS: Record<FocusItemStatus, string> = {
+  active: 'Active',
+  achieved: 'Achieved',
+  paused: 'Paused',
+  dropped: 'Dropped',
+};

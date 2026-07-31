@@ -210,6 +210,10 @@ export default function TrackDayList({
             ? `/days/${day.trackDayId}`
             : `/sessions/${[...day.sessions].sort(bySessionStart)[0].id}`;
 
+          // Assessments on the day = the sum of each session's own count, the
+          // fact each row already carries from getAllSessions.
+          const assessedCount = day.sessions.reduce((n, s) => n + s.assessmentCount, 0);
+
           return (
             <Link
               key={day.key}
@@ -223,6 +227,11 @@ export default function TrackDayList({
                     {/* A plain calendar date, so formatTrackDate — never formatDate. */}
                     {formatTrackDate(day.date)} • {day.sessions.length}{' '}
                     {day.sessions.length === 1 ? 'session' : 'sessions'}
+                    {/* Assessments on this day's sessions — a plain count off
+                        the rows this list already groups, nothing derived.
+                        Hidden at 0: "0 assessed" would hang a to-do on every
+                        pre-loop day. */}
+                    {assessedCount > 0 && ` • ${assessedCount} assessed`}
                   </p>
                 </div>
 

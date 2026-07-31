@@ -5,8 +5,9 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
-import { getTrackDayWithSessions } from '@/data/track-days';
+import { getDriverFocus, getTrackDayWithSessions } from '@/data/track-days';
 import { validLapTimesMs } from '@/lib/track-days';
+import type { FocusItemWithAssessments, Session } from '@/lib/types';
 
 export interface SessionWithDetails {
   id: string;
@@ -47,6 +48,12 @@ export interface SessionWithDetails {
    * import failed to resolve one.
    */
   track_day?: { id: string; date: string } | null;
+  /**
+   * Count of focus-item assessments anchored to this session, present when
+   * the query aggregates it (getAllSessions). A plain fact carried for the
+   * driver page's day-row badge; nothing here interprets it.
+   */
+  assessmentCount?: number;
 }
 
 /**
@@ -70,6 +77,11 @@ export type SessionWithTrackDay = SessionWithDetails & {
    * day page about which sessions its aggregates describe.
    */
   representativeness: string | null;
+  /**
+   * Required for the silent-failure reason too: an absent count reads as 0,
+   * and 0 hides the badge — every day would quietly claim no assessments.
+   */
+  assessmentCount: number;
 };
 
 /**
@@ -116,6 +128,17 @@ export interface SessionFull {
   track_day_id: string | null;
   /** This session's place in its day. Null means no day context to show. */
   dayContext: SessionDayContext | null;
+  /**
+   * The driver's focus items and their origin sessions, for the evidence
+   * banner. Null when there is no day context (the banner sits under the day
+   * header and the eligibility rule needs the day's date) or when the fetch
+   * degraded — the banner is chrome, like dayContext, and its absence must
+   * not fail the lap evidence that is the point of the page.
+   */
+  focus: {
+    focusItems: FocusItemWithAssessments[];
+    originSessions: Pick<Session, 'id' | 'date'>[];
+  } | null;
   driver: { id: string; name: string; email: string } | null;
   track: {
     id: string;
@@ -123,6 +146,8 @@ export interface SessionFull {
     location: string | null;
     length_meters: number | null;
     config: string | null;
+    /** IANA name from tracks.timezone — the banner's date-rule input. */
+    timezone: string | null;
   } | null;
   laps: Array<{
     id: string;
@@ -206,7 +231,8 @@ export async function getAllSessions(
         driver:drivers(id, name, email),
         track:tracks(id, name, location),
         track_day:track_days(id, date),
-        laps!left(lap_time_ms)
+        laps!left(lap_time_ms),
+        focus_item_assessments!left(count)
       `
     );
 
@@ -241,6 +267,10 @@ export async function getAllSessions(
       // the same helper. See its docblock for what a second derivation cost.
       lapTimesMs: validLapTimesMs(session.laps || []),
       laps: undefined, // Remove the nested laps object
+      // Same aggregated-count idiom as lapCount in getRecentSessions. The
+      // driver page's day rows sum these per day for the "{n} assessed" badge.
+      assessmentCount: session.focus_item_assessments?.[0]?.count || 0,
+      focus_item_assessments: undefined, // Remove the nested aggregate
     }));
 
     return { data: sessionsWithCounts, error: null };
@@ -338,7 +368,7 @@ export async function getSessionWithLaps(
         source,
         track_day_id,
         driver:drivers(id, name, email),
-        track:tracks(id, name, location, length_meters, config)
+        track:tracks(id, name, location, length_meters, config, timezone)
       `
       )
       .eq('id', id)
@@ -363,11 +393,33 @@ export async function getSessionWithLaps(
       ? await getSessionDayContext(session.track_day_id, session.id)
       : null;
 
+    // Focus data only where the banner can render honestly: the eligibility
+    // rule needs the DAY's plain calendar date, so no day context means no
+    // banner and no fetch. A failed fetch degrades to null with a log, the
+    // same posture as getSessionDayContext — the banner is chrome, and hiding
+    // the session's lap evidence over it would invert the page's priorities.
+    let focus: SessionFull['focus'] = null;
+    if (dayContext && session.driver) {
+      const { data: driverFocus, error: focusError } = await getDriverFocus(session.driver.id);
+      if (driverFocus) {
+        focus = {
+          focusItems: driverFocus.focusItems,
+          originSessions: driverFocus.originSessions,
+        };
+      } else {
+        console.error('[getSessionWithLaps] Focus fetch failed; evidence banner degraded', {
+          sessionId: id,
+          error: focusError?.message || 'Focus data missing',
+        });
+      }
+    }
+
     return {
       data: {
         ...session,
         laps: laps || [],
         dayContext,
+        focus,
       },
       error: null,
     };

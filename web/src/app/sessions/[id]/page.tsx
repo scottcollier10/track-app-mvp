@@ -26,6 +26,7 @@ import { MapPin, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
+import EvidenceBanner from '@/components/sessions/EvidenceBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -202,6 +203,21 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </p>
             )}
           </div>
+
+          {/* Evidence banner — facts plus present tense, under the day header.
+              Both gates come from the data layer: no dayContext means no
+              honest day date for the eligibility rule, and a degraded focus
+              fetch means no banner rather than a wrong one. The component
+              itself renders null when there is nothing to report. */}
+          {dayContext && session.focus && (
+            <EvidenceBanner
+              focusItems={session.focus.focusItems}
+              session={{ id: session.id, date: session.date }}
+              originSessions={session.focus.originSessions}
+              dayDate={dayContext.date}
+              trackTimezone={session.track?.timezone ?? null}
+            />
+          )}
 
           {/* Summary Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
