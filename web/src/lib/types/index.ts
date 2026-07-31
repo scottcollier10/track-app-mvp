@@ -30,15 +30,44 @@ export interface SessionWithLapTimes extends Session {
   laps: Pick<Lap, 'lap_number' | 'lap_time_ms'>[];
 }
 
+/**
+ * Session + the lap projection the /days/[id] query fetches — SessionWithLapTimes
+ * plus `sector_data`, which the debrief sheet's ideal-lap delta reads. Mirrors
+ * the exact `laps(lap_number, lap_time_ms, sector_data)` select, same discipline
+ * as SessionWithLapTimes above. Assignable to SessionWithLapTimes, so everything
+ * built for the narrower projection accepts these rows unchanged.
+ */
+export interface SessionWithLapDetail extends Session {
+  laps: Pick<Lap, 'lap_number' | 'lap_time_ms' | 'sector_data'>[];
+}
+
 /** A day plus its ordered sessions. Driver is implied by context (e.g. the driver page). */
 export interface TrackDayWithSessions extends TrackDay {
   track: Track;
   sessions: SessionWithLapTimes[];
 }
 
-/** Standalone day view (/days/[id]) — no ambient driver context, so it carries one. */
+/** Standalone day view (/days/[id]) — no ambient driver context, so it carries one, and its sessions carry the fuller lap projection the debrief sheet needs. */
 export interface TrackDayDetail extends TrackDayWithSessions {
   driver: Driver;
+  sessions: SessionWithLapDetail[];
+}
+
+/** A focus item with its full assessment history — the `focus_items(*, focus_item_assessments(*))` embed. */
+export interface FocusItemWithAssessments extends FocusItem {
+  focus_item_assessments: FocusItemAssessment[];
+}
+
+/**
+ * Everything the day page's debrief flow needs in one fetch: the day, plus the
+ * driver's focus items with assessments, plus the ORIGIN sessions those items'
+ * created_after_session_id values point at. Origins are fetched by id, not
+ * assumed to be among this day's sessions — an item created after a session at
+ * another track day is still in play here.
+ */
+export interface TrackDayDebrief extends TrackDayDetail {
+  focusItems: FocusItemWithAssessments[];
+  originSessions: Pick<Session, 'id' | 'date'>[];
 }
 
 /** DB CHECK constraint on sessions.representativeness. NULL = representative. */

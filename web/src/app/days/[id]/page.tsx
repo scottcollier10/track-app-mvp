@@ -8,12 +8,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
-import { getTrackDayWithSessions } from '@/data/track-days';
+import { getTrackDayDebrief } from '@/data/track-days';
 import {
   CONSISTENCY_TREND_CLAIM,
+  dayAggregateAnnotation,
   dayBestLapMs,
   dayConsistencyTrend,
   formatConsistencyTrend,
+  representativeSessions,
   validLapTimesMs,
 } from '@/lib/track-days';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
@@ -34,7 +36,9 @@ interface PageProps {
 }
 
 export default async function TrackDayPage({ params }: PageProps) {
-  const { data: day, error } = await getTrackDayWithSessions(params.id);
+  // The debrief variant: the day plus the driver's focus items, their
+  // assessments and origin sessions — everything the sheet writes against.
+  const { data: day, error } = await getTrackDayDebrief(params.id);
 
   // Only a genuine query failure gets an error state.
   if (error) {
@@ -90,6 +94,15 @@ export default async function TrackDayPage({ params }: PageProps) {
     }))
   );
 
+  // "(3 of 4 sessions)" when the flag excluded something, null when everything
+  // counted — the same helper (and therefore the same caption) as the driver
+  // page's day list. representativeSessions is the ONE exclusion rule; counting
+  // any other way here would let this caption disagree with the KPIs it annotates.
+  const annotation = dayAggregateAnnotation(
+    sessions.length,
+    representativeSessions(sessions).length
+  );
+
   return (
     <div className="relative min-h-screen text-slate-50">
       <HeroBurst />
@@ -129,14 +142,16 @@ export default async function TrackDayPage({ params }: PageProps) {
             <MetricCard
               label="Best Lap"
               value={bestLapMs !== null ? formatLapMs(bestLapMs) : '--'}
-              helper="Fastest lap of the day"
+              helper={annotation ? `Fastest lap of the day ${annotation}` : 'Fastest lap of the day'}
             />
             <MetricCard
               label="Consistency Trend"
               value={formatConsistencyTrend(trend) ?? '--'}
               helper={
                 trend
-                  ? CONSISTENCY_TREND_CLAIM
+                  ? annotation
+                    ? `${CONSISTENCY_TREND_CLAIM} ${annotation}`
+                    : CONSISTENCY_TREND_CLAIM
                   : `Needs two sessions of ${MIN_LAPS_FOR_INSIGHTS}+ laps`
               }
             />
@@ -146,7 +161,16 @@ export default async function TrackDayPage({ params }: PageProps) {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-primary">Session Progression</h2>
             {sessions.length > 0 ? (
-              <SessionProgressionStrip sessions={sessions} />
+              <SessionProgressionStrip
+                sessions={sessions}
+                debrief={{
+                  driverId: day.driver_id,
+                  dayDate: day.date,
+                  trackTimezone: day.track.timezone,
+                  focusItems: day.focusItems,
+                  originSessions: day.originSessions,
+                }}
+              />
             ) : (
               <Card className="py-8 text-center">
                 <p className="text-muted">No sessions recorded for this track day.</p>

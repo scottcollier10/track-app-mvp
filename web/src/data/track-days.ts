@@ -9,7 +9,7 @@
 
 import { createServerSupabase } from '@/lib/supabase/server';
 import { bySessionStart } from '@/lib/track-days';
-import type { TrackDay, TrackDayDetail } from '@/lib/types';
+import type { Session, TrackDay, TrackDayDebrief, TrackDayDetail } from '@/lib/types';
 import type { TablesInsert } from '@/lib/types/database';
 
 /**
@@ -41,7 +41,7 @@ export async function getTrackDayWithSessions(
         *,
         driver:drivers(*),
         track:tracks(*),
-        sessions(*, laps(lap_number, lap_time_ms))
+        sessions(*, laps(lap_number, lap_time_ms, sector_data))
       `
       )
       .eq('id', id)
@@ -64,6 +64,73 @@ export async function getTrackDayWithSessions(
     // No cast: the generated Relationships make this embed infer as TrackDayDetail
     // exactly, so select/schema drift fails the build instead of being papered over.
     return { data, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err : new Error('Unknown error'),
+    };
+  }
+}
+
+/**
+ * The day page's fetch: the day (via getTrackDayWithSessions, so ordering and
+ * the null-vs-error contract are the same function, not a copy) plus the
+ * driver's focus items with their assessments and the items' ORIGIN sessions.
+ *
+ * The focus data is fetched alongside rather than embedded in the day select
+ * because it hangs off the DRIVER, not the day: focus items follow the driver
+ * across track days, and an embed through `driver:drivers(...)` would also tax
+ * getSessionWithLaps, which reuses the day query purely for prev/next nav.
+ *
+ * Origin sessions are fetched by id (`.in()`), never assumed to be among this
+ * day's sessions — an item created after a session at a PREVIOUS track day is
+ * exactly the item a coach wants in play today. Only id and date come back:
+ * that is all bySessionStart needs to order an origin against a session.
+ */
+export async function getTrackDayDebrief(
+  id: string
+): Promise<{ data: TrackDayDebrief | null; error: Error | null }> {
+  const { data: day, error } = await getTrackDayWithSessions(id);
+  // Covers both the failure and the honest-404 branch: error is null there.
+  if (!day) return { data: null, error };
+
+  try {
+    const supabase = createServerSupabase();
+
+    const { data: focusItems, error: focusError } = await supabase
+      .from('focus_items')
+      .select('*, focus_item_assessments(*)')
+      .eq('driver_id', day.driver_id)
+      .order('created_at', { ascending: true });
+
+    if (focusError) {
+      return { data: null, error: new Error(focusError.message) };
+    }
+
+    const items = focusItems ?? [];
+
+    const originIds = Array.from(
+      new Set(
+        items
+          .map((item) => item.created_after_session_id)
+          .filter((sessionId): sessionId is string => sessionId !== null)
+      )
+    );
+
+    let originSessions: Pick<Session, 'id' | 'date'>[] = [];
+    if (originIds.length > 0) {
+      const { data: origins, error: originError } = await supabase
+        .from('sessions')
+        .select('id, date')
+        .in('id', originIds);
+
+      if (originError) {
+        return { data: null, error: new Error(originError.message) };
+      }
+      originSessions = origins ?? [];
+    }
+
+    return { data: { ...day, focusItems: items, originSessions }, error: null };
   } catch (err) {
     return {
       data: null,

@@ -10,14 +10,29 @@ import Link from 'next/link';
 import { CheckCircle, AlertCircle, Loader2, UploadCloud, TrendingUp, CalendarDays } from 'lucide-react';
 import CsvUploader from './CsvUploader';
 import CsvPreview from './CsvPreview';
+import ContextFlagChips from '@/components/sessions/ContextFlagChips';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { parseSessionCsv, ParsedSession } from '@/lib/csv-parser';
 import { uniqueTrackDayLinks, type TrackDayLink } from '@/lib/track-days';
 import { formatDriverName } from '@/lib/utils/formatters';
+import { formatLapMs } from '@/lib/time';
 import type { ImportedSessionResponse, ImportSessionPayload } from '@/lib/types';
 
 type ImportState = 'idle' | 'parsing' | 'preview' | 'importing' | 'success' | 'error';
+
+/** One imported session a coach can flag right here, before leaving the panel. */
+interface FlagTarget {
+  sessionId: string;
+  /** drivers.name from the route's response — never the CSV's spelling. */
+  driverName: string;
+  /**
+   * The best lap SUBMITTED, which on this route is also the best lap stored
+   * (the payload's bestLapMs goes into sessions.best_lap_ms verbatim) — so
+   * unlike the parse date it cannot contradict the pages it identifies.
+   */
+  bestLapMs: number | null;
+}
 
 interface ImportResults {
   successful: number;
@@ -30,6 +45,8 @@ interface ImportResults {
   /** Sessions that came back 207 and are therefore left out of totalLaps. */
   partialSessions: number;
   uniqueDrivers: number;
+  /** Every imported session (201 and 207 alike), flaggable in place. */
+  flagTargets: FlagTarget[];
 }
 
 export default function CsvImport() {
@@ -87,6 +104,10 @@ export default function CsvImport() {
     // the driver name that labels the day links is drivers.name from the DB,
     // not the CSV's name column, so a link's label matches the page it opens.
     const imported: ImportedSessionResponse[] = [];
+    // Parallel to `imported`, adding the one CSV-side field the flag rows may
+    // print: the best lap, which the route stores verbatim. Kept out of
+    // `imported` so that array stays exactly "what the route said".
+    const flagTargets: FlagTarget[] = [];
     const uniqueDriverEmails = new Set<string>();
     let totalLaps = 0;
     let partialSessions = 0;
@@ -144,6 +165,11 @@ export default function CsvImport() {
 
         const data: ImportedSessionResponse = await response.json();
         imported.push(data);
+        flagTargets.push({
+          sessionId: data.sessionId,
+          driverName: data.driverName,
+          bestLapMs: session.bestLapMs ?? null,
+        });
         // Counted HERE, not at the top of the loop: a driver whose only session
         // failed the track lookup or the POST was attempted, not imported, and
         // "3 drivers" over "landed in 2 track days" is a panel arguing with
@@ -178,6 +204,7 @@ export default function CsvImport() {
       totalLaps,
       partialSessions,
       uniqueDrivers: uniqueDriverEmails.size,
+      flagTargets,
     });
 
     if (failed.length > 0) {
@@ -401,6 +428,48 @@ export default function CsvImport() {
                 <Link href={`/sessions/${importResults.sessionIds[0]}`}>
                   <Button variant="primary">View session</Button>
                 </Link>
+              </div>
+            )}
+
+            {/* Context flags, one row per imported session. This is the moment
+                a coach remembers "session 2 got red-flagged" — at import, not
+                three clicks later — so the same write control the debrief
+                sheet uses lives here too.
+
+                Rows are labelled by driver (drivers.name off the response, the
+                spelling /days/[id] uses) and best lap (stored verbatim from
+                the payload, so it matches the session page). Deliberately NOT
+                by ordinal or date: the order here is CSV ROW order, and a
+                "Session 1" printed from it would contradict the bySessionStart
+                numbering every other view derives — see uniqueTrackDayLinks's
+                warning. The parse date can likewise contradict the day page. */}
+            {importResults.flagTargets.length > 0 && (
+              <div className="mx-auto max-w-2xl space-y-3 text-left">
+                <p className="text-sm text-neutral-400">
+                  Flag any session that should not count as-is — cut short, rain, red flag.
+                  &ldquo;Not representative&rdquo; sessions are set aside from day aggregates
+                  and comparisons; &ldquo;partial&rdquo; ones still count, with the caveat shown.
+                </p>
+                <ul className="space-y-4">
+                  {importResults.flagTargets.map((target) => (
+                    <li
+                      key={target.sessionId}
+                      className="space-y-2 rounded-lg border border-gray-700 bg-gray-800/50 p-4"
+                    >
+                      <p className="text-sm text-gray-200">
+                        {formatDriverName(target.driverName)}
+                        {target.bestLapMs !== null && target.bestLapMs > 0
+                          ? ` — best ${formatLapMs(target.bestLapMs)}`
+                          : ''}
+                      </p>
+                      <ContextFlagChips
+                        sessionId={target.sessionId}
+                        representativeness={null}
+                        note={null}
+                      />
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
