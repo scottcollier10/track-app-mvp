@@ -26,7 +26,7 @@
  * `sessions` MUST arrive in bySessionStart order — that order IS the
  * "Session N" naming and the baseline index arithmetic.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionConsistencySeconds, idealLapMs, type LapSectors } from '@/lib/analytics-v2';
 import { canClaimConsistency } from '@/lib/insights';
@@ -58,6 +58,14 @@ export interface DebriefLap {
 export interface DebriefSession extends Session {
   laps: DebriefLap[];
 }
+
+/**
+ * The standard focusable-elements query. It exists to honor the sheet's
+ * aria-modal claim (focus must not escape a modal) — a small local helper,
+ * not the seed of a general a11y library.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
 const JUDGMENTS: Array<{ value: AssessmentJudgment; label: string }> = [
   { value: 'improved', label: 'Improved' },
@@ -252,8 +260,10 @@ function AssessmentRow({
           type="button"
           // The note is its own write, and only an EDITED note earns one — the
           // route needs a judgment for the cell, so no judgment means nothing
-          // to attach a note to yet.
-          disabled={judgment === null || noteDraft === (current?.note ?? '')}
+          // to attach a note to yet. The comparison is TRIMMED because it must
+          // match what the write sends, or the button re-arms after saving
+          // padded text with nothing left to change.
+          disabled={judgment === null || noteDraft.trim() === (current?.note ?? '')}
           onClick={() => {
             if (judgment === null) return;
             void noteWrite.run(
@@ -352,6 +362,43 @@ export default function DebriefSheet({
   onClose: () => void;
 }) {
   const session = sessions[index];
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // The aria-modal contract, made true: lock the page behind (the fixed sheet
+  // must not let the day page scroll under a thumb), move focus INTO the
+  // sheet, and restore the body's previous overflow on close.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sheetRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      // Same exit as a backdrop tap.
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab' || !sheetRef.current) return;
+    // Focus trap: wrap Tab/Shift+Tab at the sheet's boundary so keyboard and
+    // screen-reader users stay inside the "modal" the ARIA attributes claim.
+    const focusable = Array.from(
+      sheetRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   // "Assessed AT this session", exactly — not "ever assessed". The eligibility
   // split itself is the lib's; this only assembles its inputs from the embeds.
@@ -380,12 +427,14 @@ export default function DebriefSheet({
     item.focus_item_assessments.find((a) => a.session_id === session.id) ?? null;
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50" onKeyDown={handleKeyDown}>
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Session ${index + 1} debrief`}
+        ref={sheetRef}
+        tabIndex={-1}
         className="absolute inset-x-0 bottom-0 max-h-[85vh] space-y-6 overflow-y-auto rounded-t-xl border border-subtle bg-surface p-4"
       >
         <div className="flex items-center justify-between">

@@ -21,7 +21,10 @@ export function useControlWrite() {
   const [status, setStatus] = useState<ControlWriteStatus>('idle');
   const last = useRef<{ send: () => Promise<Response>; onSaved?: () => void } | null>(null);
   // Monotonic write counter: when a second tap lands before the first write
-  // resolves, the first response must not overwrite the newer write's status.
+  // resolves, the first response must not overwrite the newer write's status —
+  // NOR fire its success callback. A stale onSaved is worse than a stale
+  // status: callbacks mutate caller state (e.g. clearing an input the coach
+  // has since retyped), so only the latest write may run either.
   const seq = useRef(0);
 
   const run = useCallback(async (send: () => Promise<Response>, onSaved?: () => void) => {
@@ -31,8 +34,10 @@ export function useControlWrite() {
     try {
       const response = await send();
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (seq.current === token) setStatus('saved');
-      onSaved?.();
+      if (seq.current === token) {
+        setStatus('saved');
+        onSaved?.();
+      }
     } catch {
       // A network throw and a non-2xx land in the same place: the coach sees
       // "failed" plus retry either way. The response body is not surfaced —

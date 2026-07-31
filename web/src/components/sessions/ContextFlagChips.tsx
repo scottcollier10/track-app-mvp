@@ -104,7 +104,7 @@ export default function ContextFlagChips({
           <button
             type="button"
             onClick={() => save(selected, noteDraft)}
-            disabled={noteDraft === (note ?? '')}
+            disabled={noteDraft.trim() === (note ?? '')}
             className="shrink-0 rounded-lg border border-subtle px-3 py-2 text-sm text-muted hover:border-strong disabled:opacity-50"
           >
             Save note

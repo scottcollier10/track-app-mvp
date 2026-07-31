@@ -18,7 +18,7 @@
  *   [91000, 92000] x3 -> σ 0.5477s (renders ±0.5s)
  *   [90500] x6        -> σ 0.0s
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DebriefSheet, { type DebriefSession } from '../DebriefSheet';
 import type { FocusItemWithAssessments } from '@/lib/types';
@@ -382,5 +382,70 @@ describe('DebriefSheet add focus item', () => {
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
     expect((input as HTMLInputElement).value).toBe('');
+  });
+
+  it('a stale success never fires onSaved: only the LATEST write may clear the input', async () => {
+    // Hand-resolvable fetches: the first submit hangs, the second resolves
+    // fast, then the first resolves LATE — the superseded response.
+    const resolvers: Array<(response: { ok: boolean; status: number }) => void> = [];
+    const fetchMock = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (response: { ok: boolean; status: number }) => void);
+        })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    renderSheet({});
+    const input = screen.getByLabelText('New focus item') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: 'first item' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add focus item' }));
+    fireEvent.change(input, { target: { value: 'second item' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add focus item' }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // The second (latest) write succeeds: ITS onSaved clears the input.
+    await act(async () => {
+      resolvers[1]({ ok: true, status: 201 });
+    });
+    expect(input.value).toBe('');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+
+    // The coach starts typing the next item; NOW the stale first write lands.
+    fireEvent.change(input, { target: { value: 'third item' } });
+    await act(async () => {
+      resolvers[0]({ ok: true, status: 201 });
+    });
+
+    // The stale success must not wipe the in-progress text nor re-fire onSaved.
+    expect(input.value).toBe('third item');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DebriefSheet modal behavior', () => {
+  it('locks body scroll while open and restores the previous value on close', () => {
+    document.body.style.overflow = 'auto';
+    const { unmount } = renderSheet({});
+    expect(document.body.style.overflow).toBe('hidden');
+    unmount();
+    expect(document.body.style.overflow).toBe('auto');
+    document.body.style.overflow = '';
+  });
+
+  it('closes on Escape, same as a backdrop tap', () => {
+    const onClose = jest.fn();
+    renderSheet({ onClose });
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves initial focus inside the sheet on open', () => {
+    // Smoke assertion only: jsdom does not move focus on Tab, so the trap's
+    // wrap direction is exercised by hand; what jsdom CAN pin is that focus
+    // starts inside the dialog rather than on the page behind it.
+    renderSheet({});
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });
