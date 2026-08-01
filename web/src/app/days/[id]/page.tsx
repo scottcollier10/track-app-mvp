@@ -27,6 +27,7 @@ import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 import SessionProgressionStrip from '@/components/days/SessionProgressionStrip';
 import FocusPanel from '@/components/days/FocusPanel';
+import DayNotes from '@/components/days/DayNotes';
 
 export const dynamic = 'force-dynamic';
 
@@ -188,6 +189,10 @@ export default async function TrackDayPage({ params }: PageProps) {
             originSessions={day.originSessions}
             assessmentSessions={day.assessmentSessions}
           />
+
+          {/* Zone 3 — the day notes scratchpad. Debounced autosave with
+              flush-on-leave; the Phase 3 summary slot renders above this. */}
+          <DayNotes dayId={day.id} initialNotes={day.notes} />
         </div>
       </div>
     </div>
