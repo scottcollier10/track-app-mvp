@@ -9,7 +9,14 @@
 
 import { createServerSupabase } from '@/lib/supabase/server';
 import { bySessionStart } from '@/lib/track-days';
-import type { TrackDay, TrackDayDetail } from '@/lib/types';
+import type {
+  FocusItemWithAssessments,
+  FocusOriginSession,
+  Session,
+  TrackDay,
+  TrackDayDebrief,
+  TrackDayDetail,
+} from '@/lib/types';
 import type { TablesInsert } from '@/lib/types/database';
 
 /**
@@ -41,7 +48,7 @@ export async function getTrackDayWithSessions(
         *,
         driver:drivers(*),
         track:tracks(*),
-        sessions(*, laps(lap_number, lap_time_ms))
+        sessions(*, laps(lap_number, lap_time_ms, sector_data))
       `
       )
       .eq('id', id)
@@ -70,6 +77,116 @@ export async function getTrackDayWithSessions(
       error: err instanceof Error ? err : new Error('Unknown error'),
     };
   }
+}
+
+/** The driver-scoped half of a debrief fetch — see getDriverFocus. */
+export interface DriverFocus {
+  focusItems: FocusItemWithAssessments[];
+  originSessions: FocusOriginSession[];
+  assessmentSessions: Pick<Session, 'id' | 'date'>[];
+}
+
+/**
+ * A driver's focus items with their full assessment history, plus every
+ * session those rows reference: the items' ORIGIN sessions and the sessions
+ * their assessments anchor to.
+ *
+ * One function because the day page (panel + sheet) and the session page
+ * (evidence banner) both need exactly this, and two fetches would be two
+ * chances for the surfaces to disagree about what the driver is working on.
+ *
+ * Referenced sessions are fetched by id (`.in()`), never assumed to be among
+ * any particular day's sessions — an item created after a session at a
+ * PREVIOUS track day is exactly the item a coach wants in play today, and its
+ * assessment history spans days by design. One query over the union of ids,
+ * split by membership afterwards (a session can appear in both lists).
+ *
+ * The origin select carries the origin session's DAY (plain calendar date +
+ * track name) because that day is the only honest source for the panel's
+ * "from {track}, {date}" label — deriving it from the session's timestamptz
+ * renders in the runtime's timezone and can name the previous day.
+ */
+export async function getDriverFocus(
+  driverId: string
+): Promise<{ data: DriverFocus | null; error: Error | null }> {
+  try {
+    const supabase = createServerSupabase();
+
+    const { data: focusItems, error: focusError } = await supabase
+      .from('focus_items')
+      .select('*, focus_item_assessments(*)')
+      .eq('driver_id', driverId)
+      .order('created_at', { ascending: true });
+
+    if (focusError) {
+      return { data: null, error: new Error(focusError.message) };
+    }
+
+    const items = focusItems ?? [];
+
+    const originIds = new Set(
+      items
+        .map((item) => item.created_after_session_id)
+        .filter((sessionId): sessionId is string => sessionId !== null)
+    );
+    const assessmentIds = new Set(
+      items.flatMap((item) => item.focus_item_assessments.map((a) => a.session_id))
+    );
+    const referencedIds = Array.from(new Set([...originIds, ...assessmentIds]));
+
+    let referenced: FocusOriginSession[] = [];
+    if (referencedIds.length > 0) {
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('sessions')
+        .select('id, date, track_day:track_days(date, track:tracks(name))')
+        .in('id', referencedIds);
+
+      if (sessionsError) {
+        return { data: null, error: new Error(sessionsError.message) };
+      }
+      referenced = sessions ?? [];
+    }
+
+    return {
+      data: {
+        focusItems: items,
+        originSessions: referenced.filter((session) => originIds.has(session.id)),
+        assessmentSessions: referenced
+          .filter((session) => assessmentIds.has(session.id))
+          .map(({ id, date }) => ({ id, date })),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err : new Error('Unknown error'),
+    };
+  }
+}
+
+/**
+ * The day page's fetch: the day (via getTrackDayWithSessions, so ordering and
+ * the null-vs-error contract are the same function, not a copy) plus the
+ * driver's focus data (via getDriverFocus, shared with the session page's
+ * evidence banner for the same one-definition reason).
+ *
+ * The focus data is fetched alongside rather than embedded in the day select
+ * because it hangs off the DRIVER, not the day: focus items follow the driver
+ * across track days, and an embed through `driver:drivers(...)` would also tax
+ * getSessionWithLaps, which reuses the day query purely for prev/next nav.
+ */
+export async function getTrackDayDebrief(
+  id: string
+): Promise<{ data: TrackDayDebrief | null; error: Error | null }> {
+  const { data: day, error } = await getTrackDayWithSessions(id);
+  // Covers both the failure and the honest-404 branch: error is null there.
+  if (!day) return { data: null, error };
+
+  const { data: focus, error: focusError } = await getDriverFocus(day.driver_id);
+  if (!focus) return { data: null, error: focusError };
+
+  return { data: { ...day, ...focus }, error: null };
 }
 
 /**

@@ -90,6 +90,19 @@ describe('resolveTrackDay', () => {
     });
   });
 
+  it('re-import upsert payload is keys-only, so coach day notes survive re-import', async () => {
+    await resolveTrackDay('driver-1', 'track-1', '2026-07-12');
+
+    expect(upsertCalls).toHaveLength(1);
+    const [payload] = upsertCalls[0] as [Record<string, unknown>];
+
+    expect(payload).toEqual({
+      driver_id: 'driver-1',
+      track_id: 'track-1',
+      date: '2026-07-12',
+    }); // toEqual, not toMatchObject: an EXTRA column is exactly the bug.
+  });
+
   it('passes onConflict only — never ignoreDuplicates', async () => {
     await resolveTrackDay('driver-1', 'track-1', '2026-07-28');
 

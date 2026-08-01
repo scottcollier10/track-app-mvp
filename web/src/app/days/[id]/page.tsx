@@ -8,12 +8,14 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
-import { getTrackDayWithSessions } from '@/data/track-days';
+import { getTrackDayDebrief } from '@/data/track-days';
 import {
   CONSISTENCY_TREND_CLAIM,
+  dayAggregateAnnotation,
   dayBestLapMs,
   dayConsistencyTrend,
   formatConsistencyTrend,
+  representativeSessions,
   validLapTimesMs,
 } from '@/lib/track-days';
 import { MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
@@ -24,6 +26,8 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 import SessionProgressionStrip from '@/components/days/SessionProgressionStrip';
+import FocusPanel from '@/components/days/FocusPanel';
+import DayNotes from '@/components/days/DayNotes';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +38,9 @@ interface PageProps {
 }
 
 export default async function TrackDayPage({ params }: PageProps) {
-  const { data: day, error } = await getTrackDayWithSessions(params.id);
+  // The debrief variant: the day plus the driver's focus items, their
+  // assessments and origin sessions — everything the sheet writes against.
+  const { data: day, error } = await getTrackDayDebrief(params.id);
 
   // Only a genuine query failure gets an error state.
   if (error) {
@@ -67,20 +73,36 @@ export default async function TrackDayPage({ params }: PageProps) {
 
   // A day with zero sessions is a real row (a partially-failed import), so it
   // renders — it just has nothing to compare.
-  const bestLapMs = dayBestLapMs(sessions.map((s) => ({ bestLapMs: s.best_lap_ms })));
+  //
+  // representativeness rides along untouched: the exclusion rule lives in the
+  // aggregate helpers (representativeSessions), never at a call site, so this
+  // page and the driver page's day list cannot filter differently.
+  const bestLapMs = dayBestLapMs(
+    sessions.map((s) => ({ bestLapMs: s.best_lap_ms, representativeness: s.representativeness }))
+  );
 
   // Feed dates in and let the helper sort: it reports first -> last
   // chronologically, so caller ordering can never flip the trend's direction.
   //
   // validLapTimesMs, not a raw laps.map: a 0 lap time reaches the database (see
   // its docblock), and mapping the rows straight through computed this KPI's σ
-  // over laps the >=MIN_LAPS_FOR_INSIGHTS gate had already refused elsewhere.
+  // over laps the canClaimConsistency gate had already refused elsewhere.
   const trend = dayConsistencyTrend(
     sessions.map((s) => ({
       id: s.id,
       date: s.date,
       lapTimesMs: validLapTimesMs(s.laps),
+      representativeness: s.representativeness,
     }))
+  );
+
+  // "(3 of 4 sessions)" when the flag excluded something, null when everything
+  // counted — the same helper (and therefore the same caption) as the driver
+  // page's day list. representativeSessions is the ONE exclusion rule; counting
+  // any other way here would let this caption disagree with the KPIs it annotates.
+  const annotation = dayAggregateAnnotation(
+    sessions.length,
+    representativeSessions(sessions).length
   );
 
   return (
@@ -122,14 +144,16 @@ export default async function TrackDayPage({ params }: PageProps) {
             <MetricCard
               label="Best Lap"
               value={bestLapMs !== null ? formatLapMs(bestLapMs) : '--'}
-              helper="Fastest lap of the day"
+              helper={annotation ? `Fastest lap of the day ${annotation}` : 'Fastest lap of the day'}
             />
             <MetricCard
               label="Consistency Trend"
               value={formatConsistencyTrend(trend) ?? '--'}
               helper={
                 trend
-                  ? CONSISTENCY_TREND_CLAIM
+                  ? annotation
+                    ? `${CONSISTENCY_TREND_CLAIM} ${annotation}`
+                    : CONSISTENCY_TREND_CLAIM
                   : `Needs two sessions of ${MIN_LAPS_FOR_INSIGHTS}+ laps`
               }
             />
@@ -139,13 +163,36 @@ export default async function TrackDayPage({ params }: PageProps) {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-primary">Session Progression</h2>
             {sessions.length > 0 ? (
-              <SessionProgressionStrip sessions={sessions} />
+              <SessionProgressionStrip
+                sessions={sessions}
+                debrief={{
+                  driverId: day.driver_id,
+                  dayDate: day.date,
+                  trackTimezone: day.track.timezone,
+                  focusItems: day.focusItems,
+                  originSessions: day.originSessions,
+                }}
+              />
             ) : (
               <Card className="py-8 text-center">
                 <p className="text-muted">No sessions recorded for this track day.</p>
               </Card>
             )}
           </div>
+
+          {/* Zone 2 — the focus panel: read/manage only. Assessments happen in
+              a session's debrief sheet (above), never here. */}
+          <FocusPanel
+            driverId={day.driver_id}
+            daySessionIds={sessions.map((s) => s.id)}
+            focusItems={day.focusItems}
+            originSessions={day.originSessions}
+            assessmentSessions={day.assessmentSessions}
+          />
+
+          {/* Zone 3 — the day notes scratchpad. Debounced autosave with
+              flush-on-leave; the Phase 3 summary slot renders above this. */}
+          <DayNotes dayId={day.id} initialNotes={day.notes} />
         </div>
       </div>
     </div>

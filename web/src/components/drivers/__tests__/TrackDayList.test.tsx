@@ -42,6 +42,8 @@ function makeSession(
     lapCount: lapTimesMs.length,
     lapTimesMs,
     track_day: { id: 'day-1', date: '2026-07-12' },
+    representativeness: null,
+    assessmentCount: 0,
     ...overrides,
   };
 }
@@ -318,6 +320,53 @@ describe('TrackDayList', () => {
 
       expect(rows()).toHaveLength(1);
       expect(rows()[0]).toHaveTextContent('4 sessions');
+    });
+  });
+
+  /**
+   * The assessment badge is a plain fact — the count of assessments on the
+   * day's sessions, summed straight off what each session row already carries.
+   * Nothing is derived, and zero renders NOTHING: "0 assessed" would put a
+   * to-do connotation on every pre-loop day.
+   */
+  describe('assessment badge', () => {
+    it('sums assessment counts across the day\'s sessions and renders "{n} assessed"', () => {
+      render(
+        <TrackDayList
+          sessions={[
+            makeSession({ id: 's2', date: '2026-07-12T17:00:00Z', lapTimesMs: FLAT, assessmentCount: 2 }),
+            makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY, assessmentCount: 1 }),
+          ]}
+        />
+      );
+
+      expect(rows()[0]).toHaveTextContent('3 assessed');
+    });
+
+    it('hides the badge entirely at zero — no "0 assessed"', () => {
+      render(<TrackDayList sessions={newestFirstDay} />);
+
+      expect(rows()[0].textContent).not.toContain('assessed');
+    });
+
+    it('counts per day, not across the whole list', () => {
+      render(
+        <TrackDayList
+          sessions={[
+            makeSession({
+              id: 's3',
+              date: '2026-08-02T15:00:00Z',
+              lapTimesMs: FLAT,
+              track_day: { id: 'day-2', date: '2026-08-02' },
+              assessmentCount: 2,
+            }),
+            makeSession({ id: 's1', date: '2026-07-12T15:00:00Z', lapTimesMs: WOBBLY }),
+          ]}
+        />
+      );
+
+      expect(rows()[0]).toHaveTextContent('2 assessed'); // day-2, newest first
+      expect(rows()[1].textContent).not.toContain('assessed'); // day-1 has none
     });
   });
 

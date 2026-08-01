@@ -15,8 +15,8 @@
  * a pre-filtered list — see the filter in the component body for why.
  *
  * Three rules this component must never break:
- *  - σ claims come only from dayConsistencyTrend, which owns the
- *    >=MIN_LAPS_FOR_INSIGHTS gate. No σ math is reimplemented here.
+ *  - σ claims come only from dayConsistencyTrend, which applies the
+ *    canClaimConsistency lap gate itself. No σ math is reimplemented here.
  *  - `session.lapTimesMs` is validLapTimesMs's output (see getAllSessions), so
  *    the gate counts exactly the laps σ is computed from. It is passed through
  *    untouched — filtering or re-deriving it here is what let this row drop a
@@ -184,20 +184,35 @@ export default function TrackDayList({
 
       <div className="space-y-3">
         {days.map((day) => {
+          // representativeness is passed through untouched: the exclusion rule
+          // lives in the aggregate helpers (representativeSessions), so this
+          // row and the day page it links to count the same sessions.
           const bestLapMs = dayBestLapMs(
-            day.sessions.map((s) => ({ bestLapMs: s.best_lap_ms }))
+            day.sessions.map((s) => ({
+              bestLapMs: s.best_lap_ms,
+              representativeness: s.representativeness,
+            }))
           );
 
           // Sessions arrive newest-first from /api/sessions. dayConsistencyTrend
           // sorts chronologically itself, so it is fed as-is — pre-sorting here
           // would just be a second place for the direction to go wrong.
           const trend = dayConsistencyTrend(
-            day.sessions.map((s) => ({ id: s.id, date: s.date, lapTimesMs: s.lapTimesMs }))
+            day.sessions.map((s) => ({
+              id: s.id,
+              date: s.date,
+              lapTimesMs: s.lapTimesMs,
+              representativeness: s.representativeness,
+            }))
           );
 
           const href = day.trackDayId
             ? `/days/${day.trackDayId}`
             : `/sessions/${[...day.sessions].sort(bySessionStart)[0].id}`;
+
+          // Assessments on the day = the sum of each session's own count, the
+          // fact each row already carries from getAllSessions.
+          const assessedCount = day.sessions.reduce((n, s) => n + s.assessmentCount, 0);
 
           return (
             <Link
@@ -212,6 +227,11 @@ export default function TrackDayList({
                     {/* A plain calendar date, so formatTrackDate — never formatDate. */}
                     {formatTrackDate(day.date)} • {day.sessions.length}{' '}
                     {day.sessions.length === 1 ? 'session' : 'sessions'}
+                    {/* Assessments on this day's sessions — a plain count off
+                        the rows this list already groups, nothing derived.
+                        Hidden at 0: "0 assessed" would hang a to-do on every
+                        pre-loop day. */}
+                    {assessedCount > 0 && ` • ${assessedCount} assessed`}
                   </p>
                 </div>
 

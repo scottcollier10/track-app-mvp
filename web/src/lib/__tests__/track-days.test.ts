@@ -1,11 +1,17 @@
 import {
+  assessmentsInSessionOrder,
   bySessionStart,
   localDateForTimezone,
+  dayAggregateAnnotation,
   dayBestLapMs,
   dayConsistencyTrend,
+  deltaBaselineIndex,
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
+  focusItemsForSession,
+  focusPanelGroups,
   formatConsistencyTrend,
+  representativeSessions,
   sessionDelta,
   uniqueTrackDayLinks,
   validLapTimesMs,
@@ -114,7 +120,7 @@ describe('validLapTimesMs', () => {
     expect(sixLapsOneZero).toHaveLength(6);
     expect(lapTimesMs).toEqual([91000, 92000, 91000, 92000, 91000]);
 
-    // The session page's gate (lapTimes.length >= MIN_LAPS_FOR_INSIGHTS) — the
+    // The session page's gate (canClaimConsistency over lapTimes) — the
     // one that used to be satisfied by the raw row count.
     expect(lapTimesMs.length).toBeLessThan(MIN_LAPS_FOR_INSIGHTS);
 
@@ -267,6 +273,362 @@ describe('formatConsistencyTrend', () => {
     expect(formatConsistencyTrend(trend)).toBe(
       `±${sessionConsistencySeconds(loose)!.toFixed(1)}s → ±${sessionConsistencySeconds(tight)!.toFixed(1)}s`
     );
+  });
+});
+
+// The one exclusion rule: only not_representative excludes. partial and null count.
+describe('representativeSessions', () => {
+  it('excludes only not_representative; null and partial count fully', () => {
+    const sessions = [
+      { id: 's1', representativeness: 'representative' },
+      { id: 's2', representativeness: 'partial' },
+      { id: 's3', representativeness: null },
+      { id: 's4', representativeness: 'not_representative' },
+    ];
+    expect(representativeSessions(sessions).map((s) => s.id)).toEqual(['s1', 's2', 's3']);
+  });
+});
+
+describe('day aggregates under representativeness', () => {
+  const tight = [90000, 90100, 90050, 90080, 90020, 90060];
+  const loose = [90000, 92000, 91000, 90500, 93000, 90800];
+  const mid = [90000, 90400, 90200, 90300, 90100, 90500];
+
+  it('pre-P2 days (all-null flags) produce byte-identical aggregates', () => {
+    // The no-op pin: a session flagged null (every pre-P2 session) must compute
+    // exactly what the same session computed before the field existed.
+    expect(
+      dayBestLapMs([
+        { bestLapMs: 95200, representativeness: null },
+        { bestLapMs: 94100, representativeness: null },
+      ])
+    ).toBe(dayBestLapMs([{ bestLapMs: 95200 }, { bestLapMs: 94100 }]));
+
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs: loose, representativeness: null },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: tight, representativeness: null },
+      ])
+    ).toEqual(
+      dayConsistencyTrend([
+        { date: '2026-07-11T14:00:00Z', lapTimesMs: loose },
+        { date: '2026-07-11T16:00:00Z', lapTimesMs: tight },
+      ])
+    );
+  });
+
+  it('dayBestLapMs ignores a not_representative session holding the fastest lap', () => {
+    expect(
+      dayBestLapMs([
+        { bestLapMs: 90000, representativeness: 'not_representative' },
+        { bestLapMs: 94100, representativeness: null },
+        { bestLapMs: 95000, representativeness: 'partial' },
+      ])
+    ).toBe(94100);
+  });
+
+  it('dayConsistencyTrend skips not_representative sessions when picking first/last qualifying', () => {
+    // Chronologically loose -> mid -> tight, but the loose opener is flagged:
+    // the trend must start at mid, not loose.
+    const trend = dayConsistencyTrend([
+      { date: '2026-07-11T09:00:00Z', lapTimesMs: loose, representativeness: 'not_representative' },
+      { date: '2026-07-11T12:00:00Z', lapTimesMs: mid, representativeness: null },
+      { date: '2026-07-11T15:00:00Z', lapTimesMs: tight, representativeness: 'partial' },
+    ]);
+    expect(trend).not.toBeNull();
+    expect(trend!.firstSeconds).toBeCloseTo(sessionConsistencySeconds(mid)!, 4);
+    expect(trend!.lastSeconds).toBeCloseTo(sessionConsistencySeconds(tight)!, 4);
+
+    // And when the exclusion leaves fewer than two qualifying sessions, there is
+    // no honest trend at all.
+    expect(
+      dayConsistencyTrend([
+        { date: '2026-07-11T09:00:00Z', lapTimesMs: loose, representativeness: 'not_representative' },
+        { date: '2026-07-11T12:00:00Z', lapTimesMs: mid, representativeness: null },
+      ])
+    ).toBeNull();
+  });
+
+  it('dayAggregateAnnotation renders "(3 of 4 sessions)" only for strict subsets, null otherwise', () => {
+    expect(dayAggregateAnnotation(4, 3)).toBe('(3 of 4 sessions)');
+    expect(dayAggregateAnnotation(4, 4)).toBeNull();
+    expect(dayAggregateAnnotation(1, 1)).toBeNull();
+    expect(dayAggregateAnnotation(0, 0)).toBeNull();
+  });
+});
+
+describe('deltaBaselineIndex', () => {
+  it('returns nearest earlier non-excluded session index; null for session 1 or when all priors are excluded', () => {
+    const day = [
+      { representativeness: null },
+      { representativeness: 'not_representative' },
+      { representativeness: 'partial' },
+      { representativeness: null },
+    ];
+    // Session 1 has nothing earlier to compare against.
+    expect(deltaBaselineIndex(day, 0)).toBeNull();
+    // Session 2's neighbour is fine.
+    expect(deltaBaselineIndex(day, 1)).toBe(0);
+    // Session 3 skips its flagged neighbour back to session 1.
+    expect(deltaBaselineIndex(day, 2)).toBe(0);
+    // Session 4's neighbour is partial — partial counts.
+    expect(deltaBaselineIndex(day, 3)).toBe(2);
+
+    // Every prior excluded: no baseline, never "compare against the flagged one".
+    expect(
+      deltaBaselineIndex(
+        [{ representativeness: 'not_representative' }, { representativeness: null }],
+        1
+      )
+    ).toBeNull();
+  });
+
+  it('returns null for an out-of-range index instead of naming a session that is not earlier', () => {
+    const day = [{ representativeness: null }, { representativeness: null }];
+    // Callers pass a render-loop index; an index past the end has no "earlier
+    // session" to name, and null is the same honest answer index 0 gets. Before
+    // the guard, sessions.length walked back to a REAL index (a phantom
+    // baseline) and sessions.length + 5 dereferenced undefined and threw.
+    expect(deltaBaselineIndex(day, day.length)).toBeNull();
+    expect(deltaBaselineIndex(day, day.length + 5)).toBeNull();
+    expect(deltaBaselineIndex(day, 1.5)).toBeNull();
+    expect(deltaBaselineIndex(day, -3)).toBeNull();
+  });
+});
+
+describe('focusItemsForSession', () => {
+  // A two-session day at a Chicago track. s1 is the morning session, s2 the
+  // afternoon — origin ordering between them is bySessionStart's.
+  const s1 = { id: 's1', date: '2026-07-12T15:00:00Z' };
+  const s2 = { id: 's2', date: '2026-07-12T20:00:00Z' };
+  const originSessions = new Map([
+    ['s1', s1],
+    ['s2', s2],
+  ]);
+  const dayDate = '2026-07-12';
+  const trackTimezone = 'America/Chicago';
+
+  const item = (
+    id: string,
+    status: string,
+    created_at: string,
+    created_after_session_id: string | null
+  ) => ({ id, status, created_at, created_after_session_id });
+
+  const eligibility = (
+    items: ReturnType<typeof item>[],
+    session: { id: string; date: string },
+    assessedItemIds: Set<string> = new Set()
+  ) =>
+    focusItemsForSession({
+      items,
+      assessedItemIds,
+      session,
+      originSessions,
+      dayDate,
+      trackTimezone,
+    });
+
+  it('origin-session item appears from the next session onward, never in its origin session', () => {
+    const originS1 = item('fi-1', 'active', '2026-07-12T15:30:00Z', 's1');
+    expect(eligibility([originS1], s1).inPlay).toEqual([]);
+    expect(eligibility([originS1], s2).inPlay).toEqual([originS1]);
+  });
+
+  it('null-origin item created the same local date is inPlay (tie included)', () => {
+    // 18:00Z is 1pm in Chicago — same local date as the day. The tie counts.
+    const sameDay = item('fi-2', 'active', '2026-07-12T18:00:00Z', null);
+    expect(eligibility([sameDay], s1).inPlay).toEqual([sameDay]);
+  });
+
+  it('null-origin item created after the day date is not inPlay', () => {
+    // 18:00Z on the 13th is the NEXT Chicago date — the item did not exist yet
+    // as far as this day is concerned.
+    const later = item('fi-3', 'active', '2026-07-13T18:00:00Z', null);
+    expect(eligibility([later], s2).inPlay).toEqual([]);
+  });
+
+  it('item assessed at this session and since achieved is reviewed but not inPlay', () => {
+    const achieved = item('fi-4', 'achieved', '2026-07-10T18:00:00Z', 's1');
+    const result = eligibility([achieved], s2, new Set(['fi-4']));
+    expect(result.reviewed).toEqual([achieved]);
+    expect(result.inPlay).toEqual([]);
+  });
+
+  it('paused/dropped items are neither, unless assessed at this session', () => {
+    const paused = item('fi-5', 'paused', '2026-07-10T18:00:00Z', 's1');
+    const dropped = item('fi-6', 'dropped', '2026-07-10T19:00:00Z', 's1');
+
+    const untouched = eligibility([paused, dropped], s2);
+    expect(untouched.reviewed).toEqual([]);
+    expect(untouched.inPlay).toEqual([]);
+
+    // Assessed AT this session, the coach's review still shows regardless of
+    // where the item's status has moved since.
+    const assessed = eligibility([paused, dropped], s2, new Set(['fi-6']));
+    expect(assessed.reviewed).toEqual([dropped]);
+    expect(assessed.inPlay).toEqual([]);
+  });
+
+  it('an active item both assessed here and in play coming in lands in BOTH groups', () => {
+    const working = item('fi-7', 'active', '2026-07-12T15:30:00Z', 's1');
+    const result = eligibility([working], s2, new Set(['fi-7']));
+    expect(result.reviewed).toEqual([working]);
+    expect(result.inPlay).toEqual([working]);
+  });
+
+  it('an origin id missing from the map falls back to the created-date rule', () => {
+    // The origin session was deleted (or not fetched): unknown origin, same
+    // fallback as a null origin. Created on the day -> inPlay; created after -> not.
+    const orphanSameDay = item('fi-8', 'active', '2026-07-12T18:00:00Z', 's-gone');
+    const orphanLater = item('fi-9', 'active', '2026-07-13T18:00:00Z', 's-gone');
+    expect(eligibility([orphanSameDay, orphanLater], s1).inPlay).toEqual([orphanSameDay]);
+  });
+
+  it('tied origin/session timestamps are decided by the id tiebreak, both directions', () => {
+    // Noon-anchored imports make tied timestamps common, and bySessionStart's
+    // id tiebreak is arbitrary-but-stable. This pins that BOTH outcomes are
+    // deterministic — not that either ordering is "right": an origin whose id
+    // sorts before the session's is strictly earlier (item in play), and one
+    // whose id sorts after is not.
+    const tiedDate = '2026-07-12T19:00:00Z';
+    const run = (originId: string, sessionId: string) => {
+      const origin = { id: originId, date: tiedDate };
+      const session = { id: sessionId, date: tiedDate };
+      const tied = item('fi-tie', 'active', '2026-07-12T19:05:00Z', originId);
+      return focusItemsForSession({
+        items: [tied],
+        assessedItemIds: new Set<string>(),
+        session,
+        originSessions: new Map([[originId, origin]]),
+        dayDate,
+        trackTimezone,
+      }).inPlay;
+    };
+    // Origin id sorts BEFORE the session id -> origin is "earlier" -> in play.
+    expect(run('s-a', 's-b').map((i) => i.id)).toEqual(['fi-tie']);
+    // Same timestamps, ids swapped -> origin is "later" -> not in play.
+    expect(run('s-b', 's-a')).toEqual([]);
+  });
+
+  it('orders reviewed items by creation time', () => {
+    const older = item('fi-b', 'achieved', '2026-07-10T10:00:00Z', 's1');
+    const newer = item('fi-a', 'active', '2026-07-12T15:30:00Z', 's1');
+    const result = eligibility([newer, older], s2, new Set(['fi-a', 'fi-b']));
+    expect(result.reviewed.map((i) => i.id)).toEqual(['fi-b', 'fi-a']);
+  });
+});
+
+describe('focusPanelGroups', () => {
+  const item = (id: string, status: string, created_at = '2026-07-10T12:00:00Z') => ({
+    id,
+    status,
+    created_at,
+  });
+
+  const groups = (
+    items: ReturnType<typeof item>[],
+    assessedThisDayItemIds: Set<string> = new Set()
+  ) => focusPanelGroups({ items, assessedThisDayItemIds });
+
+  it('puts active items in Active regardless of same-day evidence', () => {
+    const working = item('fi-1', 'active');
+    const alsoWorking = item('fi-2', 'active');
+    const result = groups([working, alsoWorking], new Set(['fi-1']));
+    expect(result.active.map((i) => i.id)).toEqual(['fi-1', 'fi-2']);
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive).toEqual([]);
+  });
+
+  it('puts achieved/dropped items WITH a same-day assessment in Resolved this day', () => {
+    const achieved = item('fi-1', 'achieved');
+    const dropped = item('fi-2', 'dropped');
+    const result = groups([achieved, dropped], new Set(['fi-1', 'fi-2']));
+    expect(result.resolvedThisDay.map((i) => i.id)).toEqual(['fi-1', 'fi-2']);
+    expect(result.pausedInactive).toEqual([]);
+  });
+
+  it('INTENDED GAP: a dropped item with no same-day assessment goes to Paused/inactive, not Resolved this day', () => {
+    // "Resolved this day" means resolved-WITH-same-day-evidence. An item
+    // dropped from the panel (no assessment on this day's sessions) has no
+    // evidence tying it to this day, so it appears in no day's resolved group —
+    // it stays findable under Paused/inactive instead. Do not "fix" this by
+    // inferring the day from updated_at; the transition log that would make it
+    // honest was explicitly rejected.
+    const dropped = item('fi-1', 'dropped');
+    const result = groups([dropped]);
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive.map((i) => i.id)).toEqual(['fi-1']);
+  });
+
+  it('a paused item is never Resolved this day, assessed on this day or not', () => {
+    // Paused is not resolved: only achieved/dropped can be. A same-day
+    // assessment on a paused item does not promote it.
+    const paused = item('fi-1', 'paused');
+    const result = groups([paused], new Set(['fi-1']));
+    expect(result.resolvedThisDay).toEqual([]);
+    expect(result.pausedInactive.map((i) => i.id)).toEqual(['fi-1']);
+  });
+
+  it('every non-active item lands SOMEWHERE — nothing is ever invisible', () => {
+    const items = [
+      item('fi-1', 'active'),
+      item('fi-2', 'achieved'), // same-day evidence -> resolved
+      item('fi-3', 'achieved'), // no evidence -> paused/inactive
+      item('fi-4', 'paused'),
+      item('fi-5', 'dropped'),
+    ];
+    const result = groups(items, new Set(['fi-2']));
+    const placed = [
+      ...result.active,
+      ...result.resolvedThisDay,
+      ...result.pausedInactive,
+    ].map((i) => i.id);
+    expect(placed.sort()).toEqual(['fi-1', 'fi-2', 'fi-3', 'fi-4', 'fi-5']);
+    // And exactly once each: the three groups partition the items.
+    expect(placed).toHaveLength(items.length);
+  });
+
+  it('orders every group by creation time with id tiebreak, caller order irrelevant', () => {
+    const result = groups([
+      item('fi-b', 'active', '2026-07-10T12:00:00Z'),
+      item('fi-a', 'active', '2026-07-10T12:00:00Z'),
+      item('fi-c', 'active', '2026-07-09T12:00:00Z'),
+    ]);
+    expect(result.active.map((i) => i.id)).toEqual(['fi-c', 'fi-a', 'fi-b']);
+  });
+});
+
+describe('assessmentsInSessionOrder', () => {
+  const sessions = new Map([
+    ['s1', { id: 's1', date: '2026-07-12T15:00:00Z' }],
+    ['s2', { id: 's2', date: '2026-07-12T20:00:00Z' }],
+    ['s3', { id: 's3', date: '2026-07-19T15:00:00Z' }],
+  ]);
+
+  it('orders assessments chronologically by their SESSION start, not row order', () => {
+    const ordered = assessmentsInSessionOrder(
+      [{ session_id: 's3' }, { session_id: 's1' }, { session_id: 's2' }],
+      sessions
+    );
+    expect(ordered.map((a) => a.session_id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('sorts assessments whose session is unknown last, deterministically', () => {
+    // RESTRICT on session delete means the session row exists; an unknown id
+    // here is a fetch gap. Unknowns go last so the known timeline stays honest,
+    // ordered among themselves by session id — stable, never render-order.
+    const ordered = assessmentsInSessionOrder(
+      [{ session_id: 's-zz' }, { session_id: 's2' }, { session_id: 's-aa' }],
+      sessions
+    );
+    expect(ordered.map((a) => a.session_id)).toEqual(['s2', 's-aa', 's-zz']);
+  });
+
+  it('does not mutate the input array', () => {
+    const input = [{ session_id: 's2' }, { session_id: 's1' }];
+    assessmentsInSessionOrder(input, sessions);
+    expect(input.map((a) => a.session_id)).toEqual(['s2', 's1']);
   });
 });
 

@@ -9,7 +9,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { getSessionInsightsFromMs, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import {
+  canClaimConsistency,
+  getSessionInsightsFromMs,
+  MIN_LAPS_FOR_INSIGHTS,
+} from '@/lib/insights';
+import { validLapTimesMs } from '@/lib/track-days';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 
 const COACHING_MODEL = 'claude-sonnet-4-6';
@@ -103,7 +108,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (laps.length < MIN_LAPS_FOR_INSIGHTS) {
+    // Countable laps (validLapTimesMs), not raw rows: this route used to gate
+    // on laps.length while the σ it reports ran over the positive lap times
+    // only — a six-row session with one 0 cleared the gate here and was refused
+    // by the session page. One array now feeds both the gate and the insights.
+    const countableLapTimesMs = validLapTimesMs(laps);
+    if (!canClaimConsistency(countableLapTimesMs)) {
       return NextResponse.json(
         {
           success: false,
@@ -120,17 +130,19 @@ export async function POST(request: NextRequest) {
       .eq('driver_id', session.driver_id)
       .single();
 
-    // 6. Calculate insights
-    const lapTimesMs = laps.map((lap) => lap.lap_time_ms);
-    const insights = getSessionInsightsFromMs(lapTimesMs);
+    // 6. Calculate insights — from the same countable array the gate counted.
+    const insights = getSessionInsightsFromMs(countableLapTimesMs);
 
-    // 7. Format data for prompt
+    // 7. Format data for prompt. The prompt speaks countable laps end-to-end:
+    // "Total Laps" is countableLapTimesMs.length, not laps.length, so it names
+    // the same count the gate and σ above were computed over — a 7-row session
+    // with one uncountable row says "Total Laps: 6", matching the 6-lap σ.
     const driverName = session.drivers?.name || 'Driver';
     const trackName = session.tracks?.name || 'Unknown Track';
     const experienceLevel = profile?.experience_level || 'intermediate';
     const totalSessions = profile?.total_sessions || 0;
     const sessionDate = new Date(session.date).toLocaleDateString();
-    const lapCount = laps.length;
+    const lapCount = countableLapTimesMs.length;
     const bestLapTime = session.best_lap_ms ? formatLapTime(session.best_lap_ms) : 'N/A';
     const consistencyText =
       insights.consistencySeconds !== null
@@ -138,8 +150,17 @@ export async function POST(request: NextRequest) {
         : 'not enough clean laps to measure';
     const paceTrend = insights.paceTrendLabel;
 
-    // Build lap times table
+    // Build lap times table — countable laps only, so the prompt cannot show
+    // the model a lap σ never saw. The filter mirrors validLapTimesMs (the
+    // app's one definition of a countable lap) but keeps whole ROWS, because
+    // the table needs lap_number labels and validLapTimesMs returns bare times.
+    // The prompt tells the model "Be specific with numbers and lap references";
+    // a raw row here would render "Lap 3: 0:00.000" (or NaN for a null time)
+    // and invite the model to cite that phantom lap in coach-visible text.
+    // Lap numbers stay AS RECORDED — a coach's "lap 5" must still be lap 5
+    // even when an earlier lap was uncountable, so no renumbering.
     const lapTimesTable = laps
+      .filter((lap) => lap.lap_time_ms !== null && lap.lap_time_ms > 0)
       .map((lap) => {
         const lapNum = lap.lap_number;
         const lapTime = formatLapTime(lap.lap_time_ms);

@@ -6,6 +6,7 @@ import CoachNotes from '@/components/ui/CoachNotes';
 import Sparkline from '@/components/analytics/Sparkline';
 import Link from 'next/link';
 import {
+  canClaimConsistency,
   getSessionInsightsFromMs,
   INSIGHT_HELPERS,
   MIN_LAPS_FOR_INSIGHTS,
@@ -25,6 +26,7 @@ import { MapPin, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
+import EvidenceBanner from '@/components/sessions/EvidenceBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,10 +105,11 @@ export default async function SessionDetailPage({ params }: PageProps) {
       : {}),
   }));
 
-  // Gated on lapTimes, not laps: every figure behind this gate (σ, pace trend)
-  // is computed from lapTimes, and counting raw rows instead let the page claim
-  // the six-lap minimum was met while reporting a σ over five laps.
-  const showInsights = lapTimes.length >= MIN_LAPS_FOR_INSIGHTS;
+  // canClaimConsistency over lapTimes, not raw laps: every figure behind this
+  // gate (σ, pace trend) is computed from lapTimes (validLapTimesMs output),
+  // and counting raw rows instead let the page claim the six-lap minimum was
+  // met while reporting a σ over five laps.
+  const showInsights = canClaimConsistency(lapTimes);
 
   // Where this session sits in its track day. Null for a session with no day
   // (shouldn't exist post-backfill), in which case the header falls back to the
@@ -200,6 +203,21 @@ export default async function SessionDetailPage({ params }: PageProps) {
               </p>
             )}
           </div>
+
+          {/* Evidence banner — facts plus present tense, under the day header.
+              Both gates come from the data layer: no dayContext means no
+              honest day date for the eligibility rule, and a degraded focus
+              fetch means no banner rather than a wrong one. The component
+              itself renders null when there is nothing to report. */}
+          {dayContext && session.focus && (
+            <EvidenceBanner
+              focusItems={session.focus.focusItems}
+              session={{ id: session.id, date: session.date }}
+              originSessions={session.focus.originSessions}
+              dayDate={dayContext.date}
+              trackTimezone={session.track?.timezone ?? null}
+            />
+          )}
 
           {/* Summary Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">

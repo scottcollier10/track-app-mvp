@@ -28,6 +28,12 @@ import { parseSessionCsv, type ParsedSession } from '@/lib/csv-parser';
 
 jest.mock('@/lib/csv-parser', () => ({ parseSessionCsv: jest.fn() }));
 
+// The success panel's ContextFlagChips read useRouter for their post-write
+// refresh. No test here writes a flag; the mock just lets the panel render.
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: jest.fn() }),
+}));
+
 const mockParseSessionCsv = parseSessionCsv as jest.MockedFunction<typeof parseSessionCsv>;
 
 /** What the ROUTE said about the session it just filed. */
@@ -198,11 +204,12 @@ describe('CsvImport success panel — track day links', () => {
 
     await runImport([parsedSession(), parsedSession({ bestLapMs: 90100 })]);
 
-    expect(screen.getByRole('link', { name: 'View track day' })).toHaveAttribute(
-      'href',
-      '/days/day-a'
-    );
-    expect(screen.queryByText(/Taylor/)).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'View track day' });
+    expect(link).toHaveAttribute('href', '/days/day-a');
+    // The LINK carries no name — one link needs no distinguishing label. The
+    // flag rows below it do name the driver (that is what identifies a row),
+    // so this is scoped to the link rather than the whole panel.
+    expect(link.textContent).not.toMatch(/Taylor/);
   });
 
   it('counts only laps a 201 confirmed, and says the total leaves a 207 out', async () => {
@@ -261,6 +268,31 @@ describe('CsvImport success panel — track day links', () => {
     await runImport([parsedSession()]);
 
     expect(screen.getByRole('link', { name: 'View track day' }).textContent).not.toMatch(/\d/);
+  });
+});
+
+describe('CsvImport success panel — context flags', () => {
+  it('offers context flag chips for every imported session, labelled by driver and best lap', async () => {
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        trackDayId: 'day-a',
+        driverName: 'taylor.brooks',
+      },
+    });
+
+    await runImport([parsedSession(), parsedSession({ bestLapMs: 90100 })]);
+
+    // One row of chips per imported session — flag "cut short" NOW, at the
+    // moment the coach remembers it, not three clicks into the day page.
+    expect(screen.getAllByRole('button', { name: 'Not representative' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Partial' })).toHaveLength(2);
+
+    // Rows identified by DB driver name + the stored best lap — never by an
+    // ordinal (CSV row order is not chronological) and never by the parse date.
+    expect(screen.getByText('Taylor Brooks — best 1:30.500')).toBeInTheDocument();
+    expect(screen.getByText('Taylor Brooks — best 1:30.100')).toBeInTheDocument();
+    expect(screen.queryByText(/Session \d/)).not.toBeInTheDocument();
   });
 });
 

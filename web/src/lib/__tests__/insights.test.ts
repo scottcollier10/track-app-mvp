@@ -3,6 +3,7 @@
  */
 
 import {
+  canClaimConsistency,
   getSessionInsightsFromMs,
   INSIGHT_HELPERS,
   MIN_LAPS_FOR_INSIGHTS,
@@ -11,6 +12,13 @@ import {
 describe('MIN_LAPS_FOR_INSIGHTS', () => {
   it('is 6 — the single gate for the interpretive layer', () => {
     expect(MIN_LAPS_FOR_INSIGHTS).toBe(6);
+  });
+});
+
+describe('canClaimConsistency', () => {
+  it('claims at exactly MIN_LAPS_FOR_INSIGHTS countable laps', () => {
+    expect(canClaimConsistency(Array(MIN_LAPS_FOR_INSIGHTS).fill(90000))).toBe(true);
+    expect(canClaimConsistency(Array(MIN_LAPS_FOR_INSIGHTS - 1).fill(90000))).toBe(false);
   });
 });
 

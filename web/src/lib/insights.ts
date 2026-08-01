@@ -11,6 +11,15 @@ import { sessionConsistencySeconds } from './analytics-v2';
 /** Single lap-count gate for the interpretive layer (insight tabs + AI coaching). */
 export const MIN_LAPS_FOR_INSIGHTS = 6;
 
+/**
+ * THE consistency gate — the one answer to "may this session claim a σ?".
+ * Input MUST be validLapTimesMs() output (countable laps), never raw lap rows:
+ * the coaching route once gated on raw row count while σ ran over fewer laps.
+ */
+export function canClaimConsistency(lapTimesMs: number[]): boolean {
+  return lapTimesMs.length >= MIN_LAPS_FOR_INSIGHTS;
+}
+
 function average(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, val) => sum + val, 0) / values.length;
