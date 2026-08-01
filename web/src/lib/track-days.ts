@@ -495,8 +495,8 @@ export function focusPanelGroups<I extends { id: string; status: string; created
  * comparator behind every "Session N"), never by assessment row order or
  * created_at, which retroactive debriefs scramble.
  *
- * An assessment whose session is not in the map shouldn't exist — session
- * deletion is RESTRICTed precisely so judgments keep their anchor — so a miss
+ * An assessment whose session is not in the map shouldn't exist — the FK
+ * blocks deleting a session that has judgments anchored to it — so a miss
  * here is a fetch gap. Those sort LAST, ordered among themselves by session
  * id: the known timeline stays honest and the stragglers stay deterministic.
  */
