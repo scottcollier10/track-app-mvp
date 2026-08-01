@@ -152,6 +152,33 @@ describe('FocusPanel groups', () => {
     expect(within(inactive()).getByText('Trail brake into T9')).toBeInTheDocument();
   });
 
+  it('a Resolved-this-day row exposes Reactivate — the undo for a same-day-assessed drop', async () => {
+    // The realistic mistake: coach assesses an item in the debrief sheet, then
+    // fat-fingers Drop in the panel. The item lands here (same-day evidence),
+    // and by partition it is NOT in Paused/inactive — so the undo must live on
+    // this row or nowhere on the page.
+    const fetchMock = stubFetch();
+    renderPanel({
+      focusItems: [
+        makeItem('fi-1', 'Smooth throttle out of T3', {
+          status: 'dropped',
+          focus_item_assessments: [makeAssessment('a-1', 'fi-1', 's2', 'improved')],
+        }),
+      ],
+      assessmentSessions: [{ id: 's2', date: '2026-07-12T20:00:00Z' }],
+    });
+
+    const resolved = screen.getByTestId('focus-resolved');
+    fireEvent.click(within(resolved).getByRole('button', { name: 'Reactivate' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, method, body] = calls(fetchMock)[0];
+    expect(url).toBe('/api/focus-items/fi-1');
+    expect(method).toBe('PATCH');
+    expect(body).toEqual({ status: 'active' });
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+
   it('Paused/inactive is driver-scoped: a long-ago paused item is reachable and reactivatable', async () => {
     const fetchMock = stubFetch();
     renderPanel({
@@ -288,5 +315,20 @@ describe('FocusPanel add item', () => {
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
     expect((input as HTMLInputElement).value).toBe('');
+  });
+
+  it('Enter in the input submits — phone keyboards have no mouse', async () => {
+    const fetchMock = stubFetch(201);
+    renderPanel({});
+
+    const input = screen.getByLabelText('New focus item');
+    fireEvent.change(input, { target: { value: 'Look through the corner' } });
+    fireEvent.submit(input.closest('form')!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, method, body] = calls(fetchMock)[0];
+    expect(url).toBe('/api/focus-items');
+    expect(method).toBe('POST');
+    expect(body).toEqual({ driverId: 'driver-1', text: 'Look through the corner' });
   });
 });

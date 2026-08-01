@@ -158,7 +158,12 @@ function ActiveItemRow({
   );
 }
 
-function InactiveItemRow({ item }: { item: FocusItemWithAssessments }) {
+/**
+ * A non-active item with its status label and a Reactivate control. Shared by
+ * Paused/inactive and Resolved this day: a same-day-assessed drop lands in
+ * Resolved and — by the partition — nowhere else, so its undo must live here.
+ */
+function ReactivatableItemRow({ item }: { item: FocusItemWithAssessments }) {
   const { write, setStatus } = useStatusWrite(item.id);
   return (
     <li className="rounded-lg border border-subtle p-3">
@@ -208,7 +213,13 @@ function AddFocusItem({ driverId }: { driverId: string }) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="flex items-center gap-2"
+    >
       <label htmlFor="panel-new-focus-item" className="sr-only">
         New focus item
       </label>
@@ -221,15 +232,14 @@ function AddFocusItem({ driverId }: { driverId: string }) {
         className="w-full rounded-lg border border-subtle bg-surface px-3 py-2 text-sm text-primary placeholder:text-text-subtle"
       />
       <button
-        type="button"
-        onClick={submit}
+        type="submit"
         disabled={text.trim().length === 0}
         className="shrink-0 rounded-lg border border-subtle px-3 py-2 text-sm text-muted hover:border-strong disabled:opacity-50"
       >
         Add focus item
       </button>
       <PendingWrite status={status} retry={retry} />
-    </div>
+    </form>
   );
 }
 
@@ -302,14 +312,7 @@ export default function FocusPanel({
           <h3 className="text-sm font-semibold text-primary">Resolved this day</h3>
           <ul className="space-y-3">
             {resolvedThisDay.map((item) => (
-              <li key={item.id} className="rounded-lg border border-subtle p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm text-primary">{item.text}</p>
-                  <span className="text-xs text-text-subtle">
-                    {FOCUS_STATUS_LABELS[item.status as FocusItemStatus] ?? item.status}
-                  </span>
-                </div>
-              </li>
+              <ReactivatableItemRow key={item.id} item={item} />
             ))}
           </ul>
         </div>
@@ -330,7 +333,7 @@ export default function FocusPanel({
           {showInactive && (
             <ul className="space-y-3" data-testid="focus-inactive">
               {pausedInactive.map((item) => (
-                <InactiveItemRow key={item.id} item={item} />
+                <ReactivatableItemRow key={item.id} item={item} />
               ))}
             </ul>
           )}
