@@ -174,6 +174,86 @@ describe('DayNotes', () => {
     await act(async () => {});
   });
 
+  it('serializes overlapping saves: while a PATCH is in flight, later edits queue and only the latest is sent after it settles', async () => {
+    let resolveFirst!: (response: unknown) => void;
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockImplementation(async () => ok);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DayNotes dayId="day-1" initialNotes={null} />);
+
+    fireEvent.change(notesArea(), { target: { value: 'A' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    // PATCH A is in flight and unresolved.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Two more flushes land while A is still on the wire: neither may issue a
+    // fetch yet (overlapping PATCHes are unordered at the DB), and the first
+    // queued value is superseded by the second — latest wins.
+    fireEvent.change(notesArea(), { target: { value: 'AB' } });
+    fireEvent.blur(notesArea());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.change(notesArea(), { target: { value: 'ABC' } });
+    fireEvent.blur(notesArea());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst(ok);
+    });
+
+    // Exactly one follow-up PATCH, carrying the latest text — the
+    // intermediate 'AB' was never sent.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, , body] = calls(fetchMock)[1];
+    expect(body).toEqual({ notes: 'ABC' });
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
+
+  it('a failure with newer text queued behind it sends the newer text — the queued write wins', async () => {
+    let resolveFirst!: (response: unknown) => void;
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DayNotes dayId="day-1" initialNotes={null} />);
+
+    fireEvent.change(notesArea(), { target: { value: 'doomed save' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(notesArea(), { target: { value: 'newer text' } });
+    fireEvent.blur(notesArea());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ ok: false, status: 500, json: async () => ({}) });
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, , body] = calls(fetchMock)[1];
+    expect(body).toEqual({ notes: 'newer text' });
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
+
   it('surfaces a failed save with a retry that re-sends the same payload', async () => {
     const fetchMock = stubFetch(500);
     render(<DayNotes dayId="day-1" initialNotes={null} />);
