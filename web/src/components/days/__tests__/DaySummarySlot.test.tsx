@@ -134,7 +134,12 @@ describe('DaySummarySlot', () => {
 
   it('state 3 (approved): final_text rendered, approver + date, Regenerate; no draft label', () => {
     render(
-      <DaySummarySlot dayId="day-1" summaries={[approvedRow()]} approverName="Alex Reed" />
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[approvedRow()]}
+        approverName="Alex Reed"
+        coachId="coach-1"
+      />
     );
 
     expect(summaryText().value).toBe('Approved wording.');
@@ -145,10 +150,39 @@ describe('DaySummarySlot', () => {
     expect(button('Regenerate')).toBeInTheDocument();
   });
 
+  it('state 3: the name is only used when it belongs to the row’s approver', () => {
+    // The row was approved by somebody else — a driver reassigned between
+    // coaches, or a seeded row that named its own approver. The signed-in
+    // coach's name here would be a confident lie about who signed off.
+    const { unmount } = render(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[approvedRow({ approved_by: 'coach-2' })]}
+        approverName="Alex Reed"
+        coachId="coach-1"
+      />
+    );
+    expect(screen.getByText('Approved · Jul 12, 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/Alex Reed/)).not.toBeInTheDocument();
+    unmount();
+
+    // No id to compare against degrades the same way, never to a guess.
+    render(
+      <DaySummarySlot dayId="day-1" summaries={[approvedRow()]} approverName="Alex Reed" />
+    );
+    expect(screen.getByText('Approved · Jul 12, 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/Alex Reed/)).not.toBeInTheDocument();
+  });
+
   it('state 3 chip: "Edited after approval" iff editedAfterApproval(row)', () => {
     // Freshly approved: the DB stamps both instants from the same now().
     const { unmount } = render(
-      <DaySummarySlot dayId="day-1" summaries={[approvedRow()]} approverName="Alex Reed" />
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[approvedRow()]}
+        approverName="Alex Reed"
+        coachId="coach-1"
+      />
     );
     expect(screen.queryByText('Edited after approval')).not.toBeInTheDocument();
     unmount();
@@ -158,6 +192,7 @@ describe('DaySummarySlot', () => {
         dayId="day-1"
         summaries={[approvedRow({ updated_at: '2026-07-12T20:30:00Z' })]}
         approverName="Alex Reed"
+        coachId="coach-1"
       />
     );
     expect(screen.getByText('Edited after approval')).toBeInTheDocument();
@@ -172,6 +207,7 @@ describe('DaySummarySlot', () => {
           approvedRow(),
         ]}
         approverName="Alex Reed"
+        coachId="coach-1"
       />
     );
 
@@ -448,5 +484,50 @@ describe('DaySummarySlot', () => {
       />
     );
     expect(summaryText().value).toBe('A fresh generation.');
+  });
+
+  it('regenerating cancels the pending autosave, so no stale PATCH gets stuck on the message', async () => {
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    // Anything written against sum-1 AFTER the regenerate is writing to a
+    // superseded row, which is exactly what the route answers 409 to.
+    const fetchMock = jest.fn(async (input: RequestInfo) =>
+      String(input) === '/api/day-summaries/sum-1'
+        ? { ok: false, status: 409, json: async () => SUMMARY_REPLACED }
+        : ok
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { rerender } = render(
+      <DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />
+    );
+
+    // Typing, then Regenerate inside the debounce window.
+    fireEvent.change(summaryText(), { target: { value: 'half-typed edit' } });
+    fireEvent.click(button('Regenerate'));
+    await act(async () => {});
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+
+    // What that refresh delivers: the regenerated row, the edited one
+    // superseded and therefore invisible to daySummaryView.
+    rerender(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[makeSummary({ id: 'sum-2', final_text: 'A fresh generation.' })]}
+      />
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    await act(async () => {});
+
+    // The replaced message must not land over the draft that IS current: the
+    // id-change reset is already spent, so Refresh cannot clear it there and
+    // only a full page reload could.
+    expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
+    expect(summaryText()).not.toBeDisabled();
+    expect(button('Regenerate')).toBeInTheDocument();
+    // Because the timer — whose closure still held sum-1 — never fired.
+    expect(calls(fetchMock).map(([url]) => url)).toEqual(['/api/days/day-1/summary']);
   });
 });

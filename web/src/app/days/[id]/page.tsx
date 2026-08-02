@@ -44,14 +44,23 @@ export default async function TrackDayPage({ params }: PageProps) {
   // The debrief variant: the day plus the driver's focus items, their
   // assessments and origin sessions — everything the sheet writes against.
   //
-  // The coach rides along in parallel purely to name the approver of the day
-  // summary. Only the owning coach can approve one (the day_summaries RLS chain
-  // is track_days -> drivers -> coach_id), so the signed-in coach IS the
-  // approver of any approved row visible here — the slot degrades to a plain
-  // "Approved" rather than guessing when the name is missing.
-  const [{ data: day, error }, coach] = await Promise.all([
+  // The summaries are every generation for this day — drafts, approved,
+  // superseded alike — and unfiltered on purpose: daySummaryView (inside the
+  // slot) is the ONE thing that decides which row is current. A day that turns
+  // out to be a 404 pays for this query, which is the cheaper half of the
+  // trade: bad day links are rare, every good one would otherwise pay a serial
+  // round trip.
+  //
+  // The coach rides along to name the approver of an approved summary. It is
+  // passed with its id, not as a bare name: the slot uses the name only when
+  // the row's `approved_by` matches, and degrades to a plain "Approved"
+  // otherwise. (This is a second getCurrentCoach() in the render — the root
+  // layout already made one. getCurrentCoach is deliberately not React-cached;
+  // see its docblock.)
+  const [{ data: day, error }, coach, summaries] = await Promise.all([
     getTrackDayDebrief(params.id),
     getCurrentCoach(),
+    getDaySummaries(params.id),
   ]);
 
   // Only a genuine query failure gets an error state.
@@ -80,11 +89,6 @@ export default async function TrackDayPage({ params }: PageProps) {
   if (!day) {
     notFound();
   }
-
-  // Every generation for this day — drafts, approved, superseded alike. Fetched
-  // after the 404 guard, and unfiltered on purpose: daySummaryView (inside the
-  // slot) is the ONE thing that decides which row is current.
-  const summaries = await getDaySummaries(day.id);
 
   const sessions = day.sessions;
 
@@ -209,7 +213,12 @@ export default async function TrackDayPage({ params }: PageProps) {
 
           {/* Zone 3 — the AI day summary, then the day notes scratchpad. Both
               autosave on a debounce with flush-on-leave. */}
-          <DaySummarySlot dayId={day.id} summaries={summaries} approverName={coach?.name} />
+          <DaySummarySlot
+            dayId={day.id}
+            summaries={summaries}
+            approverName={coach?.name}
+            coachId={coach?.id}
+          />
 
           <DayNotes dayId={day.id} initialNotes={day.notes} />
         </div>

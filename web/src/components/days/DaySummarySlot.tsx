@@ -54,11 +54,21 @@ type Job =
  * component never guesses it — and its absence degrades to a shorter true
  * statement rather than a placeholder.
  *
+ * The name is used ONLY when it provably belongs to this row's approver:
+ * `approverName` describes the coach whose id is `coachId`, and the row names
+ * its own approver in `approved_by`. Today's RLS chain makes those the same
+ * coach in practice, but a row can be approved by someone else — a driver
+ * reassigned between coaches, or a seeded row inserted `approved` with its own
+ * `approved_by` (see the migration's write matrix). An unverified name is a
+ * confident lie about who signed off; "Approved" is a smaller true statement.
+ *
  * `approved_at` is a timestamptz (an instant), so formatDate, never
  * formatTrackDate: that one is for the day's plain calendar date.
  */
-function approvedLabel(row: DaySummary, approverName?: string): string {
-  const by = approverName ? `Approved by ${approverName}` : 'Approved';
+function approvedLabel(row: DaySummary, approverName?: string, coachId?: string): string {
+  const named =
+    approverName !== undefined && row.approved_by !== null && row.approved_by === coachId;
+  const by = named ? `Approved by ${approverName}` : 'Approved';
   return row.approved_at ? `${by} · ${formatDate(row.approved_at)}` : by;
 }
 
@@ -66,12 +76,15 @@ export default function DaySummarySlot({
   dayId,
   summaries,
   approverName,
+  coachId,
 }: {
   dayId: string;
   /** Every generation recorded for the day — drafts, approved, superseded. */
   summaries: DaySummary[];
-  /** The approving coach's display name, when the page knows it. */
+  /** The signed-in coach's display name, when the page knows it. */
   approverName?: string;
+  /** Whose name that is — the row's `approved_by` has to match it to be used. */
+  coachId?: string;
 }) {
   const router = useRouter();
   const { current, pendingDraft } = daySummaryView(summaries);
@@ -214,10 +227,24 @@ export default function DaySummarySlot({
     if (lastSent.current !== null) enqueue(lastSent.current);
   };
 
-  const startGenerate = () =>
+  /**
+   * Drop the pending edit, THEN regenerate. Not flush: the timer's closure
+   * PATCHes the row that is current right now, and a successful regenerate is
+   * what supersedes that row — so the late PATCH earns a 409 that means nothing
+   * (the coach is looking at the new draft, which is fine). Worse, it sticks:
+   * `replaced` is only reset by a CHANGE of current.id, and the refresh already
+   * spent that change, so the message would sit over the current draft with the
+   * Refresh button unable to clear it. Only a full reload would.
+   */
+  const startGenerate = () => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
     void generate.run(() => request(`/api/days/${dayId}/summary`, { method: 'POST' }), () =>
       router.refresh()
     );
+  };
 
   const generateLabel =
     generate.status === 'pending'
@@ -280,7 +307,7 @@ export default function DaySummarySlot({
             <span className="text-xs text-text-subtle">
               {current.status === 'draft'
                 ? 'AI draft — not approved'
-                : approvedLabel(current, approverName)}
+                : approvedLabel(current, approverName, coachId)}
             </span>
             {editedAfterApproval(current) && (
               <span className="rounded-full border border-subtle px-2 py-0.5 text-xs text-muted">
