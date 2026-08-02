@@ -255,6 +255,10 @@ beforeEach(() => {
  * The default mock above resolves a canned string and never runs the route's
  * callback, which is where the stop_reason guard lives — so the truncation tests
  * swap this in to actually execute it.
+ *
+ * The escaping throw is the load-bearing half, and it mirrors the real rethrow at
+ * llm-telemetry.ts:288 — which nothing else pins (that module has no test suite).
+ * If you change that rethrow, change this.
  */
 function runTheCallback() {
   mockWrapLLMCall.mockImplementation(async (_options, callFn) => {

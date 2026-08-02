@@ -82,7 +82,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // immutable with no DELETE policy — storing it would make a truncated
         // summary permanent. Thrown, not returned: wrapLLMCall records the
         // failure in telemetry and rethrows, so this takes the same no-row path
-        // as an API failure.
+        // as an API failure. One cost caveat: throwing skips `usage`, so the
+        // llm_logs row lands at zero tokens/cost — the most expensive kind of
+        // generation is the one that reports as free. Read truncation counts,
+        // not spend, out of that row.
         if (message.stop_reason === 'max_tokens') {
           throw new Error('day summary truncated at max_tokens');
         }
