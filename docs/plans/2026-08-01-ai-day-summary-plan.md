@@ -208,6 +208,20 @@ git add web/supabase/migrations/20260801_day_summaries.sql web/src/lib/types
 git commit -m "feat(migrations): day_summaries — append-only generations, DB-enforced write matrix"
 ```
 
+**Task 1 review fixes (applied in `8144397` + `e3c8e35`; the SQL above is the pre-review text):**
+
+1. **DB owns `approved_at`** — `new.approved_at := now();` in the `draft->approved` branch, after the null check. A route-computed `approved_at` (`new Date().toISOString()` in Node) is earlier than the DB's `now()` by one round trip, so `updated_at > approved_at` would be true on every fresh approval and Task 4's "edited after approval" chip — the phase's whole disclosure budget — would always be lit. Demo data would not have shown it (seeded rows are INSERTs; `set_updated_at` is BEFORE UPDATE). The route still sends both fields (the null check is the intent declaration); the DB just makes the value trustworthy.
+2. **INSERT-path constraints** — the write matrix is BEFORE UPDATE only, so it could not see an INSERT. Two table CHECKs (`day_summaries_approved_has_approver`, `day_summaries_draft_is_unapproved`) plus a born-superseded guard in the BEFORE INSERT trigger. `superseded` is legal as a destination and illegal as a birth state, which is why that third one can't be a CHECK.
+3. **`id` immutable** — added to the matrix's immutable-column list beside `created_at`.
+4. Comment fixes: `comment on column model` (the `'seed'` convention now survives into the DB), the `approved_by` FK behavior named per `6b19b21`, and the trigger-ordering note corrected — the order is right but nothing depends on it today.
+
+**Carry-forwards into later tasks (from the same review):**
+
+- **Task 3:** two overlapping generates for one day hit `day_summaries_one_live_draft` with SQLSTATE `23505`, whose message does NOT contain `day_summaries:` — so the generate route needs its own `error.code === '23505'` branch returning the same 409 `replaced` shape. Add the test. Also: the approve route must keep sending a non-null `approved_at` even though the DB overwrites it (dropping it raises) — say so in a route comment.
+- **Task 4:** serialize Approve into the same write queue as the debounced `final_text` PATCH. A PATCH landing after the approve POST bumps `updated_at` past `approved_at` and lights the chip with no coach edit.
+- **Task 7:** the seeded row keeps `approved_at: now()`. Backdating it while `updated_at` defaults to `now()` lights the chip on every seeded row.
+- **Task 8:** after Scott applies the migration, regen `database.ts` and confirm a no-op diff. Task 1 hand-edited a file whose header says "GENERATED — do not hand-edit"; that is unavoidable pre-apply (Phase 2 did the same) but nothing currently schedules the reconciliation. Also: `final_text = draft_text` at insert is the one invariant left to route discipline (the seed needs them to differ), pinned by the Task 3 test rather than the DB.
+
 **Step 5: HANDSHAKE (main thread, not subagent).** The block Scott runs **leads with executable identity SQL** (the 8/1 wrong-project gotcha — confirmation lives in the transcript, not in the head):
 
 ```sql
@@ -269,6 +283,34 @@ select draft_text, status from day_summaries where track_day_id = '<DEMO_DAY_ID>
 update day_summaries set final_text = 'x'
  where track_day_id = '<DEMO_DAY_ID>' and draft_text = 'd1';
 -- expected: ERROR superseded rows are frozen
+rollback;
+
+-- 4. The review fixes (INSERT path + DB-owned approved_at).
+begin;
+insert into day_summaries (track_day_id, status, draft_text, prompt_context, model,
+  informing_session_ids, informing_assessment_ids, final_text)
+ values ('<DEMO_DAY_ID>', 'superseded', 'd1', '{}', 'test', '{}', '{}', 'd1');
+-- expected: ERROR rows cannot be inserted as superseded
+rollback;
+begin;
+insert into day_summaries (track_day_id, status, draft_text, prompt_context, model,
+  informing_session_ids, informing_assessment_ids, final_text)
+ values ('<DEMO_DAY_ID>', 'approved', 'd1', '{}', 'test', '{}', '{}', 'd1');
+-- expected: ERROR check constraint "day_summaries_approved_has_approver"
+rollback;
+begin;
+insert into day_summaries (track_day_id, draft_text, prompt_context, model,
+  informing_session_ids, informing_assessment_ids, final_text)
+ values ('<DEMO_DAY_ID>', 'd1', '{}', 'test', '{}', '{}', 'd1');
+-- Approve with a deliberately stale approved_at, as the route will send.
+update day_summaries set status = 'approved',
+  approved_by = (select id from coaches limit 1),
+  approved_at = now() - interval '1 hour'
+ where track_day_id = '<DEMO_DAY_ID>' and status = 'draft';
+select approved_at = updated_at as chip_starts_off, now() - approved_at as staleness
+  from day_summaries where track_day_id = '<DEMO_DAY_ID>' and status = 'approved';
+-- expected: chip_starts_off = true, staleness ~00:00:00 — the DB overwrote the
+-- stale value. If false, Task 4's "edited after approval" chip is born lit.
 rollback;
 ```
 
