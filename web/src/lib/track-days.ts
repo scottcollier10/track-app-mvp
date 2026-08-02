@@ -87,7 +87,21 @@ export function bySessionStart(
  * different and neither replaces the other.
  */
 export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): number[] {
-  return laps.map((lap) => lap.lap_time_ms).filter((ms): ms is number => ms !== null && ms > 0);
+  return laps.filter(isCountableLap).map((lap) => lap.lap_time_ms as number);
+}
+
+/**
+ * THE one definition of a countable lap, extracted from validLapTimesMs so the
+ * two can never answer differently.
+ *
+ * validLapTimesMs returns the TIMES, which is all a σ or a gate needs. A caller
+ * rendering whole ROWS — the coaching route's lap table, which prints
+ * "Lap {lap_number}: {time}" — cannot use them, and re-typing the condition is
+ * exactly how the app ended up with the drift the docblock above describes:
+ * a lap table showing "Lap 3: 0:00.000" beside a σ that never saw lap 3.
+ */
+export function isCountableLap(lap: { lap_time_ms: number | null }): boolean {
+  return lap.lap_time_ms !== null && lap.lap_time_ms > 0;
 }
 
 /**

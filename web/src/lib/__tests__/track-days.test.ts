@@ -11,6 +11,7 @@ import {
   focusItemsForSession,
   focusPanelGroups,
   formatConsistencyTrend,
+  isCountableLap,
   representativeSessions,
   sessionDelta,
   uniqueTrackDayLinks,
@@ -75,6 +76,33 @@ describe('localDateForTimezone', () => {
   });
   it('throws on an invalid timestamp rather than defaulting to today', () => {
     expect(() => localDateForTimezone('garbage', 'America/Chicago')).toThrow(RangeError);
+  });
+});
+
+describe('isCountableLap', () => {
+  /**
+   * The predicate validLapTimesMs was already applying inline, now named so
+   * callers that need whole ROWS (the coaching route's lap table) ask the same
+   * question instead of re-typing `!== null && > 0` and drifting from it.
+   */
+  it('counts a positive lap time and nothing else', () => {
+    expect(isCountableLap({ lap_time_ms: 91000 })).toBe(true);
+    expect(isCountableLap({ lap_time_ms: 0 })).toBe(false);
+    expect(isCountableLap({ lap_time_ms: -5000 })).toBe(false);
+    expect(isCountableLap({ lap_time_ms: null })).toBe(false);
+  });
+
+  it('is the predicate validLapTimesMs filters with — the two cannot disagree', () => {
+    const laps = [
+      { lap_time_ms: 91000 },
+      { lap_time_ms: 0 },
+      { lap_time_ms: null },
+      { lap_time_ms: -1 },
+      { lap_time_ms: 92000 },
+    ];
+    expect(validLapTimesMs(laps)).toEqual(
+      laps.filter(isCountableLap).map((lap) => lap.lap_time_ms)
+    );
   });
 });
 
