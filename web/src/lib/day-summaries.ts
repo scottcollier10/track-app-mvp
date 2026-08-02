@@ -31,7 +31,7 @@ import {
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
   focusPanelGroups,
-  isCountableLap,
+  isCountableLapMs,
   sessionDelta,
   validLapTimesMs,
 } from '@/lib/track-days';
@@ -52,6 +52,18 @@ export interface DaySummarySessionInput {
   representativeness: string | null;
   representativeness_note: string | null;
   laps: Array<{ lap_time_ms: number | null }>;
+  /**
+   * Compile-time tripwire: a caller handing over raw session rows fails to build.
+   *
+   * Omitting the column is not enough. TypeScript's excess-property check does
+   * not survive a spread, so `assembleDaySummaryContext({ ...debriefRow })`
+   * compiles and carries the AI text into the argument at runtime — the one
+   * shape the fetch layer is most likely to reach for. Typed `never`, that
+   * spread is a build error, and the fetch layer has to project the session
+   * fields explicitly at the boundary where the AI text actually exists. That
+   * is the point of decision 5: the exclusion is structural, not vigilance.
+   */
+  ai_coaching_summary?: never;
 }
 
 /** A focus item with its FULL assessment history — cross-day, uncapped. */
@@ -93,6 +105,15 @@ export interface DaySummaryInput {
   /** id+date of every session the assessments anchor to — cross-day by design. */
   assessmentSessions: Array<{ id: string; date: string }>;
   coachingNotes: Array<{
+    /**
+     * Input-only, and only for the sort's final tiebreak — `created_at` is
+     * nullable, so two undated notes on the same session are otherwise ordered
+     * by whatever the query returned. Every other comparator in the app carries
+     * an id tiebreak for the same reason. It does not reach the output: nothing
+     * downstream addresses a note by id, and a field in the snapshot that
+     * nothing reads is a field a future reader has to reason about.
+     */
+    id: string;
     session_id: string;
     author: string;
     body: string;
@@ -164,8 +185,20 @@ export interface DaySummaryContext {
  * name one of THIS day's sessions, and a date derived from the session's
  * timestamptz renders in the runtime's timezone. Saying less is the only honest
  * option left.
+ *
+ * The ordinal is what makes the cross-day narrative decision 4 exists to
+ * provide legible: three prior-day assessments rendered as three identical
+ * strings are three bullets the model cannot tell apart, so an item's history
+ * reads as one repeated judgment instead of a trail. It counts position within
+ * THIS ITEM's history, in assessmentsInSessionOrder's order — a place in a
+ * sequence, which the data supports. Not the assessment's createdAt, which
+ * retroactively entered debriefs scramble (see that function's docblock), and
+ * not "earlier": an item still being coached can be assessed at a session
+ * AFTER the day being summarized.
  */
-const FOREIGN_SESSION_LABEL = 'a session on another day';
+function foreignSessionLabel(ordinal: number, total: number): string {
+  return `a session on another day (${ordinal} of ${total})`;
+}
 
 /** "Session 1", "Session 2", ... — the index is bySessionStart's. */
 function sessionLabel(index: number): string {
@@ -197,9 +230,7 @@ export function assembleDaySummaryContext(input: DaySummaryInput): DaySummaryCon
     // 0 is not a best lap — the day KPI skips it and the session card prints
     // "--" for it, so the prompt must never be handed "0:00.000". Asked with
     // the app's one lap predicate rather than a fourth copy of `!== null && > 0`.
-    const bestLapMs = isCountableLap({ lap_time_ms: session.best_lap_ms })
-      ? session.best_lap_ms
-      : null;
+    const bestLapMs = isCountableLapMs(session.best_lap_ms) ? session.best_lap_ms : null;
 
     // Nearest EARLIER counted session, or null — a delta measured against a
     // not_representative session is exactly what the flag exists to prevent.
@@ -208,7 +239,7 @@ export function assembleDaySummaryContext(input: DaySummaryInput): DaySummaryCon
 
     let delta: DaySummaryContext['sessions'][number]['delta'] = null;
     if (baseline !== null && baselineIndex !== null) {
-      const baselineBestLapMs = isCountableLap({ lap_time_ms: baseline.best_lap_ms })
+      const baselineBestLapMs = isCountableLapMs(baseline.best_lap_ms)
         ? baseline.best_lap_ms
         : null;
       const raw = sessionDelta(
@@ -268,32 +299,50 @@ export function assembleDaySummaryContext(input: DaySummaryInput): DaySummaryCon
   ]);
   const originById = new Map(input.originSessions.map((origin) => [origin.id, origin]));
 
-  const focusItems = [...active, ...resolvedThisDay].map((item) => ({
-    id: item.id,
-    text: item.text,
-    status: item.status,
-    origin: originLabel(item, originById),
-    assessments: assessmentsInSessionOrder(
+  const focusItems = [...active, ...resolvedThisDay].map((item) => {
+    const inSessionOrder = assessmentsInSessionOrder(
       item.focus_item_assessments,
       assessmentSessionsById
-    ).map((assessment) => ({
-      id: assessment.id,
-      sessionId: assessment.session_id,
-      sessionLabel: labelBySessionId.get(assessment.session_id) ?? FOREIGN_SESSION_LABEL,
-      judgment: assessment.judgment,
-      note: assessment.note,
-      createdAt: assessment.created_at,
-    })),
-  }));
+    );
+    // Numbered per ITEM, so "(2 of 3)" is a position in this item's own trail.
+    const foreignTotal = inSessionOrder.filter(
+      (assessment) => !labelBySessionId.has(assessment.session_id)
+    ).length;
+    let foreignSeen = 0;
+
+    return {
+      id: item.id,
+      text: item.text,
+      status: item.status,
+      origin: originLabel(item, originById),
+      assessments: inSessionOrder.map((assessment) => {
+        const thisDayLabel = labelBySessionId.get(assessment.session_id);
+        return {
+          id: assessment.id,
+          sessionId: assessment.session_id,
+          sessionLabel:
+            thisDayLabel ?? foreignSessionLabel((foreignSeen += 1), foreignTotal),
+          judgment: assessment.judgment,
+          note: assessment.note,
+          createdAt: assessment.created_at,
+        };
+      }),
+    };
+  });
 
   // Notes read in the day's arc, not in whatever order the query returned.
+  // Three keys, and the last one always decides: created_at is nullable, so two
+  // undated notes on the same session tie on both of the first two and would
+  // otherwise keep row order — which is exactly what this object may not depend
+  // on (see the file docblock).
   const sessionOrder = new Map(ordered.map((session, i) => [session.id, i]));
   const coachingNotes = [...input.coachingNotes]
     .sort(
       (a, b) =>
         (sessionOrder.get(a.session_id) ?? ordered.length) -
           (sessionOrder.get(b.session_id) ?? ordered.length) ||
-        (a.created_at ?? '').localeCompare(b.created_at ?? '')
+        (a.created_at ?? '').localeCompare(b.created_at ?? '') ||
+        a.id.localeCompare(b.id)
     )
     .map((note) => ({
       sessionId: note.session_id,

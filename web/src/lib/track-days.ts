@@ -87,21 +87,43 @@ export function bySessionStart(
  * different and neither replaces the other.
  */
 export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): number[] {
-  return laps.filter(isCountableLap).map((lap) => lap.lap_time_ms as number);
+  return laps.filter(isCountableLap).map((lap) => lap.lap_time_ms);
 }
 
 /**
- * THE one definition of a countable lap, extracted from validLapTimesMs so the
- * two can never answer differently.
+ * THE one definition of a countable lap, at the VALUE level: is this
+ * milliseconds figure a lap at all?
+ *
+ * Everything else in this file that asked `!== null && > 0` — the row predicate
+ * below, dayBestLapMs, sessionDelta's best-lap guard — delegates here, so "is
+ * this a lap" has exactly one answer whichever shape the caller holds it in. A
+ * stored `sessions.best_lap_ms` is one of those shapes: csv-parser computes it
+ * as Math.min over UNFILTERED times, so a session whose only rows are zeros
+ * stores a 0 best lap, and every screen that prints it has to ask the same
+ * question the σ gate asked.
+ */
+export function isCountableLapMs(lapTimeMs: number | null): lapTimeMs is number {
+  return lapTimeMs !== null && lapTimeMs > 0;
+}
+
+/**
+ * THE one definition of a countable lap ROW, extracted from validLapTimesMs so
+ * the two can never answer differently.
  *
  * validLapTimesMs returns the TIMES, which is all a σ or a gate needs. A caller
  * rendering whole ROWS — the coaching route's lap table, which prints
  * "Lap {lap_number}: {time}" — cannot use them, and re-typing the condition is
  * exactly how the app ended up with the drift the docblock above describes:
  * a lap table showing "Lap 3: 0:00.000" beside a σ that never saw lap 3.
+ *
+ * A type PREDICATE, not a boolean: a caller that filters with it and then has
+ * to write `as number` to read the time back has been handed the narrowing on
+ * trust, and the cast survives changes to this condition that it should not.
  */
-export function isCountableLap(lap: { lap_time_ms: number | null }): boolean {
-  return lap.lap_time_ms !== null && lap.lap_time_ms > 0;
+export function isCountableLap<L extends { lap_time_ms: number | null }>(
+  lap: L
+): lap is L & { lap_time_ms: number } {
+  return isCountableLapMs(lap.lap_time_ms);
 }
 
 /**
@@ -146,7 +168,7 @@ export function dayBestLapMs(
 ): number | null {
   const bests = representativeSessions(sessions)
     .map((s) => s.bestLapMs)
-    .filter((b): b is number => b !== null && b > 0);
+    .filter(isCountableLapMs);
   return bests.length ? Math.min(...bests) : null;
 }
 
@@ -340,13 +362,21 @@ export interface SessionForDelta {
 
 /**
  * Change from prev to curr, signed as `curr - prev` (negative = faster lap / tighter σ).
- * bestLapDeltaMs is MILLISECONDS, null if either best lap is null.
+ * bestLapDeltaMs is MILLISECONDS, null unless BOTH best laps are countable.
  * consistencyDeltaSeconds is SECONDS, null unless both sessions clear
  * canClaimConsistency and both σ resolve.
+ *
+ * The countable-lap guard is applied HERE, not by callers. A stored
+ * `best_lap_ms` of 0 is not a lap (see isCountableLapMs), and a caller that
+ * passes the column raw used to get "-90.000s" printed beside a "--" best lap
+ * on the same card — a delta against a lap the same screen refuses to show.
+ * One guard, one answer, wherever the pair is compared.
  */
 export function sessionDelta(prev: SessionForDelta, curr: SessionForDelta): SessionDelta {
   const bestLapDeltaMs =
-    prev.bestLapMs !== null && curr.bestLapMs !== null ? curr.bestLapMs - prev.bestLapMs : null;
+    isCountableLapMs(prev.bestLapMs) && isCountableLapMs(curr.bestLapMs)
+      ? curr.bestLapMs - prev.bestLapMs
+      : null;
 
   let consistencyDeltaSeconds: number | null = null;
   if (canClaimConsistency(prev.lapTimesMs) && canClaimConsistency(curr.lapTimesMs)) {

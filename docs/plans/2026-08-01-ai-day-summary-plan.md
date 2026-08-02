@@ -494,6 +494,8 @@ export async function getDaySummaries(dayId: string): Promise<DaySummary[]>;
 // select * where track_day_id = dayId, order created_at desc. Page filters via daySummaryView.
 ```
 
+**Project the session fields explicitly — do not spread the debrief rows.** `DaySummarySessionInput` types `ai_coaching_summary?: never`, so `sessions: rows.map((r) => ({ ...r }))` is a build error (TypeScript's excess-property check does not survive a spread, which is exactly why the tripwire is a `never` field and not just an omitted one). That is the point, not an obstacle to route around: decision 5's exclusion becomes visible at the one boundary where the AI text actually exists. Same rule for `coachingNotes`, which now takes an `id` (input-only, the sort's final tiebreak — it does not reach the context object).
+
 **Step 2: Failing route tests** (mock `@/data/day-summaries`, `@/lib/llm-telemetry`, `@/lib/auth/current-coach`, `@/lib/supabase/server` per the import-session pattern):
 
 ```ts

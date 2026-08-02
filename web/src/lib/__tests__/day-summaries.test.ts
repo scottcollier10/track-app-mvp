@@ -49,6 +49,82 @@ const baseInput = (): DaySummaryInput => ({
   coachingNotes: [],
 });
 
+/**
+ * The same day with a focus trail on it — one item carried in from another day
+ * (so its history is cross-day), one resolved here, and two that belong in
+ * neither group. Module scope because the determinism test permutes it too:
+ * a day with no focus items cannot show that focusItems, their assessments and
+ * the origin/assessment session lists are all order-independent.
+ */
+const withFocus = (): DaySummaryInput => ({
+  ...baseInput(),
+  focusItems: [
+    {
+      id: 'item-active',
+      text: 'Brake later into T5',
+      status: 'active',
+      created_at: '2026-07-05T18:00:00Z',
+      created_after_session_id: 'prev-day-session',
+      focus_item_assessments: [
+        // Deliberately newest-first: order must come from the sessions.
+        {
+          id: 'a-2',
+          session_id: 's-2',
+          judgment: 'improved',
+          note: 'Much later turn-in',
+          created_at: '2026-07-12T18:30:00Z',
+        },
+        {
+          id: 'a-1',
+          session_id: 'prev-day-session',
+          judgment: 'keep_working',
+          note: null,
+          created_at: '2026-07-05T18:30:00Z',
+        },
+      ],
+    },
+    {
+      id: 'item-achieved',
+      text: 'Smooth throttle application out of T2',
+      status: 'achieved',
+      created_at: '2026-07-06T18:00:00Z',
+      created_after_session_id: null,
+      focus_item_assessments: [
+        {
+          id: 'a-3',
+          session_id: 's-3',
+          judgment: 'improved',
+          note: null,
+          created_at: '2026-07-12T21:30:00Z',
+        },
+      ],
+    },
+    {
+      id: 'item-paused',
+      text: 'Trail brake into the carousel',
+      status: 'paused',
+      created_at: '2026-07-07T18:00:00Z',
+      created_after_session_id: null,
+      focus_item_assessments: [],
+    },
+    {
+      id: 'item-dropped-elsewhere',
+      text: 'Left-foot braking',
+      status: 'dropped',
+      created_at: '2026-07-08T18:00:00Z',
+      created_after_session_id: null,
+      focus_item_assessments: [],
+    },
+  ],
+  originSessions: [
+    {
+      id: 'prev-day-session',
+      track_day: { date: '2026-07-05', track: { name: 'Sonoma' } },
+    },
+  ],
+  assessmentSessions: [{ id: 'prev-day-session', date: '2026-07-05T18:00:00Z' }],
+});
+
 describe('assembleDaySummaryContext', () => {
   it('orders sessions by bySessionStart and labels them Session 1..n', () => {
     const ctx = assembleDaySummaryContext(baseInput());
@@ -161,75 +237,6 @@ describe('assembleDaySummaryContext', () => {
   });
 
   describe('focus items', () => {
-    const withFocus = (): DaySummaryInput => ({
-      ...baseInput(),
-      focusItems: [
-        {
-          id: 'item-active',
-          text: 'Brake later into T5',
-          status: 'active',
-          created_at: '2026-07-05T18:00:00Z',
-          created_after_session_id: 'prev-day-session',
-          focus_item_assessments: [
-            // Deliberately newest-first: order must come from the sessions.
-            {
-              id: 'a-2',
-              session_id: 's-2',
-              judgment: 'improved',
-              note: 'Much later turn-in',
-              created_at: '2026-07-12T18:30:00Z',
-            },
-            {
-              id: 'a-1',
-              session_id: 'prev-day-session',
-              judgment: 'keep_working',
-              note: null,
-              created_at: '2026-07-05T18:30:00Z',
-            },
-          ],
-        },
-        {
-          id: 'item-achieved',
-          text: 'Smooth throttle application out of T2',
-          status: 'achieved',
-          created_at: '2026-07-06T18:00:00Z',
-          created_after_session_id: null,
-          focus_item_assessments: [
-            {
-              id: 'a-3',
-              session_id: 's-3',
-              judgment: 'improved',
-              note: null,
-              created_at: '2026-07-12T21:30:00Z',
-            },
-          ],
-        },
-        {
-          id: 'item-paused',
-          text: 'Trail brake into the carousel',
-          status: 'paused',
-          created_at: '2026-07-07T18:00:00Z',
-          created_after_session_id: null,
-          focus_item_assessments: [],
-        },
-        {
-          id: 'item-dropped-elsewhere',
-          text: 'Left-foot braking',
-          status: 'dropped',
-          created_at: '2026-07-08T18:00:00Z',
-          created_after_session_id: null,
-          focus_item_assessments: [],
-        },
-      ],
-      originSessions: [
-        {
-          id: 'prev-day-session',
-          track_day: { date: '2026-07-05', track: { name: 'Sonoma' } },
-        },
-      ],
-      assessmentSessions: [{ id: 'prev-day-session', date: '2026-07-05T18:00:00Z' }],
-    });
-
     it('takes focusPanelGroups active + resolvedThisDay, and nothing else', () => {
       const ctx = assembleDaySummaryContext(withFocus());
       expect(ctx.focusItems.map((i) => i.id)).toEqual(['item-active', 'item-achieved']);
@@ -282,6 +289,63 @@ describe('assembleDaySummaryContext', () => {
       expect(foreign.sessionId).toBe('prev-day-session');
       expect(foreign.sessionLabel).not.toMatch(/^Session \d+$/);
     });
+
+    it('numbers cross-day assessments so a multi-day trail is not N identical bullets', () => {
+      // The uncapped history exists to carry a cross-day narrative (decision 4).
+      // Three prior-day assessments rendered as three copies of one string are
+      // three bullets the model cannot tell apart, so the trail reads as one
+      // repeated judgment. The ordinal is a position in THIS item's history —
+      // never the assessment's createdAt, which retroactive debriefs scramble.
+      const input = withFocus();
+      input.focusItems[0].focus_item_assessments = [
+        {
+          id: 'a-x1',
+          session_id: 'other-1',
+          judgment: 'keep_working',
+          note: null,
+          created_at: '2026-07-05T18:30:00Z',
+        },
+        {
+          id: 'a-x2',
+          session_id: 'other-2',
+          judgment: 'no_change',
+          note: null,
+          created_at: '2026-07-06T18:30:00Z',
+        },
+        {
+          id: 'a-this-day',
+          session_id: 's-2',
+          judgment: 'improved',
+          note: null,
+          created_at: '2026-07-12T18:30:00Z',
+        },
+        {
+          id: 'a-x3',
+          session_id: 'other-3',
+          judgment: 'improved',
+          note: null,
+          created_at: '2026-07-07T18:30:00Z',
+        },
+      ];
+      input.assessmentSessions = [
+        { id: 'other-1', date: '2026-07-05T18:00:00Z' },
+        { id: 'other-2', date: '2026-07-06T18:00:00Z' },
+        { id: 'other-3', date: '2026-07-07T18:00:00Z' },
+      ];
+
+      const labels = assembleDaySummaryContext(input).focusItems[0].assessments.map(
+        (a) => a.sessionLabel
+      );
+      // Cross-day ones are distinguishable; the day's own session keeps its
+      // "Session N" and is not counted among them.
+      expect(labels).toEqual([
+        'a session on another day (1 of 3)',
+        'a session on another day (2 of 3)',
+        'a session on another day (3 of 3)',
+        'Session 2',
+      ]);
+      expect(new Set(labels).size).toBe(labels.length);
+    });
   });
 
   it('carries day identity and the day notes text', () => {
@@ -299,12 +363,14 @@ describe('assembleDaySummaryContext', () => {
     const input = baseInput();
     input.coachingNotes = [
       {
+        id: 'n-3',
         session_id: 's-3',
         author: 'coach',
         body: 'Traffic all run.',
         created_at: '2026-07-12T21:40:00Z',
       },
       {
+        id: 'n-1',
         session_id: 's-1',
         author: 'coach',
         body: 'Warm-up run, no notes.',
@@ -326,6 +392,28 @@ describe('assembleDaySummaryContext', () => {
         createdAt: '2026-07-12T21:40:00Z',
       },
     ]);
+  });
+
+  it('breaks a coaching-note tie on note id — created_at is nullable and ties on it are reachable', () => {
+    // Two undated notes on the same session tie on both earlier keys, so
+    // without the id tiebreak their order is whatever PostgREST returned — the
+    // one thing this object may not depend on.
+    const input = baseInput();
+    const undated = (id: string, body: string) => ({
+      id,
+      session_id: 's-2',
+      author: 'coach',
+      body,
+      created_at: null,
+    });
+    input.coachingNotes = [undated('n-b', 'Second'), undated('n-a', 'First')];
+    const forward = assembleDaySummaryContext(input);
+
+    const reversed = baseInput();
+    reversed.coachingNotes = [undated('n-a', 'First'), undated('n-b', 'Second')];
+
+    expect(forward.coachingNotes.map((n) => n.body)).toEqual(['First', 'Second']);
+    expect(assembleDaySummaryContext(reversed).coachingNotes).toEqual(forward.coachingNotes);
   });
 
   it('keeps empty sources explicit: empty arrays and null notes survive as-is', () => {
@@ -369,9 +457,45 @@ describe('assembleDaySummaryContext', () => {
   it('is deterministic: the same day from differently-ordered rows serializes identically', () => {
     // Task 3 asserts the stored prompt_context deep-equals the object that was
     // prompted with; row order out of PostgREST must not be able to change it.
-    const a = baseInput();
-    const b = baseInput();
+    // EVERY array is permuted, not just sessions: each one arrives from its own
+    // embed with its own unspecified order, and a comparator missing from any
+    // of them is the same bug.
+    const withEverything = (): DaySummaryInput => ({
+      ...withFocus(),
+      coachingNotes: [
+        {
+          id: 'n-1',
+          session_id: 's-1',
+          author: 'coach',
+          body: 'Warm-up run.',
+          created_at: null,
+        },
+        {
+          id: 'n-2',
+          session_id: 's-1',
+          author: 'coach',
+          body: 'Same session, also undated.',
+          created_at: null,
+        },
+        {
+          id: 'n-3',
+          session_id: 's-3',
+          author: 'coach',
+          body: 'Traffic all run.',
+          created_at: '2026-07-12T21:40:00Z',
+        },
+      ],
+    });
+
+    const a = withEverything();
+    const b = withEverything();
     b.sessions.reverse();
+    b.focusItems.reverse();
+    b.originSessions.reverse();
+    b.assessmentSessions.reverse();
+    b.coachingNotes.reverse();
+    for (const item of b.focusItems) item.focus_item_assessments.reverse();
+
     expect(JSON.stringify(assembleDaySummaryContext(b))).toBe(
       JSON.stringify(assembleDaySummaryContext(a))
     );

@@ -40,13 +40,32 @@ and is forbidden.
 If a source is empty, state it plainly. For example:
 "No coaching records exist for this day." Never pad or invent.`;
 
-/** Empty markers. Every source states its own emptiness rather than vanishing. */
+/**
+ * Empty markers. Every source states its own emptiness rather than vanishing,
+ * and every marker is a string that appears NOWHERE ELSE in the prompt.
+ *
+ * NO_COACH_NOTES used to be the identical sentence the HARD CONSTRAINT block
+ * quotes as its example of empty-means-empty. The empty day is one of the two
+ * canonical model failure modes (design decision 5), and an assertion for it
+ * that the constraint block satisfies on its own is coverage that reads as
+ * coverage while passing with the whole section deleted. The constraint block
+ * keeps the pinned phrasing; the marker says the same thing in its own words,
+ * so asserting it means what it looks like it means.
+ */
 const NO_SESSIONS = 'No sessions are recorded for this day.';
 const NO_FOCUS_ITEMS = 'No focus items were in play on this day.';
-const NO_COACH_NOTES = 'No coaching records exist for this day.';
+const NO_COACH_NOTES = 'No coach session notes were recorded for this day.';
 const NO_DAY_NOTES = 'No day notes were recorded.';
 const NO_ELIGIBLE_ITEMS = 'No focus items are in play for this session.';
 const NO_COUNTABLE_LAPS = 'No countable laps are recorded for this session.';
+
+/**
+ * What a coaching note's session is called when the context resolved no name
+ * for it. Reachable only if a note was fetched for a session outside the day it
+ * is being rendered with — a fetch bug, not a data state — so it names the gap
+ * instead of borrowing a "Session N" that belongs to a different session.
+ */
+const SESSION_OUTSIDE_THIS_DAY = 'a session outside this day';
 
 /** Signed lap delta in seconds. Zero is unsigned: an identical lap is not "slower". */
 function signedLapDelta(ms: number): string {
@@ -63,15 +82,54 @@ function sigma(seconds: number): string {
 }
 
 /**
- * One session's block. `marker` places the focal session in the session
- * prompt's day arc; the day summary passes none.
+ * How a prompt names a session — and the ONE place a session's position
+ * relative to the focal session is decided.
+ *
+ * Decision 7 forbids grading the focal session with hindsight it did not have,
+ * and the marker is the whole mechanism: it is what makes a later session
+ * legible as "subsequently" context rather than as something the focal session
+ * already knew. THREE renderers print a session's name — the session blocks,
+ * the assessment history under FOCUS ITEMS, the coach notes — and the
+ * assessment history is the one that matters most, because a later session's
+ * judgment ("Session 3: improved") sitting unmarked under "what THIS session's
+ * data shows against the item's assessment history" is hindsight presented as
+ * evidence. Marking one renderer and not the others is how that happens, so
+ * none of them owns the decision.
+ *
+ * `nameOutsideThisDay` is what to call an id that is not one of this day's
+ * sessions: for an assessment, the name the core already resolved (a cross-day
+ * session, which carries no marker because it has no place in this day's arc).
+ * This day's numbering is never borrowed for it.
+ */
+type SessionLabeler = (sessionId: string, nameOutsideThisDay: string) => string;
+
+/** The marker wording itself, in one place. Empty when nothing is in focus. */
+function marker(index: number, focalIndex: number | null): string {
+  if (focalIndex === null) return '';
+  if (index === focalIndex) return ' (THIS SESSION)';
+  return index > focalIndex ? ' (after this session)' : '';
+}
+
+/** `focalIndex` null in the day summary, where no session is in focus. */
+function sessionLabelerFor(ctx: DaySummaryContext, focalIndex: number | null): SessionLabeler {
+  const indexById = new Map(ctx.sessions.map((session, i) => [session.id, i]));
+  return (sessionId, nameOutsideThisDay) => {
+    const index = indexById.get(sessionId);
+    if (index === undefined) return nameOutsideThisDay;
+    return `${ctx.sessions[index].label}${marker(index, focalIndex)}`;
+  };
+}
+
+/**
+ * One session's block. `name` is the labeler's — it carries the focal marker in
+ * the session prompt and is bare "Session N" in the day summary.
  */
 function renderSession(
   session: DaySummaryContext['sessions'][number],
-  marker: string
+  name: string
 ): string {
   const head = [
-    `${session.label}${marker} — `,
+    `${name} — `,
     session.bestLapMs !== null
       ? `best lap ${formatLapMs(session.bestLapMs)}`
       : 'best lap not recorded',
@@ -112,14 +170,17 @@ function renderSession(
   return lines.join('\n');
 }
 
-function renderSessions(ctx: DaySummaryContext, markerFor: (index: number) => string): string {
+function renderSessions(ctx: DaySummaryContext, labelFor: SessionLabeler): string {
   if (ctx.sessions.length === 0) return NO_SESSIONS;
-  return ctx.sessions.map((session, i) => renderSession(session, markerFor(i))).join('\n');
+  return ctx.sessions
+    .map((session) => renderSession(session, labelFor(session.id, session.label)))
+    .join('\n');
 }
 
 function renderFocusItems(
   items: DaySummaryContext['focusItems'],
-  emptyMarker: string
+  emptyMarker: string,
+  labelFor: SessionLabeler
 ): string {
   if (items.length === 0) return emptyMarker;
   return items
@@ -133,21 +194,28 @@ function renderFocusItems(
           : item.assessments.map(
               // A sub-bullet, not an indented line: a bare indent continues the
               // item's own bullet and the history reads as one run-on claim.
+              //
+              // Through the labeler, so a judgment given at a LATER session
+              // arrives marked. This section asks what the focal session's data
+              // shows against the item's history; an unmarked "Session 3:
+              // improved" here is a verdict from the future reading as evidence
+              // the focal session already had.
               (a) =>
-                `  - ${a.sessionLabel}: ${a.judgment}${a.note !== null ? ` — "${a.note}"` : ''}`
+                `  - ${labelFor(a.sessionId, a.sessionLabel)}: ${a.judgment}${
+                  a.note !== null ? ` — "${a.note}"` : ''
+                }`
             );
       return [head, ...history].join('\n');
     })
     .join('\n');
 }
 
-function renderCoachingNotes(ctx: DaySummaryContext): string {
+function renderCoachingNotes(ctx: DaySummaryContext, labelFor: SessionLabeler): string {
   if (ctx.coachingNotes.length === 0) return NO_COACH_NOTES;
-  const labels = new Map(ctx.sessions.map((session) => [session.id, session.label]));
   return ctx.coachingNotes
     .map(
       (note) =>
-        `- ${labels.get(note.sessionId) ?? 'Unknown session'} (${note.author}): ${note.body}`
+        `- ${labelFor(note.sessionId, SESSION_OUTSIDE_THIS_DAY)} (${note.author}): ${note.body}`
     )
     .join('\n');
 }
@@ -171,6 +239,10 @@ function renderDayNotes(ctx: DaySummaryContext): string {
  * for the five settled sections.
  */
 export function buildDaySummaryPrompt(ctx: DaySummaryContext): string {
+  // No session is in focus, so no session is "later than" anything: the day
+  // summary describes the whole day at once.
+  const labelFor = sessionLabelerFor(ctx, null);
+
   return `You are writing a coach-facing summary of one HPDE track day. Everything you
 are given below is either recorded session data or something the coach wrote.
 
@@ -179,13 +251,13 @@ ${HARD_CONSTRAINT}
 ${renderDay(ctx)}
 
 SESSIONS
-${renderSessions(ctx, () => '')}
+${renderSessions(ctx, labelFor)}
 
 FOCUS ITEMS IN PLAY
-${renderFocusItems(ctx.focusItems, NO_FOCUS_ITEMS)}
+${renderFocusItems(ctx.focusItems, NO_FOCUS_ITEMS, labelFor)}
 
 COACH SESSION NOTES
-${renderCoachingNotes(ctx)}
+${renderCoachingNotes(ctx, labelFor)}
 
 DAY NOTES
 ${renderDayNotes(ctx)}
@@ -221,37 +293,62 @@ export function buildSessionCoachingPrompt(args: {
   ctx: DaySummaryContext;
   focalSessionId: string;
   eligibleItemIds: Set<string>;
-  /** The focal session's lap ROWS — filtered and formatted here, once. */
+  /**
+   * The focal session's lap ROWS — filtered and formatted here, once.
+   *
+   * The ONLY raw data that reaches this file. Everything else arrives already
+   * derived on the context object, so this parameter is where the next "just
+   * add a fade figure to the prompt" change will try to land and where a
+   * recomputation would creep back in — a metric derived here is a second
+   * definition of a number the day page already prints.
+   *
+   * It is also the one thing the prompt renders that never enters
+   * `prompt_context`: session coaching has no provenance row (design decision
+   * 7), so the lap table is unrecorded. Acceptable only while that stays true —
+   * the PR that gives session coaching a provenance row inherits the question
+   * of how this gets snapshotted with it.
+   */
   focalLaps: Array<{ lap_number: number; lap_time_ms: number | null }>;
   driverProfile: { experienceLevel: string; totalSessions: number };
 }): string {
   const { ctx, focalSessionId, eligibleItemIds, focalLaps, driverProfile } = args;
 
   const focalIndex = ctx.sessions.findIndex((session) => session.id === focalSessionId);
-  const focal = focalIndex === -1 ? null : ctx.sessions[focalIndex];
-
-  // Later sessions are marked as such so the model can hold them as
-  // "subsequently" context and not grade the focal session with hindsight.
-  const markerFor = (index: number) =>
-    index === focalIndex
-      ? ' (THIS SESSION)'
-      : focalIndex !== -1 && index > focalIndex
-        ? ' (after this session)'
-        : '';
+  // Fail loud. With no focal session nothing is marked "(THIS SESSION)", no lap
+  // is marked "(best)", and the header still promises a prompt about ONE
+  // session — so the model picks one, and the route returns it as a 200. A
+  // focal session missing from its own day's context is corrupt input, not a
+  // supported state (the same posture localDateForTimezone takes on an
+  // unparseable timestamp).
+  if (focalIndex === -1) {
+    throw new Error(
+      `buildSessionCoachingPrompt: focal session ${focalSessionId} is not in the day context`
+    );
+  }
+  const focal = ctx.sessions[focalIndex];
+  const labelFor = sessionLabelerFor(ctx, focalIndex);
 
   // Countable laps only, via the app's one lap predicate: a raw row renders
   // "Lap 3: 0:00.000" and invites the model to cite a phantom lap in
   // coach-visible text. Lap numbers stay AS RECORDED — a coach's "lap 5" must
   // still be lap 5 when an earlier lap was uncountable.
   const countable = focalLaps.filter(isCountableLap);
+  // The FIRST lap matching the session's best, not every one: two laps run to
+  // the same millisecond would otherwise both be "(best)", which reads as two
+  // best laps. The stored best_lap_ms is the one asked — csv-parser computes it
+  // as Math.min over UNFILTERED times, so when the stored best is not among the
+  // countable rows nothing here is marked. That is deliberate: recomputing the
+  // minimum over `countable` would make this file a second definition of "best
+  // lap" and let the lap table disagree with the session header above it.
+  const bestLapIndex = countable.findIndex((lap) => lap.lap_time_ms === focal.bestLapMs);
   const lapTable =
     countable.length === 0
       ? NO_COUNTABLE_LAPS
       : countable
           .map(
-            (lap) =>
-              `Lap ${lap.lap_number}: ${formatLapMs(lap.lap_time_ms as number)}${
-                focal?.bestLapMs === lap.lap_time_ms ? ' (best)' : ''
+            (lap, i) =>
+              `Lap ${lap.lap_number}: ${formatLapMs(lap.lap_time_ms)}${
+                i === bestLapIndex ? ' (best)' : ''
               }`
           )
           .join('\n');
@@ -276,16 +373,16 @@ Sessions completed: ${driverProfile.totalSessions}
 ${renderDay(ctx)}
 
 SESSIONS
-${renderSessions(ctx, markerFor)}
+${renderSessions(ctx, labelFor)}
 
 FOCAL SESSION LAPS (countable laps only, lap numbers as recorded)
 ${lapTable}
 
 FOCUS ITEMS IN EVIDENCE FOR THIS SESSION
-${renderFocusItems(eligibleItems, NO_ELIGIBLE_ITEMS)}
+${renderFocusItems(eligibleItems, NO_ELIGIBLE_ITEMS, labelFor)}
 
 COACH SESSION NOTES
-${renderCoachingNotes(ctx)}
+${renderCoachingNotes(ctx, labelFor)}
 
 DAY NOTES
 ${renderDayNotes(ctx)}

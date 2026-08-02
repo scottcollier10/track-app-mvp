@@ -12,6 +12,7 @@ import {
   focusPanelGroups,
   formatConsistencyTrend,
   isCountableLap,
+  isCountableLapMs,
   representativeSessions,
   sessionDelta,
   uniqueTrackDayLinks,
@@ -103,6 +104,27 @@ describe('isCountableLap', () => {
     expect(validLapTimesMs(laps)).toEqual(
       laps.filter(isCountableLap).map((lap) => lap.lap_time_ms)
     );
+  });
+
+  it('is the row-shaped form of isCountableLapMs — the row and the value cannot disagree', () => {
+    for (const ms of [91000, 1, 0, -5000, null]) {
+      expect(isCountableLap({ lap_time_ms: ms })).toBe(isCountableLapMs(ms));
+    }
+  });
+});
+
+describe('isCountableLapMs', () => {
+  /**
+   * The value-level form, for the callers that hold a milliseconds figure
+   * rather than a lap row — a stored `best_lap_ms`, most of them. csv-parser
+   * computes that column as Math.min over UNFILTERED times, so 0 reaches it,
+   * and every screen printing it has to ask the same question the σ gate asked.
+   */
+  it('counts a positive figure and nothing else', () => {
+    expect(isCountableLapMs(91000)).toBe(true);
+    expect(isCountableLapMs(0)).toBe(false);
+    expect(isCountableLapMs(-5000)).toBe(false);
+    expect(isCountableLapMs(null)).toBe(false);
   });
 });
 
@@ -688,6 +710,26 @@ describe('sessionDelta', () => {
       sessionDelta({ bestLapMs: 95000, lapTimesMs: loose }, { bestLapMs: null, lapTimesMs: tight })
         .bestLapDeltaMs
     ).toBeNull();
+  });
+
+  it('nulls the best-lap delta when either best lap is 0 — not null, but not a lap either', () => {
+    // The guard is HERE, not at the call sites. The session card prints "--"
+    // for a 0 best lap while passing the column raw to this function, which
+    // used to print "-90.000s" beside it: a delta against a lap the same card
+    // refuses to show. One rule, one place.
+    expect(
+      sessionDelta({ bestLapMs: 0, lapTimesMs: loose }, { bestLapMs: 94200, lapTimesMs: tight })
+        .bestLapDeltaMs
+    ).toBeNull();
+    expect(
+      sessionDelta({ bestLapMs: 95000, lapTimesMs: loose }, { bestLapMs: 0, lapTimesMs: tight })
+        .bestLapDeltaMs
+    ).toBeNull();
+    // The consistency delta is a separate gate and is untouched by this.
+    expect(
+      sessionDelta({ bestLapMs: 0, lapTimesMs: loose }, { bestLapMs: 94200, lapTimesMs: tight })
+        .consistencyDeltaSeconds
+    ).not.toBeNull();
   });
 });
 

@@ -87,6 +87,7 @@ const fullInput = (): DaySummaryInput => ({
   assessmentSessions: [{ id: 'prev-day-session', date: '2026-07-05T18:00:00Z' }],
   coachingNotes: [
     {
+      id: 'n-1',
       session_id: 's-2',
       author: 'coach',
       body: 'Caught the 911 twice, lost the last two laps.',
@@ -140,15 +141,38 @@ describe('buildDaySummaryPrompt', () => {
   it('renders explicit empty markers for empty sources, never omitting the section', () => {
     // A near-empty day is exactly where a model's helpfulness instinct invents
     // coaching narrative, so every source states its own emptiness.
+    //
+    // The coach-notes marker is deliberately NOT the sentence the HARD
+    // CONSTRAINT block quotes. It used to be, which made this assertion pass
+    // with renderCoachingNotes deleted entirely — coverage of one of the two
+    // canonical failure modes that could not fail. Every marker asserted here
+    // is now a string that appears nowhere else in the prompt.
     const p = buildDaySummaryPrompt(assembleDaySummaryContext(emptyInput()));
     expect(p).toContain('SESSIONS');
     expect(p).toContain('No sessions are recorded for this day.');
     expect(p).toContain('FOCUS ITEMS');
     expect(p).toContain('No focus items were in play on this day.');
     expect(p).toContain('COACH SESSION NOTES');
-    expect(p).toContain('No coaching records exist for this day.');
+    expect(p).toContain('No coach session notes were recorded for this day.');
     expect(p).toContain('DAY NOTES');
     expect(p).toContain('No day notes were recorded.');
+  });
+
+  it('states each empty source in its own words — no marker is a substring the constraint block supplies', () => {
+    // The guard on the fix above: if a marker is ever reworded back into a
+    // sentence the HARD CONSTRAINT block already contains, its assertion stops
+    // being able to fail. Asserted on an EMPTY day, where each marker is
+    // rendered exactly once.
+    const p = buildDaySummaryPrompt(assembleDaySummaryContext(emptyInput()));
+    const occurrences = (needle: string) => p.split(needle).length - 1;
+    for (const marker of [
+      'No sessions are recorded for this day.',
+      'No focus items were in play on this day.',
+      'No coach session notes were recorded for this day.',
+      'No day notes were recorded.',
+    ]) {
+      expect(occurrences(marker)).toBe(1);
+    }
   });
 
   it('renders each session with its label, best lap and countable lap count', () => {
@@ -251,6 +275,97 @@ describe('buildSessionCoachingPrompt', () => {
     const p = buildSessionCoachingPrompt(args('s-2'));
     expect(p).toContain('Session 2 (THIS SESSION)');
     expect(p).toContain('Session 3 (after this session)');
+  });
+
+  it('marks a later session in the ASSESSMENT HISTORY too — the hindsight that matters most', () => {
+    // This is the renderer decision 7 is actually about. The evidence section
+    // asks what THIS session's data shows against the item's assessment
+    // history; a bare "Session 3: improved" listed there is a verdict from
+    // after the fact reading as something session 2 already had.
+    const input = fullInput();
+    input.focusItems = [
+      {
+        ...ITEM_CARRIED_IN,
+        focus_item_assessments: [
+          {
+            id: 'a-later',
+            session_id: 's-3',
+            judgment: 'improved',
+            note: 'finally nailed it',
+            created_at: '2026-07-12T21:30:00Z',
+          },
+        ],
+      },
+    ];
+    const p = buildSessionCoachingPrompt(args('s-2', input));
+    expect(p).toContain('Session 3 (after this session): improved');
+    expect(p).not.toContain('- Session 3: improved');
+  });
+
+  it('marks a later session in the COACH NOTES too', () => {
+    const input = fullInput();
+    input.coachingNotes = [
+      {
+        id: 'n-late',
+        session_id: 's-3',
+        author: 'coach',
+        body: 'Much better placement in the carousel.',
+        created_at: '2026-07-12T21:40:00Z',
+      },
+    ];
+    const p = buildSessionCoachingPrompt(args('s-2', input));
+    expect(p).toContain('Session 3 (after this session) (coach):');
+    expect(p).not.toContain('- Session 3 (coach):');
+  });
+
+  it('leaves a cross-day assessment unmarked and unnumbered by this day', () => {
+    // A session on another day has no position in this day's arc, so the
+    // labeler returns the name the context resolved rather than borrowing a
+    // "Session N" that belongs to one of this day's sessions.
+    const input = fullInput();
+    input.focusItems = [
+      {
+        ...ITEM_CARRIED_IN,
+        focus_item_assessments: [
+          {
+            id: 'a-prev-day',
+            session_id: 'prev-day-session',
+            judgment: 'keep_working',
+            note: null,
+            created_at: '2026-07-05T18:30:00Z',
+          },
+        ],
+      },
+    ];
+    const p = buildSessionCoachingPrompt(args('s-2', input));
+    expect(p).toContain('a session on another day (1 of 1): keep_working');
+    expect(p).not.toContain('a session on another day (1 of 1) (THIS SESSION)');
+  });
+
+  it('throws when the focal session is not in the day context, rather than drafting about some other session', () => {
+    // With no focal session nothing is marked "(THIS SESSION)", no lap is
+    // "(best)", and the header still promises a prompt about ONE session — the
+    // model picks one and the route returns it as a 200. Corrupt input, not a
+    // supported state.
+    expect(() => buildSessionCoachingPrompt({ ...args('s-2'), focalSessionId: 's-nope' })).toThrow(
+      /buildSessionCoachingPrompt/
+    );
+  });
+
+  it('marks one lap "(best)" even when two laps tie on the session best', () => {
+    const input = fullInput();
+    input.sessions[1].best_lap_ms = 90000;
+    const p = buildSessionCoachingPrompt({
+      ...args('s-2', input),
+      focalLaps: [
+        { lap_number: 1, lap_time_ms: 90000 },
+        { lap_number: 2, lap_time_ms: 90000 },
+        { lap_number: 3, lap_time_ms: 91000 },
+      ],
+    });
+    expect(p.split('(best)').length - 1).toBe(1);
+    expect(p).toContain('Lap 1: 1:30.000 (best)');
+    expect(p).toContain('Lap 2: 1:30.000\n');
   });
 
   it('lists only items eligible for the focal session — an item is absent from its own origin session', () => {
