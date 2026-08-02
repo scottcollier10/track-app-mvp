@@ -192,6 +192,8 @@ commit;
 
 Note: the trigger-internal supersede UPDATEs re-enter `day_summaries_write_matrix` for the superseded row — `draft→superseded` / `approved→superseded` are legal transitions changing only `status`, so they pass. The one-approved index is safe because the auto-supersede completes before the approving UPDATE's own index entry lands.
 
+Note: the two BEFORE UPDATE triggers fire in alphabetical order — `day_summaries_enforce_matrix` before `day_summaries_set_updated_at` — which is the order we want (matrix validates, then updated_at stamps). That ordering is name-dependent; the names above happen to be correct, so do NOT rename these triggers.
+
 **Step 2: Types.** In `database.ts`, add `day_summaries` Row/Insert/Update + Relationships exactly following the `focus_items` entry shape (`informing_session_ids: string[]`, `prompt_context: Json`). In `index.ts`:
 
 ```ts
@@ -248,7 +250,29 @@ insert into day_summaries (track_day_id, draft_text, prompt_context, model,
 update day_summaries set status = 'approved' where track_day_id = '<DEMO_DAY_ID>' and status = 'draft';
 -- expected: ERROR approval requires approved_by and approved_at
 rollback;
+begin;
+-- Auto-supersede on approve — the trickiest trigger interaction — plus frozen-superseded.
+insert into day_summaries (track_day_id, draft_text, prompt_context, model,
+  informing_session_ids, informing_assessment_ids, final_text)
+ values ('<DEMO_DAY_ID>', 'd1', '{}', 'test', '{}', '{}', 'd1');
+update day_summaries set status = 'approved',
+  approved_by = (select id from coaches limit 1), approved_at = now()
+ where track_day_id = '<DEMO_DAY_ID>' and status = 'draft';
+insert into day_summaries (track_day_id, draft_text, prompt_context, model,
+  informing_session_ids, informing_assessment_ids, final_text)
+ values ('<DEMO_DAY_ID>', 'd2', '{}', 'test', '{}', '{}', 'd2');
+update day_summaries set status = 'approved',
+  approved_by = (select id from coaches limit 1), approved_at = now()
+ where track_day_id = '<DEMO_DAY_ID>' and status = 'draft';
+select draft_text, status from day_summaries where track_day_id = '<DEMO_DAY_ID>' order by created_at;
+-- expected: d1 superseded, d2 approved — exactly ONE approved row
+update day_summaries set final_text = 'x'
+ where track_day_id = '<DEMO_DAY_ID>' and draft_text = 'd1';
+-- expected: ERROR superseded rows are frozen
+rollback;
 ```
+
+(RLS DELETE denial can't be behaviorally tested from the SQL editor — postgres bypasses RLS; the `pg_policies` no-delete-row check above covers it.)
 
 Record all outputs in the PR description. If anything unexpected: STOP the plan, report.
 
@@ -500,7 +524,7 @@ it('autosave PATCHes finalText debounced; approve sends no text payload', () => 
 
 - Gate unchanged: `canClaimConsistency(validLapTimesMs(laps))`.
 - Replace the inline lap-table filter with `laps.filter(isCountableLap)` (Task 2's predicate — the absorbed follow-up).
-- Fetch day context: `buildDaySummaryContext(session.track_day_id)`. If the session has no day (defensive; all prod sessions are backfilled), fall back to the session-only prompt shape with the constraint block — do not invent day context.
+- Fetch day context: `buildDaySummaryContext(session.track_day_id)`. If `session.track_day_id` is null, return `500 { error: 'Session has no track day — data integrity issue' }` and log it. Post-P1 a session without a day is corrupt data, not a supported state. NO session-only fallback prompt: a fallback would be a second prompt definition — a shadow path that drifts from the contract precisely because it never runs. Dead defensive branches are where the one-definition rule goes to die.
 - Eligible items via the **shared banner function** (`focusItemsForSession`, `track-days.ts:383`) with the focal session as anchor — inputs (assessedItemIds, originSessions, dayDate, trackTimezone) come from the same debrief data the fetch layer already returns. `eligibleItemIds` = `reviewed ∪ inPlay` ids. This is the origin-session exclusion arriving by reuse, not reimplementation.
 - Prompt: `buildSessionCoachingPrompt({ ctx, focalSessionId, eligibleItemIds, lapTable, driverProfile })`. Model: `AI_MODEL`.
 - Storage and response unchanged: overwrite `ai_coaching_summary`, same success JSON. (Load-bearing pairing lives in the design doc; the route comment references it in one line.)
@@ -559,19 +583,20 @@ export function dayUuid(driverN: number, dayN: number): string {
 
 - Session timestamps: `weekendDate` gains the session's `hourUtc` (multiple sessions per day, hours ascending).
 - **Day dates via the app's own definition:** `import { localDateForTimezone } from '../../src/lib/track-days'` + a `TRACK_TIMEZONES` map (comment: must match `20260731_track_timezones.sql`; all five current tracks `America/Los_Angeles`). `track_days.date = localDateForTimezone(firstSessionIso, tz)` — SQL stays dumb values.
-- Emit per scenario: `INSERT INTO track_days (id, driver_id, track_id, date, notes) ... ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, notes = EXCLUDED.notes;` (seed-owned rows; refresh restores canonical demo state — this is NOT the app's keys-only import upsert and must not be confused with it: add that comment in the emitted SQL).
-- Sessions gain `track_day_id` (+ `representativeness`, `representativeness_note` when flagged) in both INSERT columns and the DO UPDATE SET list.
-- **Stale sweep, extended and ordered** (assessments FK: judgments block direct session deletes):
-  1. `DELETE FROM day_summaries WHERE track_day_id IN (SELECT id FROM track_days WHERE driver_id IN (demo))`
-  2. `DELETE FROM focus_items WHERE driver_id IN (demo)` (cascades assessments — BEFORE stale session deletes)
-  3. existing stale laps/sessions deletes (`NOT IN` emitted session ids)
-  4. after session upserts: `DELETE FROM track_days WHERE driver_id IN (demo) AND id NOT IN (emitted day ids)` — **this sweeps the orphaned P1-backfill day rows** (the quietly-broken refresh, fixed at the root)
+- **Days are delete-then-insert wholesale, same rationale as laps and the loop entities** — demo day rows are seed-owned. An upsert on `(id)` cannot work here: `track_days` is unique on `(driver_id, track_id, date)`, and the P1 backfill already created day rows for the demo drivers under app-generated ids. Any emitted day landing on the same driver/track/date hits that unique constraint, `ON CONFLICT (id)` doesn't catch it, and the refresh dies mid-script. Wholesale also deletes the stale-day-sweep problem entirely: orphaned backfill rows are swept by construction, and there is no second conflict target to reason about.
+- **Ordered clear + emit** (assessments FK: judgments block direct session deletes; `sessions.track_day_id` is DB-nullable — P1 made it app-required, not DB-required):
+  1. `DELETE FROM focus_items WHERE driver_id IN (demo)` (cascades assessments — BEFORE stale session deletes)
+  2. `UPDATE sessions SET track_day_id = NULL WHERE driver_id IN (demo)` (unhook the FK)
+  3. `DELETE FROM track_days WHERE driver_id IN (demo)` — ALL of them, including the P1-backfill rows (cascades `day_summaries`)
+  4. existing stale laps/sessions deletes (`NOT IN` emitted session ids)
+  5. `INSERT INTO track_days (id, driver_id, track_id, date, notes) ...` — plain INSERT, **no ON CONFLICT**: the clear above guarantees a clean slate, so a collision now is a real bug and must die loudly (add that comment in the emitted SQL; this is NOT the app's keys-only import upsert and must not be confused with it)
+  6. session upserts repoint: sessions gain `track_day_id` (+ `representativeness`, `representativeness_note` when flagged) in both INSERT columns and the DO UPDATE SET list
 
-  (Loop entities are delete-then-insert wholesale, same rationale as laps; Task 7 inserts them fresh.)
+  (Loop entities are delete-then-insert wholesale for the same reason; Task 7 inserts them fresh.)
 
 **Step 4: Purge scripts.** Rewrite both to the design's order — `focus_item_assessments` → `focus_items` → `day_summaries` → `coaching_notes` → `laps` → `sessions` → `track_days` → `drivers` (with `driver_profiles` before `drivers`, as today) — preview shows a count per table. `git rm web/supabase/scripts/cleanup-demo-data.sql`.
 
-**Step 5: Tests.** Extend `generate-demo-seed.test.ts`: determinism unchanged; emitted SQL contains day upserts with `localDateForTimezone`-derived dates; stale-day sweep present and AFTER session upserts; assessments-cleanup precedes stale session deletes; sessions carry `track_day_id`. Run: `cd web && npx jest src/lib/__tests__ && npx tsx scripts/seed/generate-demo-seed.ts --coach-email=scollier.ah@gmail.com --out=/tmp/demo-seed-check.sql` (verify report prints all six ✓; do NOT apply).
+**Step 5: Tests.** Extend `generate-demo-seed.test.ts`: determinism unchanged; emitted SQL contains plain day INSERTs (no ON CONFLICT) with `localDateForTimezone`-derived dates; the ordered clear appears with session-unhook and wholesale `track_days` delete BEFORE the day inserts; assessments-cleanup precedes stale session deletes; sessions carry `track_day_id`. Run: `cd web && npx jest src/lib/__tests__ && npx tsx scripts/seed/generate-demo-seed.ts --coach-email=scollier.ah@gmail.com --out=/tmp/demo-seed-check.sql` (verify report prints all six ✓; do NOT apply).
 
 **Step 6: Commit** — `feat(seed): day-shaped demo cast, track_days emission, ordered purge; rm poisoned cleanup script`
 
@@ -620,7 +645,7 @@ Emit plain INSERTs (Task 6's wholesale delete cleared them): focus_items with `c
 - `draft_text`: ~120 words of plausible five-section output, observation-only (write it in the scenario file as a const; it must itself pass the review checklist — no invented instructions).
 - `final_text`: identical except ONE tightened sentence (the draft/final daylight demoed as information).
 - `model: 'seed'`, `status: 'approved'`, `approved_by: (SELECT id FROM coaches WHERE email = '<coach flag>')` (the generator's existing `--coach-email` input — never a hardcoded UUID), `approved_at: now()`.
-- INSERT order: after track_days (FK), single row, no ON CONFLICT (Task 6's sweep cleared it; the BEFORE INSERT trigger finds no live draft; the write-matrix trigger never fires on INSERT).
+- INSERT order: after track_days (FK), single row, no ON CONFLICT (Task 6's wholesale clear guarantees a clean slate; the BEFORE INSERT trigger finds no live draft; the write-matrix trigger never fires on INSERT).
 
 **Step 4: Tests** — extend `generate-demo-seed.test.ts`: summary INSERT present exactly once; `model = 'seed'`; approved_by is the email subquery; `final_text ≠ draft_text`; every uuid in the informing arrays appears earlier in the emitted SQL as an inserted session/assessment id (the resolvability check, string-level); prompt_context parses as JSON and deep-equals the core's output for the same scenario input.
 
