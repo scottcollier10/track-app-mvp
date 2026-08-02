@@ -7,12 +7,15 @@
  * final_text is the ONLY writable column here. draft_text and the provenance
  * columns are immutable, and the DB enforces that — this route simply never
  * offers them.
+ *
+ * Tests: src/app/api/days/[id]/summary/__tests__/route.test.ts (all three
+ * write-path routes share one file; see its docblock for why).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { SUMMARY_REPLACED, isReplacedWriteError } from '@/data/day-summaries';
+import { SUMMARY_REPLACED, isReplacedWriteError } from '@/lib/day-summaries';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {
@@ -44,6 +47,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // NEVER write updated_at: the DB set_updated_at trigger owns it, and the
     // "edited after approval" chip compares it against approved_at — two
     // writers of that column is a chip that lies.
+    //
+    // Stored UNTRIMMED, unlike the focus-item PATCH: this is multi-line markdown
+    // from a debounced autosave textarea, not a one-line focus item, and
+    // trimming on every keystroke-triggered save would eat the coach's trailing
+    // paragraph break mid-sentence. The guard above only requires that the text
+    // is not blank.
     const updateData: TablesUpdate<'day_summaries'> = { final_text: finalText };
 
     // maybeSingle, not single: a row that RLS hides is a 404, not a query

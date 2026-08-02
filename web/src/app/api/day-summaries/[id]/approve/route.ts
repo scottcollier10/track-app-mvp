@@ -12,12 +12,15 @@
  * branch of the write matrix does it in the same statement), which is what
  * makes "one approved summary per day" an index guarantee rather than route
  * discipline.
+ *
+ * Tests: src/app/api/days/[id]/summary/__tests__/route.test.ts (all three
+ * write-path routes share one file; see its docblock for why).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import { SUMMARY_REPLACED, isReplacedWriteError } from '@/data/day-summaries';
+import { SUMMARY_REPLACED, isReplacedWriteError } from '@/lib/day-summaries';
 import type { TablesUpdate } from '@/lib/types/database';
 
 interface RouteParams {

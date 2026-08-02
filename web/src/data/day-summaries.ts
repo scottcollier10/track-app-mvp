@@ -1,7 +1,9 @@
 /**
  * Day Summaries Data Layer
  *
- * Two fetches and one error classifier, all for the `day_summaries` write path.
+ * Two fetches, both for the `day_summaries` write path. The 409 contract the
+ * write routes share (`SUMMARY_REPLACED`, `isReplacedWriteError`) is pure and
+ * lives in `@/lib/day-summaries`.
  *
  * `buildDaySummaryContext` is an ADAPTER and nothing more: it reads rows and
  * hands them to `assembleDaySummaryContext`, which owns every derivation. No
@@ -48,7 +50,16 @@ export async function buildDaySummaryContext(
       .select('id, session_id, author, body, created_at')
       .in('session_id', sessionIds);
 
-    if (notesError) throw new Error(notesError.message);
+    if (notesError) {
+      // Logged here rather than at the call site: the Postgres `code` is the
+      // useful part of a query failure and it does not survive the Error wrap.
+      console.error('[Day Summaries] Coaching notes query failed', {
+        dayId,
+        error: notesError.message,
+        code: notesError.code,
+      });
+      throw new Error(notesError.message);
+    }
     coachingNotes = data ?? [];
   }
 
@@ -101,36 +112,15 @@ export async function getDaySummaries(dayId: string): Promise<DaySummary[]> {
     .eq('track_day_id', dayId)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Logged here rather than at the call site: the Postgres `code` is the
+    // useful part of a query failure and it does not survive the Error wrap.
+    console.error('[Day Summaries] Summary select failed', {
+      dayId,
+      error: error.message,
+      code: error.code,
+    });
+    throw new Error(error.message);
+  }
   return data ?? [];
-}
-
-/** The 409 body every day_summaries write returns when it lost the race. */
-export const SUMMARY_REPLACED = {
-  error: 'replaced',
-  message: 'This draft was replaced — refresh to see the current draft.',
-} as const;
-
-/**
- * Whether a failed `day_summaries` write means "the row you wrote against is no
- * longer the live one" — a 409 the coach can recover from by refreshing, never
- * a 500.
- *
- * TWO conditions, and they are genuinely different:
- *
- *  1. The trigger matrix rejected the write (frozen superseded row, illegal
- *     transition, immutable provenance). Every exception it raises is prefixed
- *     `day_summaries:`, which is what makes the prefix matchable.
- *  2. A partial unique index rejected the INSERT with a plain SQLSTATE 23505,
- *     whose message names the constraint and says nothing about day_summaries.
- *     Two overlapping generates for one day land here via
- *     day_summaries_one_live_draft — matching only the message prefix would
- *     500 on an ordinary double-click.
- */
-export function isReplacedWriteError(
-  error: { code?: string; message?: string } | null
-): boolean {
-  if (!error) return false;
-  if (error.message?.includes('day_summaries:')) return true;
-  return error.code === '23505';
 }

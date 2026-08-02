@@ -7,16 +7,20 @@
  * do:
  *
  *  - It never carries `sessions.ai_coaching_summary` into the context object.
- *    The input type makes that a build error; this proves it at runtime too,
- *    because the property decision 5 protects is about the bytes in the
- *    snapshot, not about the shape of a TypeScript interface.
+ *    That property is enforced at COMPILE time, by the `ai_coaching_summary?:
+ *    never` tripwire on DaySummarySessionInput, which the typecheck gate runs —
+ *    not by the assertion below. The core projects its output fields explicitly,
+ *    so the AI text would be stripped downstream even if this adapter handed
+ *    over raw rows; a runtime test of the adapter cannot see the difference.
+ *    The assertion is kept as labelled defence-in-depth, since what decision 5
+ *    protects is the bytes in the snapshot.
  *  - It tells "no such day" apart from "the query failed". Null means the
  *    former and the routes turn it into a 404; a failure throws, because a 404
  *    would tell the coach their day is gone when the database is merely
  *    unreachable.
  */
 
-import { buildDaySummaryContext, getDaySummaries, isReplacedWriteError } from '../day-summaries';
+import { buildDaySummaryContext, getDaySummaries } from '../day-summaries';
 import { getTrackDayDebrief } from '@/data/track-days';
 import { createServerSupabase } from '@/lib/supabase/server';
 import type { TrackDayDebrief } from '@/lib/types';
@@ -108,12 +112,19 @@ function makeSupabaseStub(): ReturnType<typeof createServerSupabase> {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The failure paths log the Postgres code before wrapping; silenced so a
+  // passing run stays readable.
+  jest.spyOn(console, 'error').mockImplementation(() => {});
   inCalls = [];
   eqCalls = [];
   orderCalls = [];
   results = { coaching_notes: { data: [], error: null }, day_summaries: { data: [], error: null } };
   mockCreateServerSupabase.mockImplementation(() => makeSupabaseStub());
   mockGetTrackDayDebrief.mockResolvedValue({ data: debrief, error: null });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe('buildDaySummaryContext', () => {
@@ -170,12 +181,13 @@ describe('buildDaySummaryContext', () => {
     });
   });
 
-  it('carries no AI-authored text into the snapshot', async () => {
+  it('carries no AI-authored text into the snapshot (defence in depth)', async () => {
     const ctx = await buildDaySummaryContext('day-1');
 
-    // The whole object, serialized: the exclusion is about what lands in
-    // prompt_context and what the model is shown, so nothing narrower than the
-    // full snapshot proves it.
+    // The real guard is the compile-time tripwire (see the file docblock); this
+    // cannot fail while the core projects explicitly. Kept because the whole
+    // object, serialized, is the closest a runtime test gets to the property
+    // that matters — what lands in prompt_context and what the model is shown.
     expect(JSON.stringify(ctx)).not.toContain(AI_TEXT);
     expect(ctx?.sessions[0]).not.toHaveProperty('ai_coaching_summary');
   });
@@ -218,29 +230,5 @@ describe('getDaySummaries', () => {
     results.day_summaries = { data: null, error: { message: 'select failed' } };
 
     await expect(getDaySummaries('day-1')).rejects.toThrow('select failed');
-  });
-});
-
-describe('isReplacedWriteError', () => {
-  it('recognizes a trigger-matrix rejection by its prefix', () => {
-    expect(
-      isReplacedWriteError({ code: 'P0001', message: 'day_summaries: superseded rows are frozen' })
-    ).toBe(true);
-  });
-
-  it('recognizes the one-live-draft collision, which never says day_summaries:', () => {
-    expect(
-      isReplacedWriteError({
-        code: '23505',
-        message: 'duplicate key value violates unique constraint "day_summaries_one_live_draft"',
-      })
-    ).toBe(true);
-  });
-
-  it('leaves unrelated failures alone', () => {
-    expect(isReplacedWriteError({ code: '08006', message: 'connection to server was lost' })).toBe(
-      false
-    );
-    expect(isReplacedWriteError(null)).toBe(false);
   });
 });

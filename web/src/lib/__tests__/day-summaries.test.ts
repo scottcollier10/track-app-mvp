@@ -9,6 +9,7 @@ import {
   daySummaryView,
   editedAfterApproval,
   informingIdsFrom,
+  isReplacedWriteError,
   type DaySummaryInput,
 } from '@/lib/day-summaries';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
@@ -638,5 +639,29 @@ describe('editedAfterApproval', () => {
         updated_at: '2026-07-12T20:05:00Z',
       })
     ).toBe(false);
+  });
+});
+
+describe('isReplacedWriteError', () => {
+  it('recognizes a trigger-matrix rejection by its prefix', () => {
+    expect(
+      isReplacedWriteError({ code: 'P0001', message: 'day_summaries: superseded rows are frozen' })
+    ).toBe(true);
+  });
+
+  it('recognizes the one-live-draft collision, which never says day_summaries:', () => {
+    expect(
+      isReplacedWriteError({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "day_summaries_one_live_draft"',
+      })
+    ).toBe(true);
+  });
+
+  it('leaves unrelated failures alone', () => {
+    expect(isReplacedWriteError({ code: '08006', message: 'connection to server was lost' })).toBe(
+      false
+    );
+    expect(isReplacedWriteError(null)).toBe(false);
   });
 });

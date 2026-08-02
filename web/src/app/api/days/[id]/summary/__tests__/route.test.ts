@@ -38,12 +38,17 @@ import { informingIdsFrom, type DaySummaryContext } from '@/lib/day-summaries';
 jest.mock('@/lib/auth/current-coach');
 jest.mock('@/lib/supabase/server');
 jest.mock('@/lib/llm-telemetry');
-// Partial mock on purpose: only the fetch is stubbed. isReplacedWriteError is
-// the REAL classifier, so the 409 tests below exercise the mapping itself
-// rather than a mock's return value.
-jest.mock('@/data/day-summaries', () => ({
-  ...jest.requireActual('@/data/day-summaries'),
-  buildDaySummaryContext: jest.fn(),
+jest.mock('@/data/day-summaries');
+// NOT mocked: @/lib/day-summaries, which owns isReplacedWriteError. The 409
+// tests below exercise the real classifier rather than a mock's return value.
+
+/** The Anthropic SDK, stubbed at the one method the route calls. */
+const mockMessagesCreate = jest.fn();
+jest.mock('@anthropic-ai/sdk', () => ({
+  __esModule: true,
+  default: class {
+    messages = { create: (...args: unknown[]) => mockMessagesCreate(...args) };
+  },
 }));
 
 const mockGetCurrentCoach = getCurrentCoach as jest.MockedFunction<typeof getCurrentCoach>;
@@ -236,7 +241,27 @@ beforeEach(() => {
     cost: 0.01,
     latencyMs: 1200,
   });
+  mockMessagesCreate.mockResolvedValue({
+    content: [{ type: 'text', text: DRAFT_TEXT }],
+    stop_reason: 'end_turn',
+    usage: { input_tokens: 100, output_tokens: 200 },
+  });
 });
+
+/**
+ * wrapLLMCall's contract in miniature: run the call, hand back its output, let a
+ * throw escape (the real one records it in telemetry first, then rethrows).
+ *
+ * The default mock above resolves a canned string and never runs the route's
+ * callback, which is where the stop_reason guard lives — so the truncation tests
+ * swap this in to actually execute it.
+ */
+function runTheCallback() {
+  mockWrapLLMCall.mockImplementation(async (_options, callFn) => {
+    const { output } = await callFn();
+    return { output, tokensIn: 100, tokensOut: 2000, cost: 0.01, latencyMs: 1200 };
+  });
+}
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -342,6 +367,35 @@ describe('POST /api/days/[id]/summary', () => {
     expect(writes).toHaveLength(0);
   });
 
+  it('writes NO row when the generation was truncated at max_tokens', async () => {
+    // A rich day can hit the cap. The text that comes back reads fine and ends
+    // mid-sentence — and draft_text is immutable with no DELETE policy, so
+    // storing it once makes a truncated summary this day's permanent record.
+    runTheCallback();
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '## Day overview\nSession 2 was quicker because the' }],
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 100, output_tokens: 2000 },
+    });
+
+    const res = await generate(makeRequest('/api/days/day-1/summary', 'POST'), dayParams);
+
+    expect(res.status).toBe(500);
+    expect(writes).toHaveLength(0);
+  });
+
+  it('stores the draft when the model stopped on its own', async () => {
+    // The other direction: the guard is a named stop reason, not a blanket
+    // refusal to trust the callback's output.
+    runTheCallback();
+
+    const res = await generate(makeRequest('/api/days/day-1/summary', 'POST'), dayParams);
+
+    expect(res.status).toBe(201);
+    expect(summaryWrites('insert')).toHaveLength(1);
+    expect(summaryWrites('insert')[0].draft_text).toBe(DRAFT_TEXT);
+  });
+
   it('maps the one-live-draft collision (23505) to 409 replaced, not 500', async () => {
     // Two generates for one day overlapping: the second insert loses the race
     // to day_summaries_one_live_draft. The index raises a plain unique
@@ -401,6 +455,19 @@ describe('PATCH /api/day-summaries/[id]', () => {
     // every edit a trigger violation.
     expect(Object.keys(updates[0])).toEqual(['final_text']);
     expect(updates[0].final_text).toBe('coach wording');
+  });
+
+  it('stores the text exactly as sent, whitespace and all', async () => {
+    // A deliberate divergence from the focus-item PATCH, which trims: this is
+    // multi-line markdown from a debounced autosave, and trimming every save
+    // would eat the paragraph break the coach is typing into.
+    const res = await editSummary(
+      makeRequest('/api/day-summaries/summary-1', 'PATCH', { finalText: '  coach wording\n\n' }),
+      summaryParams
+    );
+
+    expect(res.status).toBe(200);
+    expect(summaryWrites('update')[0].final_text).toBe('  coach wording\n\n');
   });
 
   it('maps a write-matrix rejection to 409 replaced, never a 500', async () => {
@@ -509,5 +576,36 @@ describe('POST /api/day-summaries/[id]/approve', () => {
 
     expect(res.status).toBe(409);
     expect(json.error).toBe('replaced');
+  });
+
+  it('leaves an unrelated database failure as a 500', async () => {
+    // Same reason as the PATCH's twin: approve reporting a connection failure
+    // as "replaced" sends the coach to refresh a page that cannot load.
+    results.day_summaries = {
+      data: null,
+      error: { code: '08006', message: 'connection to server was lost' },
+    };
+
+    const res = await approve(
+      makeRequest('/api/day-summaries/summary-1/approve', 'POST'),
+      summaryParams
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error).not.toBe('replaced');
+  });
+
+  it('returns 404 when the row is not the coach\'s', async () => {
+    // RLS returns an empty update, not an error. Without this branch approve
+    // answers 200 with a null summary for someone else's row.
+    results.day_summaries = { data: null, error: null };
+
+    const res = await approve(
+      makeRequest('/api/day-summaries/summary-1/approve', 'POST'),
+      summaryParams
+    );
+
+    expect(res.status).toBe(404);
   });
 });

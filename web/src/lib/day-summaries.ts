@@ -1,5 +1,6 @@
 /**
- * AI day summaries — the PURE assembly core and the current-summary selection.
+ * AI day summaries — the PURE assembly core, the current-summary selection, and
+ * the replaced-write 409 contract the three write routes share.
  *
  * See docs/plans/2026-08-01-ai-day-summary-design.md, decisions 4 and 5.
  *
@@ -455,4 +456,37 @@ export function editedAfterApproval(row: {
 }): boolean {
   if (row.status !== 'approved' || row.approved_at === null) return false;
   return new Date(row.updated_at).getTime() > new Date(row.approved_at).getTime();
+}
+
+/** The 409 body every day_summaries write returns when it lost the race. */
+export const SUMMARY_REPLACED = {
+  error: 'replaced',
+  message: 'This draft was replaced — refresh to see the current draft.',
+} as const;
+
+/**
+ * Whether a failed `day_summaries` write means "the row you wrote against is no
+ * longer the live one" — a 409 the coach can recover from by refreshing, never
+ * a 500.
+ *
+ * Lives here, not in the fetch layer: it is a pure predicate over an error
+ * object and touches no client, and all three write routes share it.
+ *
+ * TWO conditions, and they are genuinely different:
+ *
+ *  1. The trigger matrix rejected the write (frozen superseded row, illegal
+ *     transition, immutable provenance). Every exception it raises is prefixed
+ *     `day_summaries:`, which is what makes the prefix matchable.
+ *  2. A partial unique index rejected the INSERT with a plain SQLSTATE 23505,
+ *     whose message names the constraint and says nothing about day_summaries.
+ *     Two overlapping generates for one day land here via
+ *     day_summaries_one_live_draft — matching only the message prefix would
+ *     500 on an ordinary double-click.
+ */
+export function isReplacedWriteError(
+  error: { code?: string; message?: string } | null
+): boolean {
+  if (!error) return false;
+  if (error.message?.includes('day_summaries:')) return true;
+  return error.code === '23505';
 }

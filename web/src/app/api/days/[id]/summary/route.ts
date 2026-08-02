@@ -18,13 +18,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
+import { buildDaySummaryContext } from '@/data/day-summaries';
+import { AI_MODEL, buildDaySummaryPrompt } from '@/lib/coaching-prompts';
 import {
   SUMMARY_REPLACED,
-  buildDaySummaryContext,
+  informingIdsFrom,
   isReplacedWriteError,
-} from '@/data/day-summaries';
-import { AI_MODEL, buildDaySummaryPrompt } from '@/lib/coaching-prompts';
-import { informingIdsFrom } from '@/lib/day-summaries';
+} from '@/lib/day-summaries';
 import type { Json, TablesInsert } from '@/lib/types/database';
 
 interface RouteParams {
@@ -77,6 +77,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           max_tokens: 2000,
           messages: [{ role: 'user', content: prompt }],
         });
+
+        // A generation that hit the cap ends mid-sentence, and draft_text is
+        // immutable with no DELETE policy — storing it would make a truncated
+        // summary permanent. Thrown, not returned: wrapLLMCall records the
+        // failure in telemetry and rethrows, so this takes the same no-row path
+        // as an API failure.
+        if (message.stop_reason === 'max_tokens') {
+          throw new Error('day summary truncated at max_tokens');
+        }
 
         const output = message.content
           .filter((block): block is Anthropic.TextBlock => block.type === 'text')
