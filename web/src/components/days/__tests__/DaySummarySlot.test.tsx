@@ -13,8 +13,13 @@
  *  - Writes are serialized through ONE queue — the debounced final_text PATCH
  *    and Approve alike. An approve that overtakes a pending PATCH lights the
  *    chip with no coach edit at all, so the order is asserted directly.
+ *    An approval behind a write that FAILED is dropped, for the same reason
+ *    read the other way: approval publishes the row's stored text, so it must
+ *    never follow an edit that did not land.
  *  - A 409 from any write is the stale-tab case: the coach sees
- *    SUMMARY_REPLACED's message and a Refresh, never a generic save error.
+ *    SUMMARY_REPLACED's message and a Refresh, never a generic save error. That
+ *    message is always escapable — by a new current row, and by the Refresh
+ *    itself, which matters because approving a draft does not change its id.
  *  - A failed generation writes no row: the slot shows the failure and a
  *    retry, and nothing that looks like a summary.
  */
@@ -198,7 +203,8 @@ describe('DaySummarySlot', () => {
     expect(screen.getByText('Edited after approval')).toBeInTheDocument();
   });
 
-  it('state 5 (approved + draft): approved stays current; the draft reads as a revision in progress', () => {
+  it('state 5 (approved + draft): approved stays current; the draft reads as a revision in progress', async () => {
+    const fetchMock = stubFetch();
     render(
       <DaySummarySlot
         dayId="day-1"
@@ -219,7 +225,13 @@ describe('DaySummarySlot', () => {
     expect(revision).toHaveTextContent('Revision in progress');
     expect(revision).toHaveTextContent('Newer draft wording.');
     // The only Approve on the page promotes the REVISION, not the approved row.
+    // Where it sits is presentation; which row it POSTs to is the behaviour —
+    // approving `current` here would re-approve the already-approved row and
+    // leave the revision pending forever.
     expect(revision).toContainElement(button('Approve'));
+    fireEvent.click(button('Approve'));
+    expect(calls(fetchMock)[0][0]).toBe('/api/day-summaries/sum-draft/approve');
+    await act(async () => {});
   });
 
   it('state 4 (generation failed): error + retry, and no summary row rendered', async () => {
@@ -434,20 +446,198 @@ describe('DaySummarySlot', () => {
     expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
     // The control area is gone: nothing here can be approved or re-saved.
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    // And neither can it be typed into: every keystroke would debounce into
+    // another PATCH against the same superseded row.
+    expect(summaryText()).toBeDisabled();
+    // The autosave indicator goes with them. It would be reporting on a write
+    // that can never succeed, next to a message that says exactly that.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
     fireEvent.click(button('Refresh'));
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it('409 from approve renders the replaced message', async () => {
+  it('409 from approve renders the replaced message, announced', async () => {
     stubFetch(409);
     render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
 
     fireEvent.click(button('Approve'));
     await act(async () => {});
 
-    expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
+    // It arrives asynchronously and removes every control on the card, so it is
+    // announced — the generation failure below it already is.
+    expect(screen.getByRole('alert')).toHaveTextContent(SUMMARY_REPLACED.message);
     expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('an impatient second Approve click sends no second approval', async () => {
+    let resolveApprove!: (response: unknown) => void;
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    // The first approval is still on the wire. Anything that approves sum-1
+    // after it is approving an already-approved row, and the write matrix
+    // permits the approval fields to be written only at draft->approved — so
+    // the route answers 409 and the coach gets the stale-tab banner over a
+    // summary that approved perfectly well.
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveApprove = resolve;
+          })
+      )
+      .mockImplementation(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => SUMMARY_REPLACED,
+      }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    fireEvent.click(button('Approve'));
+    fireEvent.click(button('Approve'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveApprove(ok);
+    });
+
+    // Nothing was waiting behind the first: the duplicate never joined the queue.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second Approve click while the first waits in the queue sends no second approval', async () => {
+    let resolvePatch!: (response: unknown) => void;
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolvePatch = resolve;
+          })
+      )
+      .mockImplementation(async () => ok);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    // The click flushes the edit and queues the approval behind it, so the
+    // duplicate arrives while the first approval is still waiting its turn.
+    fireEvent.change(summaryText(), { target: { value: 'last-second tightening' } });
+    fireEvent.click(button('Approve'));
+    fireEvent.click(button('Approve'));
+
+    await act(async () => {
+      resolvePatch(ok);
+    });
+
+    expect(calls(fetchMock).map(([url]) => url)).toEqual([
+      '/api/day-summaries/sum-1',
+      '/api/day-summaries/sum-1/approve',
+    ]);
+  });
+
+  it('an approve behind a FAILED edit never fires, and retry re-sends the lost edit', async () => {
+    // The PATCH fails; the approval behind it would succeed. It must not run:
+    // approval publishes the text the ROW holds, so it would publish the
+    // pre-edit wording while the screen reports a save that never happened.
+    const fetchMock = jest.fn(async (input: RequestInfo) =>
+      String(input) === '/api/day-summaries/sum-1'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({}) }
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    // Typing, then Approve inside the debounce window: the click flushes the
+    // edit and queues the approval behind it.
+    fireEvent.change(summaryText(), { target: { value: 'the wording that must be published' } });
+    fireEvent.click(button('Approve'));
+    await act(async () => {});
+
+    expect(calls(fetchMock).map(([url]) => url)).toEqual(['/api/day-summaries/sum-1']);
+    expect(mockRefresh).not.toHaveBeenCalled();
+    // The failure is what the coach is told about — not a "Saved" borrowed from
+    // the approval that followed it.
+    expect(screen.getByText('Failed to save')).toBeInTheDocument();
+
+    // And retry still means the edit: the approval did not steal `lastSent`.
+    fireEvent.click(button('Retry'));
+    await act(async () => {});
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(calls(fetchMock)[1][0]).toBe('/api/day-summaries/sum-1');
+    expect(calls(fetchMock)[1][2]).toEqual({ finalText: 'the wording that must be published' });
+  });
+
+  it('an edit that threw drops the approval behind it too', async () => {
+    const fetchMock = jest.fn(async (input: RequestInfo) => {
+      if (String(input) === '/api/day-summaries/sum-1') throw new Error('offline');
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    fireEvent.change(summaryText(), { target: { value: 'edit from the paddock' } });
+    fireEvent.click(button('Approve'));
+    await act(async () => {});
+
+    // A dropped connection loses the edit exactly as a 500 does — there is no
+    // response to read `ok` from at all, and the approval must not read that
+    // silence as permission to publish the pre-edit wording.
+    expect(calls(fetchMock).map(([url]) => url)).toEqual(['/api/day-summaries/sum-1']);
+    expect(screen.getByText('Failed to save')).toBeInTheDocument();
+  });
+
+  it('Refresh clears the replaced message even when the rows come back identical', async () => {
+    stubFetch(409);
+    const rows = [makeSummary()];
+    const { rerender } = render(<DaySummarySlot dayId="day-1" summaries={rows} />);
+
+    fireEvent.click(button('Approve'));
+    await act(async () => {});
+    expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
+
+    fireEvent.click(button('Refresh'));
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    // A draft that flips to approved KEEPS its id, so the refresh can deliver
+    // the very same current row: the id-change reset never fires, and a button
+    // that only asked the server would redraw the banner it claims to dismiss.
+    rerender(<DaySummarySlot dayId="day-1" summaries={rows} />);
+
+    expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
+    expect(button('Approve')).toBeInTheDocument();
+    expect(summaryText()).not.toBeDisabled();
+  });
+
+  it('a new current row clears the replaced message: it IS the refresh the message asked for', async () => {
+    stubFetch(409);
+    const { rerender } = render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    fireEvent.change(summaryText(), { target: { value: 'edit from a stale tab' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    await act(async () => {});
+    expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
+
+    // What the other tab wrote, arriving on the next server render.
+    rerender(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[makeSummary({ id: 'sum-2', final_text: 'The other tab’s draft.' })]}
+      />
+    );
+
+    expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
+    expect(summaryText().value).toBe('The other tab’s draft.');
+    expect(summaryText()).not.toBeDisabled();
+    expect(button('Approve')).toBeInTheDocument();
   });
 
   it('a failed save surfaces retry, and the retry re-sends the same payload', async () => {
@@ -486,7 +676,7 @@ describe('DaySummarySlot', () => {
     expect(summaryText().value).toBe('A fresh generation.');
   });
 
-  it('regenerating cancels the pending autosave, so no stale PATCH gets stuck on the message', async () => {
+  it('regenerating cancels the pending autosave while the textarea still has focus', async () => {
     const ok = { ok: true, status: 200, json: async () => ({}) };
     // Anything written against sum-1 AFTER the regenerate is writing to a
     // superseded row, which is exactly what the route answers 409 to.
@@ -501,7 +691,9 @@ describe('DaySummarySlot', () => {
       <DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />
     );
 
-    // Typing, then Regenerate inside the debounce window.
+    // Typing, then Regenerate inside the debounce window, with the textarea
+    // never blurred — jsdom's click does not move focus. The browser's own
+    // order is the test below.
     fireEvent.change(summaryText(), { target: { value: 'half-typed edit' } });
     fireEvent.click(button('Regenerate'));
     await act(async () => {});
@@ -521,13 +713,55 @@ describe('DaySummarySlot', () => {
     });
     await act(async () => {});
 
-    // The replaced message must not land over the draft that IS current: the
-    // id-change reset is already spent, so Refresh cannot clear it there and
-    // only a full page reload could.
+    // No replaced message over the draft that IS current — a banner the coach
+    // would have to dismiss for a write nobody asked for.
     expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
     expect(summaryText()).not.toBeDisabled();
     expect(button('Regenerate')).toBeInTheDocument();
     // Because the timer — whose closure still held sum-1 — never fired.
     expect(calls(fetchMock).map(([url]) => url)).toEqual(['/api/days/day-1/summary']);
+  });
+
+  it('with the browser’s blur-then-click order the flushed edit does go out, and its 409 clears', async () => {
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    const fetchMock = jest.fn(async (input: RequestInfo) =>
+      String(input) === '/api/day-summaries/sum-1'
+        ? { ok: false, status: 409, json: async () => SUMMARY_REPLACED }
+        : ok
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { rerender } = render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    fireEvent.change(summaryText(), { target: { value: 'half-typed edit' } });
+    // A real browser fires focusout before the click that caused it, so the
+    // edit is already flushed by the time Regenerate runs. Cancelling the timer
+    // cannot help here — there is no timer left to cancel.
+    fireEvent.blur(summaryText());
+    fireEvent.click(button('Regenerate'));
+    await act(async () => {});
+
+    // Both writes are on the wire: generation is deliberately off the write
+    // queue, so the PATCH does not hold the generation up and is not held up.
+    expect(calls(fetchMock).map(([url]) => url)).toEqual([
+      '/api/day-summaries/sum-1',
+      '/api/days/day-1/summary',
+    ]);
+    // Here the PATCH lost that race, so the banner is up over a draft that is
+    // about to be replaced anyway.
+    expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
+
+    rerender(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[makeSummary({ id: 'sum-2', final_text: 'A fresh generation.' })]}
+      />
+    );
+
+    // The regenerated row IS the refresh the message asked for. Had it landed
+    // the other way round, Refresh clears the banner by itself.
+    expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
+    expect(summaryText().value).toBe('A fresh generation.');
+    expect(summaryText()).not.toBeDisabled();
   });
 });

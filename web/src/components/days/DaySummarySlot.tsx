@@ -23,9 +23,22 @@
  * control gets used, so the click flushes the pending edit and the approval
  * queues behind it.
  *
+ * Generation is the ONE write deliberately left off that queue. It inserts a
+ * NEW row rather than writing the row the queued jobs address, so it has no
+ * order to keep with them, and putting an LLM round trip on the autosave's wire
+ * would park every subsequent keystroke behind it for seconds. The cost is that
+ * with the browser's blur-then-click order a flushed PATCH and the generate
+ * POST are in flight together; the PATCH is milliseconds against a row that is
+ * still live and the generation takes seconds, and if the PATCH does lose that
+ * race its 409 is recoverable (a new current row, or Refresh).
+ *
  * A 409 from any write is the stale-tab case (the row was superseded in another
  * tab). The controls are replaced by SUMMARY_REPLACED's message and a Refresh —
  * never a generic save error, which would invite a retry that cannot succeed.
+ * That message is escapable BY ITSELF: Refresh clears it as well as asking the
+ * server for the truth, because the flip a summary makes most often — draft to
+ * approved — does not change the row's id, so "a different row became current"
+ * cannot be the only way out.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -131,17 +144,26 @@ export default function DaySummarySlot({
 
   const send = (job: Job) => {
     lastSent.current = job;
+    // Whether this write LANDED. `write.run` turns the outcome into a status
+    // and returns nothing, so the drain below would otherwise treat a lost edit
+    // exactly like a saved one. False until proven otherwise: a network throw
+    // never reaches the assignment, and it is as much a failure as a 500.
+    let landed = false;
     inFlight.current = write
       .run(
-        () =>
-          job.kind === 'text'
-            ? request(`/api/day-summaries/${job.summaryId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ finalText: job.value }),
-              })
-            : // No payload: approval publishes the text the row already holds.
-              request(`/api/day-summaries/${job.summaryId}/approve`, { method: 'POST' }),
+        async () => {
+          const response =
+            job.kind === 'text'
+              ? await request(`/api/day-summaries/${job.summaryId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ finalText: job.value }),
+                })
+              : // No payload: approval publishes the text the row already holds.
+                await request(`/api/day-summaries/${job.summaryId}/approve`, { method: 'POST' });
+          landed = response.ok;
+          return response;
+        },
         // Approval changes the label, the chip and which row is current, so the
         // server-rendered page must recompute. A text PATCH deliberately does
         // NOT refresh — it would fight the coach mid-sentence.
@@ -149,6 +171,13 @@ export default function DaySummarySlot({
       )
       .then(() => {
         inFlight.current = null;
+        // A write that did not land cancels every approval waiting behind it.
+        // Approval publishes the text the ROW holds, so approving after a lost
+        // edit publishes the wording the coach already replaced — the outcome
+        // this queue exists to prevent, reached by the failure path instead of
+        // the ordering path. Queued EDITS still drain: each one carries the
+        // whole textarea, so sending them is how the coach's words survive.
+        if (!landed) queue.current = queue.current.filter((j) => j.kind !== 'approve');
         const next = queue.current.shift();
         // Fires even after unmount (the chain lives on the promise, not the
         // component); the hook's setStatus is then a React no-op.
@@ -156,7 +185,26 @@ export default function DaySummarySlot({
       });
   };
 
+  /** Is an approval of this row already on the wire or waiting behind one? */
+  const approveOutstanding = (summaryId: string) =>
+    (inFlight.current !== null &&
+      lastSent.current?.kind === 'approve' &&
+      lastSent.current.summaryId === summaryId) ||
+    queue.current.some((job) => job.kind === 'approve' && job.summaryId === summaryId);
+
   const enqueue = (job: Job) => {
+    // One approval per row from this component, however impatiently the button
+    // is clicked. The second POST lands on a row the first one already flipped
+    // to `approved`, and the write matrix allows the approval fields to be
+    // written only at draft->approved (see the migration) — so it comes back as
+    // a rejection this component can only read as "replaced", a stale-tab
+    // banner sitting over a summary that approved perfectly well.
+    //
+    // Guarded here rather than by disabling the button on any pending write:
+    // that would also refuse the approval that rides BEHIND an in-flight edit,
+    // which is the queue's whole reason for existing and the ordinary way this
+    // control gets used. The write in flight is reported beside the heading.
+    if (job.kind === 'approve' && approveOutstanding(job.summaryId)) return;
     if (inFlight.current === null) {
       send(job);
       return;
@@ -224,6 +272,9 @@ export default function DaySummarySlot({
   };
 
   const retry = () => {
+    // Safe only because Retry renders on 'failed', which persists only with an
+    // empty queue: re-enqueued behind a NEWER text job, this older text would
+    // coalesce over it and save the wrong words.
     if (lastSent.current !== null) enqueue(lastSent.current);
   };
 
@@ -231,10 +282,13 @@ export default function DaySummarySlot({
    * Drop the pending edit, THEN regenerate. Not flush: the timer's closure
    * PATCHes the row that is current right now, and a successful regenerate is
    * what supersedes that row — so the late PATCH earns a 409 that means nothing
-   * (the coach is looking at the new draft, which is fine). Worse, it sticks:
-   * `replaced` is only reset by a CHANGE of current.id, and the refresh already
-   * spent that change, so the message would sit over the current draft with the
-   * Refresh button unable to clear it. Only a full reload would.
+   * (the coach is looking at the new draft, which is fine) and paints the
+   * stale-tab banner over a draft that is perfectly live. Escapable now that
+   * Refresh clears the flag itself, but a banner nobody needed to see.
+   *
+   * It cancels the TIMER and nothing else. A blur — which a real browser fires
+   * before the click that follows it — has already sent that edit; see the file
+   * docblock on why generation is not on the queue.
    */
   const startGenerate = () => {
     if (timer.current !== null) {
@@ -259,8 +313,26 @@ export default function DaySummarySlot({
   // succeed against a superseded row, so nothing here is offered.
   const controls = replaced ? (
     <div className="space-y-2">
-      <p className="text-sm text-status-critical">{SUMMARY_REPLACED.message}</p>
-      <button type="button" onClick={() => router.refresh()} className={buttonClass}>
+      {/* role="alert": this message arrives asynchronously and takes every
+          control on the card with it — the largest change on the page is not
+          the one to leave unannounced. */}
+      <p role="alert" className="text-sm text-status-critical">
+        {SUMMARY_REPLACED.message}
+      </p>
+      <button
+        type="button"
+        // Clearing the flag here, not only asking the server: the row's id does
+        // NOT change when a draft flips to approved, so the id-change reset
+        // cannot be relied on to fire and this button would otherwise redraw
+        // the same banner it claims to dismiss. If the row really is superseded
+        // the next write 409s and the banner comes back — which is the honest
+        // ordering: recovery is offered, the server still decides.
+        onClick={() => {
+          setReplaced(false);
+          router.refresh();
+        }}
+        className={buttonClass}
+      >
         Refresh
       </button>
     </div>
