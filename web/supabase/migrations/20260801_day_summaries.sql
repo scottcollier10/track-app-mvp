@@ -23,13 +23,27 @@ create table if not exists public.day_summaries (
   -- zero and grows only by coach action. Writable in draft and approved;
   -- frozen at superseded (history that can drift stops being history).
   final_text text not null,
+  -- The FK blocks deleting a coach who has approved a summary: approval
+  -- attribution is a permanent record.
   approved_by uuid references public.coaches(id),
   approved_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- The write matrix below is BEFORE UPDATE only, so it cannot see an INSERT.
+  -- These close that path: no row is born 'approved' without an approver (the
+  -- demo seed INSERTs an approved row directly), and no draft carries approval
+  -- fields. A 'superseded' row legitimately retains the approval fields it
+  -- carried out of 'approved', so neither constraint constrains that status.
+  constraint day_summaries_approved_has_approver
+    check (status <> 'approved'
+           or (approved_by is not null and approved_at is not null)),
+  constraint day_summaries_draft_is_unapproved
+    check (status <> 'draft' or (approved_by is null and approved_at is null))
 );
 comment on table public.day_summaries is
   'Append-only AI day-summary generations. draft_text/provenance immutable; final_text coach-authored; superseded rows frozen. No DELETE policy on purpose.';
+comment on column public.day_summaries.model is
+  'Model id of the generation that produced draft_text. Demo-seeded rows use ''seed'': the row never claims a generation that did not run.';
 comment on column public.day_summaries.final_text is
   'Coach-authored. Seeded from draft_text at insert (no-COALESCE current text; diff grows only by coach action). updated_at > approved_at marks a post-approval edit.';
 
@@ -62,7 +76,7 @@ create trigger day_summaries_supersede_draft
 
 -- BEFORE UPDATE: the status write matrix.
 --   any status:  draft_text / prompt_context / model / informing_* /
---                track_day_id / created_at immutable
+--                track_day_id / created_at / id immutable
 --   superseded:  row fully frozen
 --   draft:       final_text writable; legal transitions -> approved, superseded
 --   approved:    final_text writable (post-approval edits are the coach's to
@@ -81,7 +95,8 @@ begin
      or new.informing_session_ids    is distinct from old.informing_session_ids
      or new.informing_assessment_ids is distinct from old.informing_assessment_ids
      or new.track_day_id       is distinct from old.track_day_id
-     or new.created_at         is distinct from old.created_at then
+     or new.created_at         is distinct from old.created_at
+     or new.id                 is distinct from old.id then
     raise exception 'day_summaries: generated content and provenance are immutable';
   end if;
 
@@ -94,6 +109,12 @@ begin
       if new.approved_by is null or new.approved_at is null then
         raise exception 'day_summaries: approval requires approved_by and approved_at';
       end if;
+      -- DB owns the timestamp, same reason set_updated_at owns updated_at: a
+      -- route-computed approved_at is earlier than the DB's now() by one round
+      -- trip, which would light the "edited after approval" chip on every
+      -- approval. now() is the transaction timestamp, so this and updated_at
+      -- land identical and the marker starts false.
+      new.approved_at := now();
       update public.day_summaries
          set status = 'superseded'
        where track_day_id = new.track_day_id
@@ -127,8 +148,11 @@ create trigger day_summaries_enforce_matrix
 -- updated_at: DB-owned, same function Phase 2 installed.
 -- The two BEFORE UPDATE triggers fire in alphabetical order —
 -- day_summaries_enforce_matrix before day_summaries_set_updated_at — which is
--- the order we want (matrix validates, then updated_at stamps). That ordering
--- is name-dependent: do NOT rename these triggers.
+-- the order we want (matrix validates, then updated_at stamps). Nothing
+-- depends on it today: set_updated_at overwrites new.updated_at
+-- unconditionally and the matrix never reads updated_at, so either order
+-- yields the same row. It would start mattering if updated_at ever joined the
+-- immutable column list above, which renaming could then silently break.
 drop trigger if exists day_summaries_set_updated_at on public.day_summaries;
 create trigger day_summaries_set_updated_at
   before update on public.day_summaries
