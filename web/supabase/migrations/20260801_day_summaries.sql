@@ -63,6 +63,17 @@ create or replace function public.day_summaries_before_insert()
 returns trigger language plpgsql
 set search_path = '' as $$
 begin
+  -- The third INSERT-path hole, and the one that can't join the two CHECK
+  -- constraints on the table above: 'superseded' is legal as a destination but
+  -- illegal as a birth state, and a CHECK sees only the finished row, never how
+  -- it got there. Only 'draft' (generate route, via the column default) and
+  -- 'approved' (demo seed's direct insert) are legitimate. A row born
+  -- superseded is invisible to current-summary selection, frozen by the write
+  -- matrix, and — with no DELETE policy, on purpose — permanent.
+  if new.status = 'superseded' then
+    raise exception 'day_summaries: rows cannot be inserted as superseded';
+  end if;
+
   update public.day_summaries
      set status = 'superseded'
    where track_day_id = new.track_day_id and status = 'draft';
