@@ -27,9 +27,9 @@ export const SPARKLINE_WINDOW = 8;          // last N session-bests shown in row
  * Everything that asked `!== null && > 0` delegates here — the row predicate
  * (isCountableLap in track-days), dayBestLapMs, sessionDelta's best-lap guard,
  * the flag engine's prior-track-bests, the coach dashboard's best/avg/lap
- * counts, the import screen's flag list, the insight layer's pace-trend gate —
- * so "is this a lap" has exactly one answer whichever shape the caller holds it
- * in.
+ * counts, the import screen's flag list, the insight layer's pace-trend gate,
+ * the driver-progress peak window — so "is this a lap" has exactly one answer
+ * whichever shape the caller holds it in.
  *
  * A stored `sessions.best_lap_ms` is one of those shapes: csv-parser computes it
  * as Math.min over UNFILTERED times, so a session whose only rows are zeros

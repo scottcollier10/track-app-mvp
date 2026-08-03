@@ -5,6 +5,7 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
+import { isCountableLapMs } from '@/lib/analytics-constants';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 
 export interface EventMetrics {
@@ -88,7 +89,10 @@ export async function getDriverProgressByTrack(
     // Process each session into event metrics
     const events: EventMetrics[] = sessions.map((session) => {
       const laps = session.laps || [];
-      const lapTimes = laps.map((lap) => lap.lap_time_ms).filter((t: number) => t > 0);
+      // Through the shared predicate, not an inline `> 0`: peakWindowAvg below
+      // averages the three fastest of these, so "is this a lap at all" is asked
+      // here and has to have the same answer it has everywhere else.
+      const lapTimes = laps.map((lap) => lap.lap_time_ms).filter(isCountableLapMs);
 
       // Find which lap number was the best
       let bestLapNumber: number | null = null;
