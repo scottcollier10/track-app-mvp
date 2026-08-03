@@ -28,7 +28,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { canClaimConsistency, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
-import { focusItemsForSession, validLapTimesMs } from '@/lib/track-days';
+import { assessedAtSession, focusItemsForSession, validLapTimesMs } from '@/lib/track-days';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 import { ANTHROPIC_KEY_MISSING, anthropicApiKey } from '@/lib/anthropic-key';
 import { COACHING_ERROR } from '@/lib/coaching-errors';
@@ -210,16 +210,9 @@ export async function POST(request: NextRequest) {
     // session tested) therefore arrives by reuse, never by a copy living here.
     // Both groups count: `reviewed` is what was assessed AT this session,
     // `inPlay` what was carried into it, and an item can be in both.
-    const assessedItemIds = new Set(
-      debrief.focusItems
-        .filter((item) =>
-          item.focus_item_assessments.some((a) => a.session_id === session.id)
-        )
-        .map((item) => item.id)
-    );
     const { reviewed, inPlay } = focusItemsForSession({
       items: debrief.focusItems,
-      assessedItemIds,
+      assessedItemIds: assessedAtSession(debrief.focusItems, session.id),
       session: { id: session.id, date: session.date },
       originSessions: new Map(debrief.originSessions.map((origin) => [origin.id, origin])),
       dayDate: debrief.date,

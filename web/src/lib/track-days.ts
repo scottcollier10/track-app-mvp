@@ -433,7 +433,7 @@ export function focusItemsForSession<
   }
 >(args: {
   items: I[];
-  /** Assessments AT this session — not "ever assessed". */
+  /** Assessments AT this session. Build it with assessedAtSession below. */
   assessedItemIds: Set<string>;
   session: { id: string; date: string };
   /** id -> session, for origin ordering. Missing ids fall back to the date rule. */
@@ -460,6 +460,39 @@ export function focusItemsForSession<
     reviewed: byCreation.filter((item) => assessedItemIds.has(item.id)),
     inPlay: byCreation.filter((item) => item.status === 'active' && inPlayComingIn(item)),
   };
+}
+
+/**
+ * focusItemsForSession's `assessedItemIds`, from the embedded assessments —
+ * kept HERE, beside the rule, because it is the only input that rule is correct
+ * for.
+ *
+ * "Assessed AT this session", exactly. Not "ever assessed": every item with any
+ * history would land in `reviewed`, and the session page would report a coach
+ * reviewing items they never opened. The rule cannot catch that — a Set of ids
+ * is a Set of ids, and a wrong one produces a plausible list.
+ *
+ * It lived at each call site instead, identically, three times over (the
+ * coaching route, the evidence banner, the debrief sheet) plus once more in a
+ * test. Four hand-written copies of "the input this function needs" is how the
+ * fifth caller gets it subtly wrong — and the argument for leaving it there,
+ * that a helper spanning the route/component boundary is a design call, is
+ * answered by where it goes: not a shared UI helper, but the six lines that
+ * produce one parameter, sitting against the function that consumes it.
+ *
+ * Deliberately NOT generalised to cover focusPanelGroups' `assessedThisDayItemIds`,
+ * which asks a different question (assessed at ANY of the day's sessions) and
+ * would turn this into a Set-of-ids parameter that reads the same at every call
+ * site whichever question was meant.
+ */
+export function assessedAtSession<
+  I extends { id: string; focus_item_assessments: Array<{ session_id: string }> }
+>(items: I[], sessionId: string): Set<string> {
+  return new Set(
+    items
+      .filter((item) => item.focus_item_assessments.some((a) => a.session_id === sessionId))
+      .map((item) => item.id)
+  );
 }
 
 /**

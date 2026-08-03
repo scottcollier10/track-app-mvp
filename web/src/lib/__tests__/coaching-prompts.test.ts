@@ -12,7 +12,7 @@ import {
   buildSessionCoachingPrompt,
 } from '@/lib/coaching-prompts';
 import { assembleDaySummaryContext, type DaySummaryInput } from '@/lib/day-summaries';
-import { focusItemsForSession } from '@/lib/track-days';
+import { assessedAtSession, focusItemsForSession } from '@/lib/track-days';
 
 const TIGHT_6 = [90000, 90100, 90050, 90080, 90020, 90060];
 const LOOSE_6 = [90000, 92000, 91000, 90500, 93000, 90800];
@@ -221,21 +221,15 @@ describe('buildDaySummaryPrompt', () => {
 
 describe('buildSessionCoachingPrompt', () => {
   /**
-   * Eligibility comes from the SHARED banner function with the focal session as
-   * anchor — the same call the route makes. Computing it here by hand would
-   * test the test.
+   * Eligibility — and the `assessedItemIds` it is fed — come from the SHARED
+   * functions with the focal session as anchor, which is the pair of calls the
+   * route makes. Assembling either here by hand would test the test.
    */
   const eligibleFor = (input: DaySummaryInput, focalSessionId: string) => {
     const focal = input.sessions.find((s) => s.id === focalSessionId)!;
     const { reviewed, inPlay } = focusItemsForSession({
       items: input.focusItems,
-      assessedItemIds: new Set(
-        input.focusItems
-          .filter((item) =>
-            item.focus_item_assessments.some((a) => a.session_id === focalSessionId)
-          )
-          .map((item) => item.id)
-      ),
+      assessedItemIds: assessedAtSession(input.focusItems, focalSessionId),
       session: { id: focal.id, date: focal.date },
       originSessions: new Map(
         input.sessions.map((s) => [s.id, { id: s.id, date: s.date }])

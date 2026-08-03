@@ -1,4 +1,5 @@
 import {
+  assessedAtSession,
   assessmentsInSessionOrder,
   bySessionStart,
   localDateForTimezone,
@@ -566,6 +567,42 @@ describe('focusItemsForSession', () => {
     const newer = item('fi-a', 'active', '2026-07-12T15:30:00Z', 's1');
     const result = eligibility([newer, older], s2, new Set(['fi-a', 'fi-b']));
     expect(result.reviewed.map((i) => i.id)).toEqual(['fi-b', 'fi-a']);
+  });
+});
+
+describe('assessedAtSession', () => {
+  // The one input focusItemsForSession's `assessedItemIds` is correct for. It
+  // was assembled by hand at four call sites before this existed, and the thing
+  // a hand copy gets wrong is the same thing every time: "ever assessed"
+  // instead of "assessed AT this session". That is what these pin.
+  const item = (id: string, ...sessionIds: string[]) => ({
+    id,
+    focus_item_assessments: sessionIds.map((session_id) => ({ session_id })),
+  });
+
+  it('selects only items assessed at the session asked about', () => {
+    const here = item('fi-here', 's2');
+    const elsewhere = item('fi-elsewhere', 's1');
+
+    expect([...assessedAtSession([here, elsewhere], 's2')]).toEqual(['fi-here']);
+  });
+
+  it('does not select an item merely because it was assessed SOMEWHERE', () => {
+    // The "ever assessed" bug, driven directly: this item has two assessments,
+    // neither at s2. A predicate that ignored the session id would return it.
+    const other = item('fi-other', 's1', 's3');
+
+    expect([...assessedAtSession([other], 's2')]).toEqual([]);
+  });
+
+  it('selects an item with several assessments if any one of them is here', () => {
+    const carried = item('fi-carried', 's1', 's2');
+
+    expect([...assessedAtSession([carried], 's2')]).toEqual(['fi-carried']);
+  });
+
+  it('ignores an item with no assessments at all', () => {
+    expect([...assessedAtSession([item('fi-none')], 's2')]).toEqual([]);
   });
 });
 
