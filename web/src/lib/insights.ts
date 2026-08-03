@@ -6,6 +6,7 @@
  */
 
 import { calculatePaceTrend } from './analytics';
+import { isCountableLapMs } from './analytics-constants';
 import { sessionConsistencySeconds } from './analytics-v2';
 
 /** Single lap-count gate for the interpretive layer (insight tabs + AI coaching). */
@@ -36,7 +37,9 @@ export function getSessionInsightsFromMs(lapTimesMs: number[]): {
   paceTrendLabel: string;
   paceTrendDetail: string;
 } {
-  const validLapTimes = lapTimesMs.filter(t => t != null && t > 0);
+  // The array is TYPED number[], but callers reach it from raw lap rows, so the
+  // predicate still runs — through the app's one definition, not a local copy.
+  const validLapTimes = lapTimesMs.filter(isCountableLapMs);
 
   const consistencySeconds = sessionConsistencySeconds(lapTimesMs);
   const paceTrendLabel = calculatePaceTrend(lapTimesMs);

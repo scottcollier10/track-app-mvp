@@ -182,6 +182,26 @@ describe('evaluateStudent', () => {
     expect(evaluateStudent(multi).flags.length).toBeGreaterThan(1);
     expect(multiScore).toBeGreaterThan(singleScore);
   });
+
+  it('never measures the regression gap against a 0 best lap — 0 is not a PB', () => {
+    // A stored best_lap_ms of 0 is reachable (csv-parser takes Math.min over
+    // UNFILTERED times). The prior-bests list is filtered by isCountableLapMs
+    // BEFORE Math.min runs, and that is the whole point: with a bare `!== null`
+    // the flag still fires — isRegressedVsTrackPB drops the 0 on its own — but
+    // the gap it reports is measured from zero, so the coach reads "Best lap
+    // 93.0s off your track PB" and the severity score inherits it.
+    const h: StudentHistory = { ...base, sessions: [
+      { date: '2026-01-01', trackId: 't1', bestLapMs: 0, lapTimesMs: steadyLaps },
+      { date: '2026-01-02', trackId: 't1', bestLapMs: 91000, lapTimesMs: steadyLaps },
+      { date: '2026-01-03', trackId: 't1', bestLapMs: 93000, lapTimesMs: steadyLaps },
+    ]};
+
+    const regressed = evaluateStudent(h).flags.find((f) => f.kind === 'regressed');
+
+    expect(regressed).toBeDefined();
+    expect(regressed!.deltaSeconds).toBeCloseTo(2.0, 3); // 93.000 vs the 91.000 PB
+    expect(regressed!.why).toBe('Best lap 2.0s off your track PB');
+  });
 });
 
 describe('evaluateStudent readiness', () => {

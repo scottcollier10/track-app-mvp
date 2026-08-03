@@ -8,6 +8,7 @@ import {
   FADE_THRESHOLD_S,
   READINESS_MIN_SESSIONS,
   SPARKLINE_WINDOW,
+  isCountableLapMs,
 } from './analytics-constants';
 
 function median(sorted: number[]): number {
@@ -160,7 +161,7 @@ export function evaluateStudent(h: StudentHistory): StudentEval {
   // regressed vs track PB
   if (latest && latest.bestLapMs) {
     const priorBests = prior.filter((s) => s.trackId === latest.trackId)
-      .map((s) => s.bestLapMs).filter((v): v is number => v !== null && v > 0);
+      .map((s) => s.bestLapMs).filter(isCountableLapMs);
     if (isRegressedVsTrackPB(latest.bestLapMs, priorBests)) {
       const pb = Math.min(...priorBests);
       const deltaS = (latest.bestLapMs - pb) / 1000;

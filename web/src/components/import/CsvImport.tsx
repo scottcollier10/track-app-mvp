@@ -14,7 +14,7 @@ import ContextFlagChips from '@/components/sessions/ContextFlagChips';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { parseSessionCsv, ParsedSession } from '@/lib/csv-parser';
-import { uniqueTrackDayLinks, type TrackDayLink } from '@/lib/track-days';
+import { isCountableLapMs, uniqueTrackDayLinks, type TrackDayLink } from '@/lib/track-days';
 import { formatDriverName } from '@/lib/utils/formatters';
 import { formatLapMs } from '@/lib/time';
 import type { ImportedSessionResponse, ImportSessionPayload } from '@/lib/types';
@@ -458,7 +458,7 @@ export default function CsvImport() {
                     >
                       <p className="text-sm text-gray-200">
                         {formatDriverName(target.driverName)}
-                        {target.bestLapMs !== null && target.bestLapMs > 0
+                        {isCountableLapMs(target.bestLapMs)
                           ? ` — best ${formatLapMs(target.bestLapMs)}`
                           : ''}
                       </p>

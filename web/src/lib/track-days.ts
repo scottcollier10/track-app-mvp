@@ -2,6 +2,7 @@
  * Track-day helpers. Pure functions only — day grouping math lives here,
  * honesty gates reuse canClaimConsistency and sessionConsistencySeconds.
  */
+import { isCountableLapMs } from '@/lib/analytics-constants';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import { canClaimConsistency } from '@/lib/insights';
 import type {
@@ -91,20 +92,19 @@ export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): nu
 }
 
 /**
- * THE one definition of a countable lap, at the VALUE level: is this
- * milliseconds figure a lap at all?
+ * THE one definition of a countable lap, at the VALUE level — RE-EXPORTED here,
+ * defined in analytics-constants.
  *
- * Everything else in this file that asked `!== null && > 0` — the row predicate
- * below, dayBestLapMs, sessionDelta's best-lap guard — delegates here, so "is
- * this a lap" has exactly one answer whichever shape the caller holds it in. A
- * stored `sessions.best_lap_ms` is one of those shapes: csv-parser computes it
- * as Math.min over UNFILTERED times, so a session whose only rows are zeros
- * stores a 0 best lap, and every screen that prints it has to ask the same
- * question the σ gate asked.
+ * It had to move. analytics-v2 asks the same question and this file imports
+ * sessionConsistencySeconds FROM analytics-v2, so analytics-v2 could not import
+ * the predicate back without closing a cycle — which is precisely why it carried
+ * its own copy. analytics-constants imports nothing, so everyone can reach it.
+ *
+ * Re-exported rather than repointed at the leaf, because "which laps count" is a
+ * track-day question and this is the file a reader looks in for it. One
+ * definition, two doors.
  */
-export function isCountableLapMs(lapTimeMs: number | null): lapTimeMs is number {
-  return lapTimeMs !== null && lapTimeMs > 0;
-}
+export { isCountableLapMs };
 
 /**
  * THE one definition of a countable lap ROW, extracted from validLapTimesMs so

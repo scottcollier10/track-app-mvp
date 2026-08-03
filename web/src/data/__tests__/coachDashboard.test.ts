@@ -102,4 +102,23 @@ describe('buildStudents', () => {
     expect(student.sessionCount).toBe(2);
     expect(student.totalLaps).toBe(5); // 2 + 3 positive laps
   });
+
+  it('counts no lap and no best from a session of zeros — 0 is not a lap', () => {
+    // Reachable, not hypothetical: csv-parser only rejects a lap time that
+    // fails parseInt, so "0" survives import, and best_lap_ms is Math.min over
+    // UNFILTERED times. Every figure in this row asks isCountableLapMs — the
+    // app's one lap predicate — so a bare `!== null` would report a 0 best lap,
+    // halve the average, and count laps nobody drove.
+    const rows: SessionRow[] = [
+      row({ driverId: 'zeros', date: '2026-01-01', bestLapMs: 90000, lapTimesMs: [90000, 90100] }),
+      row({ driverId: 'zeros', date: '2026-01-02', bestLapMs: 0, lapTimesMs: [0, 0, null] }),
+    ];
+
+    const [student] = buildStudents(rows);
+
+    expect(student.bestLapMs).toBe(90000);
+    expect(student.avgBestLapMs).toBe(90000); // the 0 is not averaged in
+    expect(student.totalLaps).toBe(2);
+    expect(student.sessionCount).toBe(2); // the session itself still exists
+  });
 });
