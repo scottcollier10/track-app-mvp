@@ -173,11 +173,22 @@ export async function POST(request: NextRequest) {
     // profiled is a fabricated fact under a promise that there are none — and
     // one the model will reason from, framing a 40-session driver's day as a
     // beginner's. The route hands over what it has, including nothing.
+    //
+    // maybeSingle, NOT single. `driver_profiles` is an optional extension table
+    // (migration 004: UNIQUE(driver_id), nullable columns, no backfill), so a
+    // driver with no row is the common case — and `.single()` reports that
+    // ordinary state as a PGRST116 error, which would fire the log below on
+    // nearly every generation and bury the one case an operator needs to see.
+    // With maybeSingle an absent row is just a null row, so `profileError`
+    // means the read genuinely failed. Kept inline rather than routed through
+    // `@/data/driverProfiles`.getDriverProfile: that helper is correct, but it
+    // selects `*`, and this route reads named columns everywhere on purpose so
+    // that a column added to a table later cannot arrive in its scope unasked.
     const { data: profile, error: profileError } = await supabase
       .from('driver_profiles')
       .select('experience_level, total_sessions')
       .eq('driver_id', session.driver_id)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       console.error('[AI Coaching] Driver profile unavailable', {

@@ -11,14 +11,22 @@
  *
  *  1. NO AI TEXT REACHES THE PROMPT. The session rows this route's day context
  *     is assembled from carry `ai_coaching_summary` — this route's own previous
- *     output. What actually strips it is the context core's explicit output
- *     projection, backed by the input type's compile-time tripwire, so the
- *     prompt assertion below cannot fail while that projection stays explicit
- *     (`@/data/__tests__/day-summaries` says the same of its own). It is kept
- *     because the rendered prompt is the closest a runtime test gets to the
- *     thing that matters — the bytes the model is shown. The falsifiable half
- *     is this route's OWN read: it names the four columns it needs, so the
- *     column never enters this route's scope to be projected out of.
+ *     output. TWO guards stand between it and the model, and they guard
+ *     different things. The context core's explicit output projection
+ *     (`@/lib/day-summaries`), backed by the input type's compile-time
+ *     tripwire, keeps the column off the context OBJECT — which matters on its
+ *     own account, because that object is snapshotted verbatim into the stored
+ *     `prompt_context`. The prompt renderer's reading of NAMED FIELDS is what
+ *     keeps it out of the prompt BYTES. So the assertion below cannot fail:
+ *     spread the raw session into that projection and the column lands in the
+ *     context object without changing a byte of this prompt — only the core's
+ *     own test (`@/lib/__tests__/day-summaries`) catches that, and
+ *     `@/data/__tests__/day-summaries` says the same of the fetch layer's
+ *     half. It is kept because the rendered prompt is the closest a runtime
+ *     test gets to the thing that matters — the bytes the model is shown. The
+ *     falsifiable half is this route's OWN read: it names the four columns it
+ *     needs, so the column never enters this route's scope to be projected out
+ *     of.
  *  2. ELIGIBILITY IS THE BANNER'S, ANCHORED ON THE FOCAL SESSION. An item is
  *     never evidence against its own origin session, and it becomes evidence at
  *     the very next one. A route that anchored on the day rather than the
@@ -191,6 +199,7 @@ interface QueryBuilder {
   in: () => QueryBuilder;
   order: () => QueryBuilder;
   single: () => QueryBuilder;
+  maybeSingle: () => QueryBuilder;
   update: (payload: unknown) => QueryBuilder;
   then: (
     onFulfilled: (value: QueryResult) => unknown,
@@ -203,6 +212,7 @@ function makeSupabaseStub(): ReturnType<typeof createServerSupabase> {
     from(table: string): QueryBuilder {
       // A chain is one operation; `.update(...).eq(...)` never calls select.
       let operation = 'select';
+      let strictRow = false;
       const builder: QueryBuilder = {
         select: (columns?: string) => {
           selects.push({ table, columns });
@@ -211,16 +221,37 @@ function makeSupabaseStub(): ReturnType<typeof createServerSupabase> {
         eq: () => builder,
         in: () => builder,
         order: () => builder,
-        single: () => builder,
+        single: () => {
+          strictRow = true;
+          return builder;
+        },
+        maybeSingle: () => builder,
         update: (payload: unknown) => {
           operation = 'update';
           writes.push({ table, payload });
           return builder;
         },
-        then: (onFulfilled, onRejected) =>
-          Promise.resolve(
-            results[`${table}:${operation}`] ?? { data: null, error: null }
-          ).then(onFulfilled, onRejected),
+        then: (onFulfilled, onRejected) => {
+          const result = results[`${table}:${operation}`] ?? { data: null, error: null };
+          // The two terminals answer DIFFERENTLY, because postgrest's do.
+          // `.single()` on zero rows is a PGRST116 ERROR; `.maybeSingle()` is
+          // what turns "no such row" into a null row with no error. A stub that
+          // resolves both to the canned result lets a route read an optional
+          // table with `.single()` and treat every absent row as a failed read,
+          // with nothing here able to tell.
+          const noRow = result.data === null || result.data === undefined;
+          const resolved =
+            strictRow && noRow && !result.error
+              ? {
+                  data: null,
+                  error: {
+                    code: 'PGRST116',
+                    message: 'JSON object requested, multiple (or no) rows returned',
+                  },
+                }
+              : result;
+          return Promise.resolve(resolved).then(onFulfilled, onRejected);
+        },
       };
       return builder;
     },
@@ -551,6 +582,11 @@ describe('POST /api/coaching/generate', () => {
     // "intermediate, 0 sessions completed" is a fabricated fact under that
     // promise — and the model reasons from it, framing an experienced driver's
     // day as a beginner's.
+    //
+    // Null rows and a null error together is maybeSingle's answer for "no such
+    // row" — the state this reaches only because the read is `.maybeSingle()`.
+    // Under `.single()` zero rows come back as a PGRST116 ERROR, so this
+    // fixture described a reply that read could not produce.
     results['driver_profiles:select'] = { data: null, error: null };
 
     const res = await POST(makeRequest({ sessionId: 's-2' }));
@@ -561,6 +597,12 @@ describe('POST /api/coaching/generate', () => {
     expect(prompt).toContain('Sessions completed: not recorded');
     expect(prompt).not.toContain('intermediate');
     expect(prompt).not.toContain('Sessions completed: 0');
+    // And QUIETLY. An unprofiled driver is the common case on an optional
+    // extension table, not an incident. This is what `.maybeSingle()` buys:
+    // under `.single()` the missing row arrives as PGRST116 and every
+    // unprofiled driver logs a read failure that did not happen, burying the
+    // one below it that did.
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it('prompts without the profile when its query fails, instead of inventing one', async () => {
@@ -577,6 +619,18 @@ describe('POST /api/coaching/generate', () => {
     expect(res.status).toBe(200);
     expect(promptSent()).toContain('Experience level: not recorded');
     expect(promptSent()).not.toContain('intermediate');
+    // Now that an absent row is silent (maybeSingle), this log is the ONLY
+    // signal that a profile read genuinely failed — a generation that quietly
+    // drops the profile and 200s looks identical to one for an unprofiled
+    // driver. Pinned so deleting the log fails a test.
+    expect(console.error).toHaveBeenCalledWith(
+      '[AI Coaching] Driver profile unavailable',
+      expect.objectContaining({
+        sessionId: 's-2',
+        driverId: 'driver-1',
+        error: 'driver_profiles query failed',
+      })
+    );
   });
 
   it('reports a genuinely zero session count as zero, not as unrecorded', async () => {
