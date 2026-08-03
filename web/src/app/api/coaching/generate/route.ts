@@ -31,6 +31,7 @@ import { canClaimConsistency, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
 import { focusItemsForSession, validLapTimesMs } from '@/lib/track-days';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 import { ANTHROPIC_KEY_MISSING, anthropicApiKey } from '@/lib/anthropic-key';
+import { COACHING_ERROR } from '@/lib/coaching-errors';
 import { getDaySummaryInputs } from '@/data/day-summaries';
 import { AI_MODEL, buildSessionCoachingPrompt } from '@/lib/coaching-prompts';
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       console.error('[AI Coaching] Missing or invalid API key');
       return NextResponse.json(
-        { success: false, error: ANTHROPIC_KEY_MISSING },
+        { success: false, error: ANTHROPIC_KEY_MISSING, code: COACHING_ERROR.apiKeyMissing },
         { status: 500 }
       );
     }
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
         error: sessionError?.message,
       });
       return NextResponse.json(
-        { success: false, error: 'Session not found' },
+        { success: false, error: 'Session not found', code: COACHING_ERROR.notFound },
         { status: 404 }
       );
     }
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
         error: lapsError?.message,
       });
       return NextResponse.json(
-        { success: false, error: 'No laps found for this session' },
+        { success: false, error: 'No laps found for this session', code: COACHING_ERROR.notFound },
         { status: 404 }
       );
     }
@@ -151,11 +152,15 @@ export async function POST(request: NextRequest) {
         sessionId,
         trackDayId: session.track_day_id,
       });
-      // "missing", not "not found": the two 404s above are this route's
-      // not-found vocabulary, and a corruption 500 wearing it is a state nobody
-      // can act on told in the words of one they can retry. The wording matches
-      // the log line it will be read next to, and the phrase this route uses
-      // for a benign miss stays exclusively theirs.
+      // No `code`, deliberately. The two 404s above carry COACHING_ERROR
+      // .notFound and this does not, so the card's "Session or laps not found"
+      // branch cannot claim a corruption 500 no matter how its prose reads —
+      // the wording is for the coach, not for a caller to match on.
+      //
+      // "missing", not "not found", for that coach: the 404s are this route's
+      // not-found vocabulary, and a state nobody can act on told in the words of
+      // one they can retry reads as recoverable. The wording also matches the
+      // log line it will be read next to.
       return NextResponse.json(
         { success: false, error: 'Track day missing for this session — data integrity issue' },
         { status: 500 }

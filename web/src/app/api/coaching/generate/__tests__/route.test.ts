@@ -44,6 +44,8 @@ import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
 import { getTrackDayDebrief } from '@/data/track-days';
+import { ANTHROPIC_KEY_MISSING } from '@/lib/anthropic-key';
+import { COACHING_ERROR } from '@/lib/coaching-errors';
 import { AI_MODEL } from '@/lib/coaching-prompts';
 import type { TrackDayDebrief } from '@/lib/types';
 
@@ -359,6 +361,54 @@ describe('POST /api/coaching/generate', () => {
     expect(writes).toHaveLength(0);
   });
 
+  it('codes a genuinely absent session as not_found', async () => {
+    // The code, not the sentence, is what AICoachingCard branches on. The
+    // sentence stays for the coach who reads it.
+    results['sessions:select'] = { data: null, error: null };
+
+    const res = await POST(makeRequest({ sessionId: 'nope' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.code).toBe(COACHING_ERROR.notFound);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe('Session not found');
+  });
+
+  it('codes absent laps as not_found', async () => {
+    results['laps:select'] = { data: [], error: null };
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.code).toBe(COACHING_ERROR.notFound);
+    expect(json.error).toBe('No laps found for this session');
+  });
+
+  it('codes a missing key as api_key_missing, and keeps the sentence', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.code).toBe(COACHING_ERROR.apiKeyMissing);
+    expect(json.error).toBe(ANTHROPIC_KEY_MISSING);
+  });
+
+  it('leaves the lap-count refusal uncoded — it is neither branch', async () => {
+    // A 400 the card has nothing special to say about, so it must fall through
+    // to the route's own sentence. A code here would be a branch nobody wrote.
+    results['laps:select'] = { data: lapRows([90000, 90100, 90050]), error: null };
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.code).toBeUndefined();
+  });
+
   it('refuses the generation when the session has no track day', async () => {
     // Post-P1 a session without a day is corrupt data, not a supported state:
     // there is exactly one prompt for this route and it is day-aware, so there
@@ -396,9 +446,13 @@ describe('POST /api/coaching/generate', () => {
     // The named refusal, not the generic catch: without the explicit branch the
     // route dies destructuring null and 500s for a reason nobody can act on.
     expect(json.error).toContain('Track day missing');
-    // And NOT in the 404s' words. This route says "not found" for a session or
-    // laps that genuinely are not there, which a coach can retry past; a caller
-    // (or a coach) reading corruption as that is reading it as recoverable.
+    // And NOT wearing the 404s' CODE. That is what stops a caller reading
+    // corruption as the benign miss it can retry past — AICoachingCard branches
+    // on `code`, so the wording below is for the coach alone.
+    expect(json.code).toBeUndefined();
+    // The wording still avoids the 404s' phrase, for the coach reading it next
+    // to the log line: a state nobody can act on told in the words of one they
+    // can retry reads as recoverable.
     expect(json.error).not.toContain('not found');
     expect(mockWrapLLMCall).not.toHaveBeenCalled();
     expect(writes).toHaveLength(0);
