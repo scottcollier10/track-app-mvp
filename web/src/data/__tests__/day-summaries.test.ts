@@ -20,7 +20,11 @@
  *    unreachable.
  */
 
-import { buildDaySummaryContext, getDaySummaries } from '../day-summaries';
+import {
+  buildDaySummaryContext,
+  getDaySummaries,
+  getDaySummaryInputs,
+} from '../day-summaries';
 import { getTrackDayDebrief } from '@/data/track-days';
 import { createServerSupabase } from '@/lib/supabase/server';
 import type { TrackDayDebrief } from '@/lib/types';
@@ -210,6 +214,19 @@ describe('buildDaySummaryContext', () => {
     results.coaching_notes = { data: null, error: { message: 'notes query failed' } };
 
     await expect(buildDaySummaryContext('day-1')).rejects.toThrow('notes query failed');
+  });
+});
+
+describe('getDaySummaryInputs', () => {
+  it('hands back the context AND the debrief it was built from, on ONE read of the day', async () => {
+    // The session-coaching route needs both — the context for the prompt, the
+    // raw focus rows for the eligibility function — and fetching the day twice
+    // would let the two disagree about which sessions the day has.
+    const inputs = await getDaySummaryInputs('day-1');
+
+    expect(mockGetTrackDayDebrief).toHaveBeenCalledTimes(1);
+    expect(inputs?.debrief).toBe(debrief);
+    expect(inputs?.ctx.sessions.map((session) => session.id)).toEqual(['session-1']);
   });
 });
 

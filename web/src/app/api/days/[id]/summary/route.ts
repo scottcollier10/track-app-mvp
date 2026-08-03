@@ -18,6 +18,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
+import { ANTHROPIC_KEY_MISSING, anthropicApiKey } from '@/lib/anthropic-key';
 import { buildDaySummaryContext } from '@/data/day-summaries';
 import { AI_MODEL, buildDaySummaryPrompt } from '@/lib/coaching-prompts';
 import {
@@ -40,13 +41,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey.includes('placeholder')) {
+    const apiKey = anthropicApiKey();
+    if (!apiKey) {
       console.error('[Day Summary] Missing or invalid API key');
-      return NextResponse.json(
-        { error: 'ANTHROPIC_API_KEY not configured. Please add your API key to .env.local' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: ANTHROPIC_KEY_MISSING }, { status: 500 });
     }
 
     // Null covers both "no such day" and "not this coach's day" — RLS makes

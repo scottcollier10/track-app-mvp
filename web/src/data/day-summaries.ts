@@ -1,19 +1,20 @@
 /**
  * Day Summaries Data Layer
  *
- * Two fetches, both for the `day_summaries` write path. The 409 contract the
- * write routes share (`SUMMARY_REPLACED`, `isReplacedWriteError`) is pure and
- * lives in `@/lib/day-summaries`.
+ * Two fetches — the day's context and the day's summary rows. The 409 contract
+ * the write routes share (`SUMMARY_REPLACED`, `isReplacedWriteError`) is pure
+ * and lives in `@/lib/day-summaries`.
  *
- * `buildDaySummaryContext` is an ADAPTER and nothing more: it reads rows and
- * hands them to `assembleDaySummaryContext`, which owns every derivation. No
- * metric is computed here — see the docblock on `@/lib/day-summaries`.
+ * `getDaySummaryInputs` is an ADAPTER and nothing more: it reads rows and hands
+ * them to `assembleDaySummaryContext`, which owns every derivation. No metric
+ * is computed here — see the docblock on `@/lib/day-summaries`.
+ * `buildDaySummaryContext` is the same fetch with the debrief dropped.
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getTrackDayDebrief } from '@/data/track-days';
 import { assembleDaySummaryContext, type DaySummaryContext } from '@/lib/day-summaries';
-import type { DaySummary } from '@/lib/types';
+import type { DaySummary, TrackDayDebrief } from '@/lib/types';
 
 /**
  * The context object for one track day — the thing that is prompted with AND
@@ -23,10 +24,36 @@ import type { DaySummary } from '@/lib/types';
  * empty read for both, and the two are indistinguishable by design). A genuine
  * query failure THROWS instead: returning null for it would tell the coach
  * their day is missing when the database is merely unreachable.
+ *
+ * A thin wrapper over getDaySummaryInputs — the day summary route needs the
+ * context and nothing else, and this is the signature it already reads.
  */
 export async function buildDaySummaryContext(
   dayId: string
 ): Promise<DaySummaryContext | null> {
+  const inputs = await getDaySummaryInputs(dayId);
+  return inputs?.ctx ?? null;
+}
+
+/**
+ * The context object AND the debrief rows it was assembled from, in ONE fetch.
+ *
+ * The session-coaching route needs both: the context for the prompt, and the
+ * raw focus rows (`status`, `created_at`, `created_after_session_id`), the
+ * origin sessions, the day date and the track timezone that
+ * `focusItemsForSession` takes — none of which survive into the context, whose
+ * focus items are snapshotted down to what the prompt renders.
+ *
+ * Returning them together rather than letting the route call
+ * `getTrackDayDebrief` again is not tidiness: two reads of the same day can
+ * disagree (a session imported between them), and the eligibility set would
+ * then be computed over a day the prompt does not describe. One read, one day.
+ *
+ * Null and throw mean exactly what they mean above.
+ */
+export async function getDaySummaryInputs(
+  dayId: string
+): Promise<{ ctx: DaySummaryContext; debrief: TrackDayDebrief } | null> {
   const { data: debrief, error } = await getTrackDayDebrief(dayId);
   if (error) throw error;
   if (!debrief) return null;
@@ -63,7 +90,7 @@ export async function buildDaySummaryContext(
     coachingNotes = data ?? [];
   }
 
-  return assembleDaySummaryContext({
+  const ctx = assembleDaySummaryContext({
     date: debrief.date,
     notes: debrief.notes,
     track: { name: debrief.track.name },
@@ -93,6 +120,8 @@ export async function buildDaySummaryContext(
       created_at: note.created_at,
     })),
   });
+
+  return { ctx, debrief };
 }
 
 /**

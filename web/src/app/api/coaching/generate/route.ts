@@ -1,37 +1,39 @@
 /**
- * AI Coaching Generation API Route
+ * AI Session Coaching API Route
  *
  * POST /api/coaching/generate
- * Generates AI coaching feedback using Anthropic Claude API
+ * Generates coach-facing OBSERVATIONS about one session and overwrites
+ * `sessions.ai_coaching_summary` with them.
+ *
+ * The output contract is observation-only (design decision 7): the model may
+ * summarize coach-directed work and may never author a driving instruction.
+ * This route used to ask for prescriptive sections — improvements to make, goals
+ * for next time — and that capability is removed here, not relocated. The three
+ * sections it asks for now are the prompt builder's, defined once.
+ *
+ * LOAD-BEARING PAIRING, spelled out in
+ * docs/plans/2026-08-01-ai-day-summary-design.md decision 7: session coaching
+ * may stay EPHEMERAL — one overwritten column, no approval, no provenance row —
+ * only because its output contract now forbids instructions. A future PR that
+ * relaxes the contract inherits the storage question with it.
+ *
+ * Context comes from the SAME builder the day summary uses, with this session
+ * marked focal. One definition of the day, two prompts; the no-AI-text input
+ * property (an old generation can never be laundered into a new one) holds for
+ * both features by construction rather than by care.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { getCurrentCoach } from '@/lib/auth/current-coach';
-import {
-  canClaimConsistency,
-  getSessionInsightsFromMs,
-  MIN_LAPS_FOR_INSIGHTS,
-} from '@/lib/insights';
-import { validLapTimesMs } from '@/lib/track-days';
+import { canClaimConsistency, MIN_LAPS_FOR_INSIGHTS } from '@/lib/insights';
+import { focusItemsForSession, validLapTimesMs } from '@/lib/track-days';
 import { wrapLLMCall } from '@/lib/llm-telemetry';
+import { ANTHROPIC_KEY_MISSING, anthropicApiKey } from '@/lib/anthropic-key';
+import { getDaySummaryInputs } from '@/data/day-summaries';
+import { AI_MODEL, buildSessionCoachingPrompt } from '@/lib/coaching-prompts';
 
-const COACHING_MODEL = 'claude-sonnet-4-6';
-
-/**
- * Format milliseconds to readable lap time (MM:SS.mmm)
- */
-function formatLapTime(ms: number): string {
-  const totalSeconds = ms / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toFixed(3).padStart(6, '0')}`;
-}
-
-/**
- * Generate coaching feedback for a session
- */
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
@@ -42,14 +44,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Check for API key
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey || apiKey.includes('placeholder')) {
+    const apiKey = anthropicApiKey();
+    if (!apiKey) {
       console.error('[AI Coaching] Missing or invalid API key');
       return NextResponse.json(
-        {
-          success: false,
-          error: 'ANTHROPIC_API_KEY not configured. Please add your API key to .env.local',
-        },
+        { success: false, error: ANTHROPIC_KEY_MISSING },
         { status: 500 }
       );
     }
@@ -72,10 +71,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerSupabase();
 
-    // 3. Fetch session data
+    // 3. Fetch the session. Named columns, not `*`: the track and driver names
+    // now come off the day context, and the one column this route must never
+    // read back into a prompt is `ai_coaching_summary` — its own last output.
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
-      .select('*, tracks(name), drivers(name, email)')
+      .select('id, date, driver_id, track_day_id')
       .eq('id', sessionId)
       .single();
 
@@ -111,9 +112,9 @@ export async function POST(request: NextRequest) {
     // Countable laps (validLapTimesMs), not raw rows: this route used to gate
     // on laps.length while the σ it reports ran over the positive lap times
     // only — a six-row session with one 0 cleared the gate here and was refused
-    // by the session page. One array now feeds both the gate and the insights.
-    const countableLapTimesMs = validLapTimesMs(laps);
-    if (!canClaimConsistency(countableLapTimesMs)) {
+    // by the session page. The prompt's lap table is filtered by the same
+    // definition, inside buildSessionCoachingPrompt.
+    if (!canClaimConsistency(validLapTimesMs(laps))) {
       return NextResponse.json(
         {
           success: false,
@@ -123,98 +124,97 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Fetch driver profile
+    // 5. The day this session belongs to. Post-P1 every session has one — the
+    // column is an FK and the backfill filled it — so a null here is corrupt
+    // data, not a supported state, and there is deliberately NO session-only
+    // fallback prompt: a second prompt definition that almost never runs is a
+    // shadow path that drifts from the output contract precisely because
+    // nothing exercises it.
+    if (!session.track_day_id) {
+      console.error('[AI Coaching] Session has no track day', { sessionId });
+      return NextResponse.json(
+        { success: false, error: 'Session has no track day — data integrity issue' },
+        { status: 500 }
+      );
+    }
+
+    const inputs = await getDaySummaryInputs(session.track_day_id);
+    // A 500, NOT the day-summary route's 404. That route's day id comes from
+    // the URL and can be anything, so an empty read there means "no such day,
+    // or not yours" and 404 is the honest answer. Here the session row was
+    // already read under this coach's RLS, `track_days` chains to the same
+    // coach, and `track_day_id` is an FK that cannot dangle — so an empty read
+    // is the same class of corruption as the null above. Different condition,
+    // different code.
+    if (!inputs) {
+      console.error('[AI Coaching] Track day missing for session', {
+        sessionId,
+        trackDayId: session.track_day_id,
+      });
+      return NextResponse.json(
+        { success: false, error: 'Track day not found for this session — data integrity issue' },
+        { status: 500 }
+      );
+    }
+    const { ctx, debrief } = inputs;
+
+    // 6. Fetch driver profile
     const { data: profile } = await supabase
       .from('driver_profiles')
       .select('*')
       .eq('driver_id', session.driver_id)
       .single();
 
-    // 6. Calculate insights — from the same countable array the gate counted.
-    const insights = getSessionInsightsFromMs(countableLapTimesMs);
+    // 7. Which focus items are evidence for THIS session — through the same
+    // function the session page's evidence banner calls, with the focal session
+    // as anchor. The rule that an item never evidences against its own origin
+    // session (it was the coach's response to that session, not something the
+    // session tested) therefore arrives by reuse, never by a copy living here.
+    // Both groups count: `reviewed` is what was assessed AT this session,
+    // `inPlay` what was carried into it, and an item can be in both.
+    const assessedItemIds = new Set(
+      debrief.focusItems
+        .filter((item) =>
+          item.focus_item_assessments.some((a) => a.session_id === session.id)
+        )
+        .map((item) => item.id)
+    );
+    const { reviewed, inPlay } = focusItemsForSession({
+      items: debrief.focusItems,
+      assessedItemIds,
+      session: { id: session.id, date: session.date },
+      originSessions: new Map(debrief.originSessions.map((origin) => [origin.id, origin])),
+      dayDate: debrief.date,
+      trackTimezone: debrief.track.timezone,
+    });
+    const eligibleItemIds = new Set([...reviewed, ...inPlay].map((item) => item.id));
 
-    // 7. Format data for prompt. The prompt speaks countable laps end-to-end:
-    // "Total Laps" is countableLapTimesMs.length, not laps.length, so it names
-    // the same count the gate and σ above were computed over — a 7-row session
-    // with one uncountable row says "Total Laps: 6", matching the 6-lap σ.
-    const driverName = session.drivers?.name || 'Driver';
-    const trackName = session.tracks?.name || 'Unknown Track';
-    const experienceLevel = profile?.experience_level || 'intermediate';
-    const totalSessions = profile?.total_sessions || 0;
-    const sessionDate = new Date(session.date).toLocaleDateString();
-    const lapCount = countableLapTimesMs.length;
-    const bestLapTime = session.best_lap_ms ? formatLapTime(session.best_lap_ms) : 'N/A';
-    const consistencyText =
-      insights.consistencySeconds !== null
-        ? `±${insights.consistencySeconds.toFixed(1)}s lap-time spread (std-dev of clean laps; lower is tighter)`
-        : 'not enough clean laps to measure';
-    const paceTrend = insights.paceTrendLabel;
-
-    // Build lap times table — countable laps only, so the prompt cannot show
-    // the model a lap σ never saw. The filter mirrors validLapTimesMs (the
-    // app's one definition of a countable lap) but keeps whole ROWS, because
-    // the table needs lap_number labels and validLapTimesMs returns bare times.
-    // The prompt tells the model "Be specific with numbers and lap references";
-    // a raw row here would render "Lap 3: 0:00.000" (or NaN for a null time)
-    // and invite the model to cite that phantom lap in coach-visible text.
-    // Lap numbers stay AS RECORDED — a coach's "lap 5" must still be lap 5
-    // even when an earlier lap was uncountable, so no renumbering.
-    const lapTimesTable = laps
-      .filter((lap) => lap.lap_time_ms !== null && lap.lap_time_ms > 0)
-      .map((lap) => {
-        const lapNum = lap.lap_number;
-        const lapTime = formatLapTime(lap.lap_time_ms);
-        const isBest = lap.lap_time_ms === session.best_lap_ms;
-        return `Lap ${lapNum}: ${lapTime}${isBest ? ' ⭐ (Best)' : ''}`;
-      })
-      .join('\n');
-
-    // 8. Build prompt
-    const prompt = `You are an expert motorsport coach analyzing a track session. Provide balanced feedback that combines data insights with encouraging guidance.
-
-DRIVER PROFILE
-Name: ${driverName}
-Experience Level: ${experienceLevel}
-Total Sessions Completed: ${totalSessions}
-
-SESSION DATA
-Track: ${trackName}
-Date: ${sessionDate}
-Total Laps: ${lapCount}
-Best Lap Time: ${bestLapTime}
-
-PERFORMANCE METRICS
-- Consistency: ${consistencyText}
-- Pace Trend: ${paceTrend}
-
-LAP TIMES
-${lapTimesTable}
-
-Provide coaching feedback in exactly 3 sections:
-
-## Strengths
-Identify 2-3 specific things the driver did well based on the data. Reference actual numbers and trends.
-
-## Areas for Improvement
-Suggest 2-3 specific, actionable improvements. Be constructive and data-backed. Consider their experience level.
-
-## Next Session Goals
-Provide 1-2 concrete, measurable targets for their next track day.
-
-Keep tone encouraging but honest. Focus on what the data reveals. Be specific with numbers and lap references.`;
+    // 8. Build the prompt. Every number in it is already derived on the context
+    // object; the lap ROWS ride along raw because the table needs lap_number
+    // labels, and the builder filters them with the app's one lap predicate.
+    const prompt = buildSessionCoachingPrompt({
+      ctx,
+      focalSessionId: session.id,
+      eligibleItemIds,
+      focalLaps: laps,
+      driverProfile: {
+        experienceLevel: profile?.experience_level || 'intermediate',
+        totalSessions: profile?.total_sessions || 0,
+      },
+    });
 
     // 9. Call Anthropic API with telemetry
     const anthropic = new Anthropic({ apiKey });
 
     console.log('[AI Coaching] Calling Anthropic API', {
       sessionId,
-      model: COACHING_MODEL,
+      model: AI_MODEL,
     });
 
     const result = await wrapLLMCall(
       {
         provider: 'anthropic',
-        model: COACHING_MODEL,
+        model: AI_MODEL,
         prompt: prompt,
         metadata: {
           project: 'track-app',
@@ -226,7 +226,7 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
       },
       async () => {
         const message = await anthropic.messages.create({
-          model: COACHING_MODEL,
+          model: AI_MODEL,
           max_tokens: 1500,
           messages: [
             {
@@ -236,10 +236,23 @@ Keep tone encouraging but honest. Focus on what the data reveals. Be specific wi
           ],
         });
 
+        // A generation that hit the cap ends mid-sentence, and the write below
+        // is a DESTRUCTIVE OVERWRITE of the column — storing a truncated
+        // generation costs the coach the previous good text, while refusing to
+        // write leaves it intact with a retry available. Thrown, not returned:
+        // wrapLLMCall records the failure in telemetry and rethrows, so this
+        // takes the same no-write path as an API failure. Same cost caveat as
+        // the day summary route: throwing skips `usage`, so the llm_logs row
+        // lands at zero tokens/cost — read truncation counts, not spend, out of
+        // that row.
+        if (message.stop_reason === 'max_tokens') {
+          throw new Error('session coaching truncated at max_tokens');
+        }
+
         // Extract text from response
         const output = message.content
-          .filter((block) => block.type === 'text')
-          .map((block) => (block as any).text)
+          .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+          .map((block) => block.text)
           .join('\n');
 
         return {
