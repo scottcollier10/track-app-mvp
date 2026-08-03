@@ -13,13 +13,17 @@
  *  - Writes are serialized through ONE queue — the debounced final_text PATCH
  *    and Approve alike. An approve that overtakes a pending PATCH lights the
  *    chip with no coach edit at all, so the order is asserted directly.
- *    An approval behind a write that FAILED is dropped, for the same reason
- *    read the other way: approval publishes the row's stored text, so it must
- *    never follow an edit that did not land.
+ *    An approval of the SAME ROW behind a write that FAILED is dropped, for the
+ *    same reason read the other way: approval publishes the row's stored text,
+ *    so it must never follow an edit to that row that did not land. Everything
+ *    else in the queue still drains, and in that order — a queued edit held
+ *    back would land after the next edit typed and overwrite it.
  *  - A 409 from any write is the stale-tab case: the coach sees
  *    SUMMARY_REPLACED's message and a Refresh, never a generic save error. That
  *    message is always escapable — by a new current row, and by the Refresh
  *    itself, which matters because approving a draft does not change its id.
+ *    Both exits forget the failed write, or the exit hands back the generic
+ *    save error the banner was shown instead of.
  *  - A failed generation writes no row: the slot shows the failure and a
  *    retry, and nothing that looks like a summary.
  */
@@ -433,6 +437,50 @@ describe('DaySummarySlot', () => {
     expect(calls(fetchMock)[1][2]).toEqual({ finalText: 'ABC' });
   });
 
+  it('a FAILED edit keeps the queue draining, so a stale edit never lands after a newer one', async () => {
+    const ok = { ok: true, status: 200, json: async () => ({}) };
+    let failFirst!: () => void;
+    const fetchMock = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            failFirst = () => resolve({ ok: false, status: 500, json: async () => ({}) });
+          })
+      )
+      .mockImplementation(async () => ok);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    // "A" occupies the wire; "AB" waits behind it.
+    fireEvent.change(summaryText(), { target: { value: 'A' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    fireEvent.change(summaryText(), { target: { value: 'AB' } });
+    fireEvent.blur(summaryText());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      failFirst();
+    });
+
+    // A lost write cancels the approvals behind it and NOTHING else. Holding
+    // the queued edit back instead would leave it parked with the wire idle...
+    const bodies = () => calls(fetchMock).map(([, , body]) => body?.finalText);
+    expect(bodies()).toEqual(['A', 'AB']);
+
+    // ...and this newer edit would then go out first and be overwritten by that
+    // stale one whenever the queue next moved — the coach's latest wording lost
+    // to the failure path, which is the whole reason writes are serialized.
+    fireEvent.change(summaryText(), { target: { value: 'ABC' } });
+    fireEvent.blur(summaryText());
+    await act(async () => {});
+
+    expect(bodies()).toEqual(['A', 'AB', 'ABC']);
+  });
+
   it('409 from the autosave PATCH renders the replaced message and a Refresh', async () => {
     stubFetch(409);
     render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
@@ -594,6 +642,41 @@ describe('DaySummarySlot', () => {
     expect(screen.getByText('Failed to save')).toBeInTheDocument();
   });
 
+  it('state 5: a failed edit to the approved row leaves the REVISION’s approval standing', async () => {
+    // The drop is scoped to the failed write's own row, because the argument
+    // for it is: approval publishes the text the ROW holds. Here the textarea
+    // edits the approved row while the only Approve on screen promotes the
+    // revision — a row whose text this failure never touched. Dropping that
+    // click would cancel the coach's approval with nothing but a shared
+    // "Failed to save" to account for it.
+    const fetchMock = jest.fn(async (input: RequestInfo) =>
+      String(input) === '/api/day-summaries/sum-approved'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({}) }
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[
+          makeSummary({ id: 'sum-draft', final_text: 'Newer draft wording.' }),
+          approvedRow(),
+        ]}
+      />
+    );
+
+    fireEvent.change(summaryText(), { target: { value: 'a tweak to the approved wording' } });
+    fireEvent.click(button('Approve'));
+    await act(async () => {});
+
+    expect(calls(fetchMock).map(([url]) => url)).toEqual([
+      '/api/day-summaries/sum-approved',
+      '/api/day-summaries/sum-draft/approve',
+    ]);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
   it('Refresh clears the replaced message even when the rows come back identical', async () => {
     stubFetch(409);
     const rows = [makeSummary()];
@@ -613,6 +696,29 @@ describe('DaySummarySlot', () => {
     expect(screen.queryByText(SUMMARY_REPLACED.message)).not.toBeInTheDocument();
     expect(button('Approve')).toBeInTheDocument();
     expect(summaryText()).not.toBeDisabled();
+  });
+
+  it('Refresh forgets the write that 409’d — no Retry that would raise the banner again', async () => {
+    stubFetch(409);
+    const rows = [makeSummary()];
+    const { rerender } = render(<DaySummarySlot dayId="day-1" summaries={rows} />);
+
+    fireEvent.change(summaryText(), { target: { value: 'edit from a stale tab' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    await act(async () => {});
+    expect(screen.getByText(SUMMARY_REPLACED.message)).toBeInTheDocument();
+
+    fireEvent.click(button('Refresh'));
+    rerender(<DaySummarySlot dayId="day-1" summaries={rows} />);
+
+    // The banner hid an indicator that is still reporting the 409. Unhiding it
+    // unchanged would offer the coach a Retry for the very request that raised
+    // the banner: one click back to the message they just dismissed.
+    expect(screen.queryByText('Failed to save')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('a new current row clears the replaced message: it IS the refresh the message asked for', async () => {
@@ -638,6 +744,33 @@ describe('DaySummarySlot', () => {
     expect(summaryText().value).toBe('The other tab’s draft.');
     expect(summaryText()).not.toBeDisabled();
     expect(button('Approve')).toBeInTheDocument();
+  });
+
+  it('a new current row forgets the failed write too: the Retry would address the old row', async () => {
+    stubFetch(500);
+    const { rerender } = render(<DaySummarySlot dayId="day-1" summaries={[makeSummary()]} />);
+
+    fireEvent.change(summaryText(), { target: { value: 'edit that did not land' } });
+    act(() => {
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+    });
+    await act(async () => {});
+    expect(screen.getByText('Failed to save')).toBeInTheDocument();
+
+    // A regenerate lands, so the row that edit was addressing is superseded.
+    rerender(
+      <DaySummarySlot
+        dayId="day-1"
+        summaries={[makeSummary({ id: 'sum-2', final_text: 'A fresh generation.' })]}
+      />
+    );
+
+    // The textarea has been re-seeded from the new row, so Retry no longer
+    // means what it says: it would PATCH sum-1 with words that are no longer on
+    // screen, against a row the server will only answer 409 to.
+    expect(screen.queryByText('Failed to save')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('a failed save surfaces retry, and the retry re-sends the same payload', async () => {

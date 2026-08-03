@@ -23,14 +23,18 @@
  * control gets used, so the click flushes the pending edit and the approval
  * queues behind it.
  *
- * Generation is the ONE write deliberately left off that queue. It inserts a
- * NEW row rather than writing the row the queued jobs address, so it has no
- * order to keep with them, and putting an LLM round trip on the autosave's wire
- * would park every subsequent keystroke behind it for seconds. The cost is that
- * with the browser's blur-then-click order a flushed PATCH and the generate
- * POST are in flight together; the PATCH is milliseconds against a row that is
- * still live and the generation takes seconds, and if the PATCH does lose that
- * race its 409 is recoverable (a new current row, or Refresh).
+ * Generation is the ONE write deliberately left off that queue, because putting
+ * an LLM round trip on the autosave's wire would park every subsequent
+ * keystroke behind it for seconds. It is NOT that generation leaves the queued
+ * jobs' row alone: its insert fires the BEFORE INSERT trigger, which flips a
+ * live draft to `superseded` (see the migration), and that flip is precisely
+ * what a late PATCH 409s on. What makes the missing ordering affordable is
+ * WHEN it happens — at the end of a multi-second generation, so a PATCH that
+ * takes milliseconds against a row that is still live reliably wins the race
+ * rather than merely usually winning it. The cost is that with the browser's
+ * blur-then-click order a flushed PATCH and the generate POST are in flight
+ * together, and if the PATCH does lose that race its 409 is recoverable (a new
+ * current row, or Refresh).
  *
  * A 409 from any write is the stale-tab case (the row was superseded in another
  * tab). The controls are replaced by SUMMARY_REPLACED's message and a Refresh —
@@ -38,7 +42,9 @@
  * That message is escapable BY ITSELF: Refresh clears it as well as asking the
  * server for the truth, because the flip a summary makes most often — draft to
  * approved — does not change the row's id, so "a different row became current"
- * cannot be the only way out.
+ * cannot be the only way out. Both ways out forget the failed write as they go
+ * (`forgetWrite`): otherwise clearing the banner would uncover the generic
+ * "Failed to save" it was shown instead of, Retry and all.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -111,6 +117,22 @@ export default function DaySummarySlot({
   const [replaced, setReplaced] = useState(false);
   const [text, setText] = useState(current?.final_text ?? '');
 
+  /**
+   * Both routes out of the replaced banner run this. They end with the coach
+   * back among live controls, and the write state left over from the 409 is
+   * about a row that is no longer addressable: left alone it paints "Failed to
+   * save / Retry" beside those controls, and that Retry re-sends the write that
+   * raised the banner — one click back to where they started.
+   *
+   * `lastSent` deliberately survives. Retry is only ever on screen while the
+   * status is 'failed', and the only thing that can set that status again is a
+   * fresh `send` — which assigns `lastSent` first — so it can never name a
+   * write this cleared. Nulling it would meanwhile blind `approveOutstanding`
+   * to an approval STILL IN FLIGHT, trading a Retry that cannot render for a
+   * duplicate approval that can.
+   */
+  const forgetWrite = () => write.reset();
+
   // Re-seed when a DIFFERENT row becomes current — a regenerate, or a revision
   // approved out of the card below. Adjusting state during render (React's own
   // "adjusting state when a prop changes" pattern) rather than in an effect, so
@@ -122,8 +144,10 @@ export default function DaySummarySlot({
   if ((current?.id ?? null) !== seededId) {
     setSeededId(current?.id ?? null);
     setText(current?.final_text ?? '');
-    // A new current row IS the refresh the replaced message asked for.
+    // A new current row IS the refresh the replaced message asked for — and it
+    // retires the write that failed against the old one just as surely.
     setReplaced(false);
+    forgetWrite();
   }
 
   /** Every write goes through here, so the 409 is recognized in ONE place. */
@@ -171,13 +195,28 @@ export default function DaySummarySlot({
       )
       .then(() => {
         inFlight.current = null;
-        // A write that did not land cancels every approval waiting behind it.
-        // Approval publishes the text the ROW holds, so approving after a lost
-        // edit publishes the wording the coach already replaced — the outcome
-        // this queue exists to prevent, reached by the failure path instead of
-        // the ordering path. Queued EDITS still drain: each one carries the
-        // whole textarea, so sending them is how the coach's words survive.
-        if (!landed) queue.current = queue.current.filter((j) => j.kind !== 'approve');
+        // A write that did not land cancels the approvals waiting behind it FOR
+        // THE SAME ROW. Approval publishes the text the ROW holds, so approving
+        // after a lost edit publishes the wording the coach already replaced —
+        // the outcome this queue exists to prevent, reached by the failure path
+        // instead of the ordering path. That argument is per-row and the filter
+        // is scoped to match: in state 5 the textarea edits the approved row
+        // while the only Approve on screen promotes the revision, and dropping
+        // that click would cancel an approval of a row whose text the failed
+        // write never touched, with nothing but "Failed to save" to explain it.
+        // That approval is also what supersedes the row the edit was lost from
+        // (the write matrix auto-supersedes the old approved row), so the words
+        // that failed to save were on their way out either way.
+        //
+        // Queued EDITS still drain, whatever they address: each one carries the
+        // whole textarea, so sending them is how the coach's words survive, and
+        // holding them back would let a NEWER edit typed after the failure go
+        // out first and be overwritten by the stale one behind it.
+        if (!landed) {
+          queue.current = queue.current.filter(
+            (j) => !(j.kind === 'approve' && j.summaryId === job.summaryId)
+          );
+        }
         const next = queue.current.shift();
         // Fires even after unmount (the chain lives on the promise, not the
         // component); the hook's setStatus is then a React no-op.
@@ -204,6 +243,14 @@ export default function DaySummarySlot({
     // that would also refuse the approval that rides BEHIND an in-flight edit,
     // which is the queue's whole reason for existing and the ordinary way this
     // control gets used. The write in flight is reported beside the heading.
+    //
+    // A window survives the guard: between an approval LANDING and the refresh
+    // that takes the button away, nothing is outstanding, so a click there does
+    // send a second POST and does earn the 409 banner. Left open deliberately —
+    // it costs a Refresh and closing it needs machinery this doesn't yet earn.
+    // If it ever bites, the fix is a ref holding the id of the last approve
+    // that landed (`landed && job.kind === 'approve'`) and refusing that id;
+    // a failed approve never lands, so Retry after one is untouched.
     if (job.kind === 'approve' && approveOutstanding(job.summaryId)) return;
     if (inFlight.current === null) {
       send(job);
@@ -327,8 +374,13 @@ export default function DaySummarySlot({
         // the same banner it claims to dismiss. If the row really is superseded
         // the next write 409s and the banner comes back — which is the honest
         // ordering: recovery is offered, the server still decides.
+        //
+        // The write that 409'd is forgotten in the same breath: unhiding the
+        // indicator without it hands the coach a Retry for the request that
+        // raised this banner, which raises it again.
         onClick={() => {
           setReplaced(false);
+          forgetWrite();
           router.refresh();
         }}
         className={buttonClass}
