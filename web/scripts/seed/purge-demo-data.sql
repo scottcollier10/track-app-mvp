@@ -11,6 +11,13 @@
 -- anchored to it. Deleting them explicitly here means this script never
 -- depends on cascade evaluation order to succeed.
 -- track_days after sessions: sessions.track_day_id references it.
+--
+-- KNOWN, DEFERRED (no logic change): assessments are scoped by focus_item, so an
+-- assessment on a demo SESSION via a non-demo driver's focus item survives — the
+-- app cannot create one today (an item and the sessions it is assessed at share a
+-- driver), and the session delete below would raise on it if it ever could.
+-- KNOWN, DEFERRED: llm_logs.user_id keeps demo driver ids after this runs. Not
+-- purged deliberately — logs are an audit trail, not demo content.
 BEGIN;
 
 DELETE FROM focus_item_assessments WHERE focus_item_id IN (

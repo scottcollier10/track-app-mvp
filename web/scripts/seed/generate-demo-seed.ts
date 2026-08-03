@@ -31,11 +31,17 @@ export function dayUuid(driverN: number, dayN: number): string {
 }
 
 /**
- * Track -> IANA timezone. MUST match what 20260731_track_timezones.sql wrote
- * into tracks.timezone — the emitted track_days.date is computed here from
- * these values, while the app buckets live imports from the DB's. Two answers
- * to "what local day is this?" is a session filed under a day it did not
- * happen on, which is the exact bug that migration was written to fix.
+ * Track -> IANA timezone. Every entry MUST agree with what
+ * 20260731_track_timezones.sql wrote into tracks.timezone — the emitted
+ * track_days.date is computed here from these values, while the app buckets
+ * live imports from the DB's. Two answers to "what local day is this?" is a
+ * session filed under a day it did not happen on, which is the exact bug that
+ * migration was written to fix.
+ *
+ * A SUBSET of that migration, not a copy of it: the migration also maps the
+ * 'Thunderhill'/'Buttonwillow' short-name variants and 'Barber' ->
+ * America/Chicago. The cast uses only the five long names below, and dayDate
+ * throws on anything else, so the gap cannot produce a wrong date here.
  */
 export const TRACK_TIMEZONES: Record<string, string> = {
   'Thunderhill Raceway': 'America/Los_Angeles',
@@ -50,6 +56,12 @@ export const TRACK_TIMEZONES: Record<string, string> = {
  * FIRST session. Throws on a track with no timezone: falling back to UTC is how
  * a session silently lands on the wrong day, so an unmapped track fails the
  * whole run instead of emitting a plausible wrong date.
+ *
+ * That guard covers a missing KEY only. A wrong VALUE — a typo'd IANA name, or
+ * a real-but-wrong zone like 'UTC' — cannot be caught here: localDateForTimezone
+ * falls back to UTC on an unparseable name, and 'UTC' parses fine. The values
+ * are pinned by a test instead ("every TRACK_TIMEZONES entry buckets 02:00 UTC
+ * to the previous local day"), which is the only check that sees both mistakes.
  */
 export function dayDate(firstSessionIso: string, trackName: string): string {
   const timezone = TRACK_TIMEZONES[trackName];
@@ -62,14 +74,34 @@ export function dayDate(firstSessionIso: string, trackName: string): string {
   return localDateForTimezone(firstSessionIso, timezone);
 }
 
-const q = (s: string) => s.replace(/'/g, "''");
-const sqlText = (s: string | undefined) => (s === undefined ? 'NULL' : `'${q(s)}'`);
+/**
+ * THE one quoting path: every string this generator emits goes through here,
+ * so escaping is one concern rather than one per call site. `undefined` becomes
+ * a bare NULL, never the string 'NULL' — the same discipline applied uniformly
+ * whether the column is nullable or not.
+ *
+ * Coach prose flows through here (day notes, representativeness notes, and the
+ * focus/summary text Task 7 adds), where an apostrophe is near-certain. One
+ * unescaped `don't` is a syntactically broken script pasted into the prod SQL
+ * editor.
+ */
+const sqlText = (s: string | undefined) =>
+  s === undefined ? 'NULL' : `'${s.replace(/'/g, "''")}'`;
 
 /**
  * ISO start of a day's FIRST session — the timestamp track_days.date is derived
- * from. First, not last, because that is what the import route buckets on. The
- * cast's ascending-hour + 17-23 UTC invariants mean the two happen to agree
- * today; this stays the definition rather than an accident of that overlap.
+ * from.
+ *
+ * First, not last, because it does not matter which: the cast's ascending-hour
+ * and 17-23 UTC invariants make every session of a day agree on the track-local
+ * date, so first is the cheapest of several identical answers. Both invariants
+ * are asserted (demo-scenarios.test.ts pins the hour window and the ordering;
+ * generate-demo-seed.test.ts pins that the window stays on one local date in
+ * every mapped timezone), so a cast that ever straddled midnight local would
+ * turn a test red rather than quietly make this choice load-bearing.
+ *
+ * The import route has no first-session rule to copy, incidentally — it buckets
+ * every session on its own timestamp. This is the seed's own definition.
  */
 export function dayStartIso(day: ScenarioDay, now: Date): string {
   return weekendDate(now, day.weeksAgo, day.day, day.sessions[0].hourUtc);
@@ -107,7 +139,7 @@ export function verifyScenarios(scenarios: Scenario[], now: Date): string[] {
 
 export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Date): string {
   const trackNames = [...new Set(scenarios.flatMap(s => s.days.map(d => d.trackName)))];
-  const coach = `(SELECT id FROM coaches WHERE email = '${q(coachEmail)}')`;
+  const coach = `(SELECT id FROM coaches WHERE email = ${sqlText(coachEmail)})`;
   const lines: string[] = [];
 
   lines.push(`BEGIN;`);
@@ -117,12 +149,12 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
 
   // Guards: coach and tracks must exist.
   lines.push(`DO $seed_guard$ BEGIN`);
-  lines.push(`  IF NOT EXISTS (SELECT 1 FROM coaches WHERE email = '${q(coachEmail)}') THEN`);
-  lines.push(`    RAISE EXCEPTION 'Coach % not found — check coaches.email', '${q(coachEmail)}';`);
+  lines.push(`  IF NOT EXISTS (SELECT 1 FROM coaches WHERE email = ${sqlText(coachEmail)}) THEN`);
+  lines.push(`    RAISE EXCEPTION 'Coach % not found — check coaches.email', ${sqlText(coachEmail)};`);
   lines.push(`  END IF;`);
   for (const t of trackNames) {
-    lines.push(`  IF NOT EXISTS (SELECT 1 FROM tracks WHERE name = '${q(t)}') THEN`);
-    lines.push(`    RAISE EXCEPTION 'Track % not found — check tracks.name', '${q(t)}';`);
+    lines.push(`  IF NOT EXISTS (SELECT 1 FROM tracks WHERE name = ${sqlText(t)}) THEN`);
+    lines.push(`    RAISE EXCEPTION 'Track % not found — check tracks.name', ${sqlText(t)};`);
     lines.push(`  END IF;`);
   }
   lines.push(`END $seed_guard$;`);
@@ -136,9 +168,19 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
 
   // ORDERED CLEAR. The order is load-bearing, top to bottom:
   //
-  //  1. focus_items first (cascades focus_item_assessments). Assessments hold a
-  //     plain FK to sessions, so a live assessment BLOCKS the stale-session
-  //     delete in step 4. They have to go first, not last.
+  //  1. focus_items first (cascades focus_item_assessments). Two separate
+  //     reasons, and only the first is the FK's:
+  //       - ORDER is FK-forced. Assessments hold a plain FK to sessions, so a
+  //         live assessment BLOCKS the stale-session delete in step 4. They
+  //         have to go first, not last.
+  //       - SCOPE is a choice. The FK would be satisfied by deleting only the
+  //         assessments anchored to STALE sessions; this deletes every focus
+  //         item the demo drivers own. That is seed ownership: Task 7 rebuilds
+  //         the whole focus trail, and a refresh that left half of it standing
+  //         would leave items with no evidence behind them. The cost is real —
+  //         a focus item a coach wrote by hand against a demo driver DURING a
+  //         demo does not survive the next refresh. Demo drivers are seed
+  //         territory, so that is accepted, not overlooked.
   //  2. Unhook sessions from their days. sessions.track_day_id is nullable in
   //     the DB (P1 made it app-required, not DB-required), so this is the legal
   //     way to free the day rows without touching the sessions themselves.
@@ -177,49 +219,54 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
     lines.push(`-- ${s.name} (${s.expect.flagKinds.join('+') || (s.expect.ready ? 'ready' : s.expect.baselineState)}) — ${s.days.length} day(s), ${sessions.length} session(s)`);
     lines.push(
       `INSERT INTO drivers (id, name, email, coach_id, created_at) VALUES ` +
-      `('${dId}', '${q(s.name)}', '${q(s.email)}', ${coach}, now()) ` +
+      `('${dId}', ${sqlText(s.name)}, ${sqlText(s.email)}, ${coach}, now()) ` +
       `ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, coach_id = EXCLUDED.coach_id;`,
     );
     lines.push(
       `INSERT INTO driver_profiles (driver_id, experience_level, total_sessions) VALUES ` +
-      `('${dId}', '${s.experienceLevel}', ${sessions.length}) ` +
+      `('${dId}', ${sqlText(s.experienceLevel)}, ${sessions.length}) ` +
       `ON CONFLICT (driver_id) DO UPDATE SET experience_level = EXCLUDED.experience_level, total_sessions = EXCLUDED.total_sessions;`,
     );
+    // Days BEFORE the sessions that reference them, always: sessions.track_day_id
+    // is a plain non-deferrable FK, so a session INSERT naming a day row this
+    // script has not written yet aborts the whole refresh at apply time.
     s.days.forEach((day, dayIdx) => {
       lines.push(
         `INSERT INTO track_days (id, driver_id, track_id, date, notes) VALUES ` +
-        `('${dayUuid(s.n, dayIdx + 1)}', '${dId}', (SELECT id FROM tracks WHERE name = '${q(day.trackName)}'), ` +
+        `('${dayUuid(s.n, dayIdx + 1)}', '${dId}', (SELECT id FROM tracks WHERE name = ${sqlText(day.trackName)}), ` +
         `'${dayDate(dayStartIso(day, now), day.trackName)}', ${sqlText(day.notes)});`,
       );
     });
-    let sessionN = 0;
-    s.days.forEach((day, dayIdx) => {
+    sessions.forEach(({ day, dayIdx, session: sess }, i) => {
+      const sId = sessionUuid(s.n, i + 1);
       const tdId = dayUuid(s.n, dayIdx + 1);
-      for (const sess of day.sessions) {
-        sessionN += 1;
-        const sId = sessionUuid(s.n, sessionN);
-        const date = weekendDate(now, day.weeksAgo, day.day, sess.hourUtc);
-        const total = sess.lapTimesMs.reduce((a, b) => a + b, 0);
-        const best = Math.min(...sess.lapTimesMs);
-        // representativeness is emitted ALWAYS, NULL included, in both the
-        // column list and the DO UPDATE SET: sessions are upserted, not
-        // deleted, so a flag dropped from the cast has to be cleared in prod
-        // rather than left behind as a stale chip nothing in the repo explains.
-        lines.push(
-          `INSERT INTO sessions (id, driver_id, track_day_id, track_id, date, total_time_ms, best_lap_ms, source, representativeness, representativeness_note) VALUES ` +
-          `('${sId}', '${dId}', '${tdId}', (SELECT id FROM tracks WHERE name = '${q(day.trackName)}'), '${date}', ${total}, ${best}, 'manual', ` +
-          `${sqlText(sess.representativeness)}, ${sqlText(sess.representativenessNote)}) ` +
-          `ON CONFLICT (id) DO UPDATE SET driver_id = EXCLUDED.driver_id, track_day_id = EXCLUDED.track_day_id, track_id = EXCLUDED.track_id, ` +
-          `date = EXCLUDED.date, total_time_ms = EXCLUDED.total_time_ms, best_lap_ms = EXCLUDED.best_lap_ms, ` +
-          `representativeness = EXCLUDED.representativeness, representativeness_note = EXCLUDED.representativeness_note;`,
-        );
-      }
+      const date = weekendDate(now, day.weeksAgo, day.day, sess.hourUtc);
+      const total = sess.lapTimesMs.reduce((a, b) => a + b, 0);
+      const best = Math.min(...sess.lapTimesMs);
+      // representativeness is emitted ALWAYS, NULL included, in both the
+      // column list and the DO UPDATE SET: sessions are upserted, not
+      // deleted, so a flag dropped from the cast has to be cleared in prod
+      // rather than left behind as a stale chip nothing in the repo explains.
+      lines.push(
+        `INSERT INTO sessions (id, driver_id, track_day_id, track_id, date, total_time_ms, best_lap_ms, source, representativeness, representativeness_note) VALUES ` +
+        `('${sId}', '${dId}', '${tdId}', (SELECT id FROM tracks WHERE name = ${sqlText(day.trackName)}), '${date}', ${total}, ${best}, 'manual', ` +
+        `${sqlText(sess.representativeness)}, ${sqlText(sess.representativenessNote)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET driver_id = EXCLUDED.driver_id, track_day_id = EXCLUDED.track_day_id, track_id = EXCLUDED.track_id, ` +
+        `date = EXCLUDED.date, total_time_ms = EXCLUDED.total_time_ms, best_lap_ms = EXCLUDED.best_lap_ms, ` +
+        `representativeness = EXCLUDED.representativeness, representativeness_note = EXCLUDED.representativeness_note;`,
+      );
     });
   }
 
   // Refresh laps wholesale: delete-then-insert is simpler than per-lap upserts.
   // Combined with the stale-session cleanup above, a re-run refreshes dates and
   // removes stale demo sessions.
+  //
+  // This DELETE is what makes a second run possible at ALL, and it is a
+  // different statement from the stale-lap delete in the ordered clear above:
+  // that one scrubs laps of sessions LEAVING the cast, this one scrubs the laps
+  // of the sessions we are about to re-insert. Without it the INSERT below dies
+  // on laps_session_id_lap_number_key the moment the script runs twice.
   lines.push(``);
   lines.push(`DELETE FROM laps WHERE session_id IN (${sessionIdList});`);
   const lapValues: string[] = [];

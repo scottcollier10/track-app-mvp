@@ -3,6 +3,12 @@
 -- Scope: all drivers whose email ends in @trackapp.demo (Dec 2025 seed + current demo cast).
 -- Row order matches the purge's delete order, so a surprising count is easy to
 -- trace back to the statement that would produce it.
+--
+-- The counts below carry the purge's two known scope gaps, unchanged so the
+-- preview never claims more than the purge delivers: assessments are counted by
+-- focus_item (an assessment on a demo session via a non-demo driver's focus item
+-- is app-impossible today and is not counted), and llm_logs is absent entirely —
+-- its user_id keeps demo driver ids on purpose, as an audit trail.
 
 WITH demo_drivers AS (
   SELECT id FROM drivers WHERE email LIKE '%@trackapp.demo'

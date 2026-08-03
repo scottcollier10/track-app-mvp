@@ -6,9 +6,11 @@ export type Weekday = 'sat' | 'sun';
 export interface ScenarioSession {
   /**
    * UTC hour the session starts. Kept in 17-23 on purpose: for every track in
-   * the cast (all America/Los_Angeles) that window is 10:00-16:00 local on the
-   * SAME calendar date, so a session's UTC date and its track-local date never
-   * disagree and the day grouping cannot be read two ways.
+   * the cast (all America/Los_Angeles) that window is daytime local on the SAME
+   * calendar date — 10:00-16:00 under PDT, 09:00-15:00 under PST, and a refresh
+   * run in November gets the latter — so a session's UTC date and its
+   * track-local date never disagree and the day grouping cannot be read two
+   * ways. The offset moves the wall clock; the calendar date is the invariant.
    */
   hourUtc: number;
   lapTimesMs: number[];
@@ -48,11 +50,19 @@ export function weekendDate(now: Date, weeksAgo: number, day: Weekday, hourUtc: 
   return d.toISOString();
 }
 
-/** Every session of a scenario, day order then hour order — the ONE flattening. */
+/**
+ * Every session of a scenario, day order then hour order — the ONE flattening.
+ *
+ * `dayIdx` rides along because the flat index IS the session's seed identity
+ * (sessionUuid's Nth), and its day's identity (dayUuid's dayIdx+1) has to be
+ * read off the SAME walk. The generator used to re-implement this flatten
+ * inline just to get dayIdx, which made the session->day and session->lap
+ * correspondences depend on two independent traversals agreeing.
+ */
 export function scenarioSessions(
   s: Scenario,
-): Array<{ day: ScenarioDay; session: ScenarioSession }> {
-  return s.days.flatMap(day => day.sessions.map(session => ({ day, session })));
+): Array<{ day: ScenarioDay; dayIdx: number; session: ScenarioSession }> {
+  return s.days.flatMap((day, dayIdx) => day.sessions.map(session => ({ day, dayIdx, session })));
 }
 
 /** evaluateStudent is day-agnostic: it sees the flat session list, exactly as prod does. */
