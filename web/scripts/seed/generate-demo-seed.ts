@@ -8,6 +8,15 @@ import { evaluateStudent } from '../../src/lib/analytics-v2';
 // its own: track_days.date has to mean here exactly what it means in the import
 // route, or the demo files sessions under days the app would not have made.
 import { localDateForTimezone } from '../../src/lib/track-days';
+// The app's OWN context core, not an imitation of its output: the seeded
+// prompt_context and informing id arrays are built by the same function the
+// generate route calls, so a demo row's provenance is real-shaped by
+// construction and drifts only when the core itself changes.
+import {
+  assembleDaySummaryContext,
+  informingIdsFrom,
+  type DaySummaryInput,
+} from '../../src/lib/day-summaries';
 import {
   SCENARIOS,
   scenarioSessions,
@@ -15,6 +24,8 @@ import {
   weekendDate,
   type Scenario,
   type ScenarioDay,
+  type ScenarioFocusItem,
+  type ScenarioSessionRef,
 } from './demo-scenarios';
 
 const pad = (n: number, width: number) => String(n).padStart(width, '0');
@@ -28,6 +39,39 @@ export function sessionUuid(driverN: number, sessionN: number): string {
 /** Day ids share the driver-scoped shape of session ids; `b000` is their namespace. */
 export function dayUuid(driverN: number, dayN: number): string {
   return `dd000000-${pad(driverN, 4)}-4000-b000-${pad(dayN, 12)}`;
+}
+/** Focus items: `c000`, keyed by the item's number WITHIN its driver. */
+export function focusItemUuid(driverN: number, itemN: number): string {
+  return `dd000000-${pad(driverN, 4)}-4000-c000-${pad(itemN, 12)}`;
+}
+/**
+ * Assessments: `d0II`, where II is the ITEM number, and the final node packs
+ * the assessment's session coordinate as `DDDDDDSSSSSS` — six digits of day
+ * index then six of session-within-day.
+ *
+ * The item number rides in the node-4 slot because the final node is already
+ * spent on the coordinate, and it has to be in the id somewhere: the DB is
+ * UNIQUE on (focus_item_id, session_id), so two items assessed at the SAME
+ * session are legal rows that must not share an id. Two digits is the whole
+ * budget that slot has, which is why the guard below is not decoration.
+ */
+export function assessmentUuid(
+  driverN: number,
+  itemN: number,
+  dayIdx: number,
+  sessionIdx: number,
+): string {
+  if (itemN > 99) {
+    throw new Error(
+      `assessmentUuid: item number ${itemN} does not fit the two digits reserved for it — ` +
+      `widen the packing rather than emitting a malformed uuid.`,
+    );
+  }
+  return `dd000000-${pad(driverN, 4)}-4000-d0${pad(itemN, 2)}-${pad(dayIdx, 6)}${pad(sessionIdx, 6)}`;
+}
+/** One seeded summary per driver at most, so the ordinal is a constant. */
+export function summaryUuid(driverN: number): string {
+  return `dd000000-${pad(driverN, 4)}-4000-e000-000000000001`;
 }
 
 /**
@@ -89,6 +133,14 @@ const sqlText = (s: string | undefined) =>
   s === undefined ? 'NULL' : `'${s.replace(/'/g, "''")}'`;
 
 /**
+ * A uuid[] literal. Explicitly cast, because `ARRAY[]` on its own has no
+ * element type Postgres can infer and the empty case is reachable — a day whose
+ * focus items were never assessed has no informing assessment ids at all.
+ */
+const uuidArray = (ids: string[]) =>
+  `ARRAY[${ids.map(id => `'${id}'`).join(', ')}]::uuid[]`;
+
+/**
  * ISO start of a day's FIRST session — the timestamp track_days.date is derived
  * from.
  *
@@ -105,6 +157,151 @@ const sqlText = (s: string | undefined) =>
  */
 export function dayStartIso(day: ScenarioDay, now: Date): string {
   return weekendDate(now, day.weeksAgo, day.day, day.sessions[0].hourUtc);
+}
+
+/**
+ * Every flattened session of a scenario carrying the two things the rest of
+ * this file addresses it by: the id it is seeded under and the timestamp it is
+ * seeded at.
+ *
+ * One derivation, used by the session INSERTs, the focus/assessment INSERTs and
+ * the summary's prompt_context alike. A second one would let an assessment
+ * anchor to a session id the sessions block never wrote, which no test would
+ * catch until the FK rejected it in the prod SQL editor.
+ */
+function seededSessions(s: Scenario, now: Date) {
+  return scenarioSessions(s).map(({ day, dayIdx, session }, i) => ({
+    id: sessionUuid(s.n, i + 1),
+    iso: weekendDate(now, day.weeksAgo, day.day, session.hourUtc),
+    day,
+    dayIdx,
+    session,
+  }));
+}
+
+/**
+ * The flat index a (day, session-within-day) coordinate names — through
+ * scenarioSessions, so the coordinate and the id it resolves to are read off
+ * the SAME walk the sessions were emitted from.
+ *
+ * Throws on a coordinate the cast does not have. That is not belt-and-braces:
+ * an out-of-range index would otherwise emit an assessment against `undefined`,
+ * and the DB's UNIQUE (focus_item_id, session_id) — which the plan leans on to
+ * catch scenario typos — only catches DUPLICATES, never a reference into
+ * nowhere.
+ */
+function refIndex(s: Scenario, ref: ScenarioSessionRef): number {
+  const target = s.days[ref.dayIdx]?.sessions[ref.sessionIdx];
+  const i = target === undefined
+    ? -1
+    : scenarioSessions(s).findIndex(x => x.session === target);
+  if (i === -1) {
+    throw new Error(
+      `${s.name}: focus reference names day ${ref.dayIdx} session ${ref.sessionIdx}, ` +
+      `which the cast does not have.`,
+    );
+  }
+  return i;
+}
+
+/**
+ * A focus item's `created_at`.
+ *
+ * Emitted EXPLICITLY rather than left to the column default, for two reasons
+ * that both bite:
+ *
+ *  - `now()` is refresh time. focusItemsForSession asks whether a NULL-origin
+ *    item's created_at is on or before the day's date, so an item defaulted to
+ *    today is in play at no past session — Ava's null-origin item would be
+ *    evidence for nothing, on every day the demo has.
+ *  - prompt_context is assembled HERE, at generate time, and the DB stamps the
+ *    row at apply time. Anything left to a default makes the snapshot describe
+ *    a row that does not exist yet.
+ *
+ * The origin session's own timestamp when there is an origin ("created after
+ * that session"); otherwise the driver's first seeded session, which is the
+ * earliest instant the item could honestly predate.
+ */
+function focusItemCreatedAtIso(s: Scenario, item: ScenarioFocusItem, now: Date): string {
+  const flat = seededSessions(s, now);
+  return item.origin === null ? flat[0].iso : flat[refIndex(s, item.origin)].iso;
+}
+
+/**
+ * The core's INPUT for one of a scenario's days, assembled from seeded ids and
+ * timestamps only — the adapter `getDaySummaryInputs` is, minus the database.
+ *
+ * Exported so the tests can run the core over it themselves and compare against
+ * the JSON that actually landed in the emitted INSERT.
+ *
+ * `coachingNotes` is empty because the seed writes no `coaching_notes` rows —
+ * and the ordered clear does not delete any either, so seeding them would
+ * duplicate on every refresh. An empty array is the truth about the seeded day,
+ * and the prompt states it plainly rather than padding.
+ */
+export function daySummaryInputFor(s: Scenario, dayIdx: number, now: Date): DaySummaryInput {
+  const flat = seededSessions(s, now);
+  const day = s.days[dayIdx];
+
+  const focusItems = s.focusItems.map(item => ({
+    id: focusItemUuid(s.n, item.n),
+    text: item.text,
+    status: item.status,
+    created_at: focusItemCreatedAtIso(s, item, now),
+    created_after_session_id: item.origin === null ? null : flat[refIndex(s, item.origin)].id,
+    focus_item_assessments: item.assessments.map(a => {
+      const at = flat[refIndex(s, a)];
+      return {
+        id: assessmentUuid(s.n, item.n, a.dayIdx, a.sessionIdx),
+        session_id: at.id,
+        judgment: a.judgment,
+        note: a.note ?? null,
+        created_at: at.iso,
+      };
+    }),
+  }));
+
+  // Both lists are the union of what the items REFERENCE, deduped by id —
+  // exactly the `.in(referencedIds)` read getDriverFocus makes, split the same
+  // two ways. Cross-day by design: an item's origin and its judgments live on
+  // whichever days they happened on.
+  const originIds = new Set(
+    s.focusItems.filter(i => i.origin !== null).map(i => flat[refIndex(s, i.origin!)].id),
+  );
+  const assessmentSessionIds = new Set(
+    s.focusItems.flatMap(i => i.assessments.map(a => flat[refIndex(s, a)].id)),
+  );
+
+  return {
+    date: dayDate(dayStartIso(day, now), day.trackName),
+    notes: day.notes ?? null,
+    track: { name: day.trackName },
+    driver: { name: s.name },
+    sessions: flat
+      .filter(x => x.dayIdx === dayIdx)
+      .map(x => ({
+        id: x.id,
+        date: x.iso,
+        best_lap_ms: Math.min(...x.session.lapTimesMs),
+        representativeness: x.session.representativeness ?? null,
+        representativeness_note: x.session.representativenessNote ?? null,
+        laps: x.session.lapTimesMs.map(lap_time_ms => ({ lap_time_ms })),
+      })),
+    focusItems,
+    originSessions: flat
+      .filter(x => originIds.has(x.id))
+      .map(x => ({
+        id: x.id,
+        track_day: {
+          date: dayDate(dayStartIso(x.day, now), x.day.trackName),
+          track: { name: x.day.trackName },
+        },
+      })),
+    assessmentSessions: flat
+      .filter(x => assessmentSessionIds.has(x.id))
+      .map(x => ({ id: x.id, date: x.iso })),
+    coachingNotes: [],
+  };
 }
 
 /** Verify all scenarios trip exactly their expected flags. Throws with a diff on mismatch. */
@@ -237,10 +434,8 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
         `'${dayDate(dayStartIso(day, now), day.trackName)}', ${sqlText(day.notes)});`,
       );
     });
-    sessions.forEach(({ day, dayIdx, session: sess }, i) => {
-      const sId = sessionUuid(s.n, i + 1);
+    seededSessions(s, now).forEach(({ id: sId, iso: date, day, dayIdx, session: sess }) => {
       const tdId = dayUuid(s.n, dayIdx + 1);
-      const date = weekendDate(now, day.weeksAgo, day.day, sess.hourUtc);
       const total = sess.lapTimesMs.reduce((a, b) => a + b, 0);
       const best = Math.min(...sess.lapTimesMs);
       // representativeness is emitted ALWAYS, NULL included, in both the
@@ -256,6 +451,81 @@ export function buildSeedSql(scenarios: Scenario[], coachEmail: string, now: Dat
         `representativeness = EXCLUDED.representativeness, representativeness_note = EXCLUDED.representativeness_note;`,
       );
     });
+  }
+
+  // THE COACHING LOOP. A pass of its own, after every driver's sessions are
+  // written: an item's origin and an assessment's session are plain FKs, and an
+  // item can be anchored to a session on any of its driver's days.
+  //
+  // PLAIN INSERTs, for the same reason the days above are: the ordered clear
+  // deleted every demo focus item and cascaded their assessments, so a
+  // collision here is a real bug. The DB's UNIQUE (focus_item_id, session_id)
+  // is doing real work in this block — two assessments written at one session
+  // for one item is a scenario typo, and it aborts the refresh instead of
+  // silently keeping whichever the generator emitted last.
+  //
+  // created_at/updated_at are written EXPLICITLY and identically. created_at
+  // because a default would stamp refresh time (see focusItemCreatedAtIso);
+  // updated_at to match it, because the assessments table comment claims
+  // "updated_at > created_at marks a corrected cell" and a defaulted updated_at
+  // beside a backdated created_at would mark every seeded judgment corrected.
+  const withFocus = scenarios.filter(s => s.focusItems.length > 0);
+  if (withFocus.length > 0) {
+    lines.push(``);
+    lines.push(`-- Focus items and their assessment trails.`);
+  }
+  for (const s of withFocus) {
+    const flat = seededSessions(s, now);
+    for (const item of s.focusItems) {
+      const createdAt = focusItemCreatedAtIso(s, item, now);
+      const originId = item.origin === null
+        ? 'NULL'
+        : `'${flat[refIndex(s, item.origin)].id}'`;
+      lines.push(
+        `INSERT INTO focus_items (id, driver_id, text, status, created_after_session_id, created_at, updated_at) VALUES ` +
+        `('${focusItemUuid(s.n, item.n)}', '${driverUuid(s.n)}', ${sqlText(item.text)}, ${sqlText(item.status)}, ` +
+        `${originId}, '${createdAt}', '${createdAt}');`,
+      );
+      for (const a of item.assessments) {
+        const at = flat[refIndex(s, a)];
+        lines.push(
+          `INSERT INTO focus_item_assessments (id, focus_item_id, session_id, judgment, note, created_at, updated_at) VALUES ` +
+          `('${assessmentUuid(s.n, item.n, a.dayIdx, a.sessionIdx)}', '${focusItemUuid(s.n, item.n)}', '${at.id}', ` +
+          `${sqlText(a.judgment)}, ${sqlText(a.note)}, '${at.iso}', '${at.iso}');`,
+        );
+      }
+    }
+  }
+
+  // THE SEEDED DAY SUMMARY — one approved row on the driver's LATEST day.
+  //
+  // prompt_context and the two informing arrays come from the app's own core
+  // (assembleDaySummaryContext / informingIdsFrom) over the ids this script has
+  // just emitted, so every uuid in them resolves to a row in this same file by
+  // construction. Hand-writing them would produce a row whose provenance
+  // describes a generation that never could have happened.
+  //
+  // approved_at is now(), NOT a backdated timestamp. updated_at defaults to
+  // now() in the same statement, and the day page lights "Edited after
+  // approval" when updated_at > approved_at — backdating would light that chip
+  // on every seeded row the moment it was inserted.
+  //
+  // model is 'seed' by the column's own comment: the row never claims a
+  // generation that did not run.
+  for (const s of scenarios) {
+    if (!s.summary) continue;
+    const dayIdx = s.days.length - 1;
+    const ctx = assembleDaySummaryContext(daySummaryInputFor(s, dayIdx, now));
+    const { sessionIds, assessmentIds } = informingIdsFrom(ctx);
+    lines.push(``);
+    lines.push(`-- ${s.name} — approved day summary for the latest day.`);
+    lines.push(
+      `INSERT INTO day_summaries (id, track_day_id, status, draft_text, final_text, prompt_context, model, informing_session_ids, informing_assessment_ids, approved_by, approved_at) VALUES ` +
+      `('${summaryUuid(s.n)}', '${dayUuid(s.n, dayIdx + 1)}', 'approved', ` +
+      `${sqlText(s.summary.draftText)}, ${sqlText(s.summary.finalText)}, ` +
+      `${sqlText(JSON.stringify(ctx))}::jsonb, 'seed', ` +
+      `${uuidArray(sessionIds)}, ${uuidArray(assessmentIds)}, ${coach}, now());`,
+    );
   }
 
   // Refresh laps wholesale: delete-then-insert is simpler than per-lap upserts.

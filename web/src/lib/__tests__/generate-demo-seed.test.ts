@@ -1,11 +1,15 @@
 import { readFileSync } from 'fs';
 import {
+  assessmentUuid,
   buildSeedSql,
   dayDate,
   dayStartIso,
+  daySummaryInputFor,
   dayUuid,
   driverUuid,
+  focusItemUuid,
   sessionUuid,
+  summaryUuid,
   verifyScenarios,
   TRACK_TIMEZONES,
 } from '../../../scripts/seed/generate-demo-seed';
@@ -15,6 +19,7 @@ import {
   weekendDate,
   type Scenario,
 } from '../../../scripts/seed/demo-scenarios';
+import { assembleDaySummaryContext } from '@/lib/day-summaries';
 import {
   GOLDEN_COACH_EMAIL,
   GOLDEN_NOW,
@@ -24,9 +29,10 @@ import {
 
 /**
  * Split a SQL VALUES tuple on TOP-LEVEL commas — commas inside a quoted string
- * ("Hot day, 95F by lunch") or inside a subselect are not separators. Needed
- * because the arity check below is the only thing standing between a dropped
- * column name and a 4-column/5-value INSERT that dies in the prod SQL editor.
+ * ("Hot day, 95F by lunch"), inside a subselect, or inside an array constructor
+ * (`ARRAY['a', 'b']::uuid[]`) are not separators. Needed because the arity check
+ * below is the only thing standing between a dropped column name and a
+ * 4-column/5-value INSERT that dies in the prod SQL editor.
  */
 function splitTopLevel(values: string): string[] {
   const parts: string[] = [];
@@ -43,8 +49,8 @@ function splitTopLevel(values: string): string[] {
       continue;
     }
     if (c === "'") inStr = true;
-    else if (c === '(') depth++;
-    else if (c === ')') depth--;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
     else if (c === ',' && depth === 0) {
       parts.push(values.slice(start, i).trim());
       start = i + 1;
@@ -82,8 +88,70 @@ function valuesOf(line: string): string[] {
   return splitTopLevel(line.slice(start, i));
 }
 
+/**
+ * Top-level statements — split on semicolons OUTSIDE a string literal.
+ *
+ * The line-oriented helpers above stopped being enough at Task 7: a seeded
+ * day_summaries row carries a five-section draft_text, so its INSERT spans
+ * lines. Every checked-in assertion about "each single-row INSERT" has to see
+ * it, and a line filter silently would not — which is a whole statement's worth
+ * of columns going unchecked while the suite stays green.
+ *
+ * The dollar-quoted guard block gets chopped into fragments by this; that is
+ * harmless, because every caller filters for fragments starting `INSERT INTO `.
+ * Leading blank and `--` comment lines are dropped so those filters see the
+ * statement and not the section header the generator prints above it.
+ */
+function statementsOf(sql: string): string[] {
+  const out: string[] = [];
+  let inStr = false;
+  let start = 0;
+  const push = (raw: string) => {
+    const parts = raw.split('\n');
+    let i = 0;
+    while (i < parts.length && (parts[i].trim() === '' || parts[i].trim().startsWith('--'))) i++;
+    const body = parts.slice(i).join('\n');
+    if (body !== '') out.push(body);
+  };
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (inStr) {
+      if (c === "'") {
+        if (sql[i + 1] === "'") i++;
+        else inStr = false;
+      }
+      continue;
+    }
+    // `--` runs to end of line and the lexer takes it whole, so an apostrophe
+    // in a section header ("the import route's keys-only upsert") is not a
+    // string delimiter. Not skipping them desynchronizes `inStr` for the whole
+    // rest of the file — which looks like "there are no INSERTs after the
+    // first comment", not like an error.
+    if (c === '-' && sql[i + 1] === '-') {
+      const nl = sql.indexOf('\n', i);
+      i = nl === -1 ? sql.length : nl;
+    } else if (c === "'") inStr = true;
+    else if (c === ';') {
+      push(sql.slice(start, i + 1).trim());
+      start = i + 1;
+    }
+  }
+  return out;
+}
+
 /** Strip the surrounding quotes off a SQL string literal, undoubling apostrophes. */
 const unquote = (v: string) => v.slice(1, -1).replace(/''/g, "'");
+
+/** The uuids inside an `ARRAY['a', 'b']::uuid[]` literal. */
+const uuidArrayValues = (v: string): string[] => {
+  // Anchored on the WHOLE literal: the cast ends in `[]` too, so a lastIndexOf(']')
+  // would take the array's own bracket to be the cast's and drag `']::uuid` into
+  // the final id.
+  const m = v.match(/^ARRAY\[(.*)\]::uuid\[\]$/);
+  expect(m).not.toBeNull();
+  const inner = m![1];
+  return inner === '' ? [] : inner.split(', ').map(unquote);
+};
 
 describe('uuid helpers', () => {
   it('are stable and namespaced', () => {
@@ -94,6 +162,33 @@ describe('uuid helpers', () => {
   it('gives days their own namespace, never colliding with a session id', () => {
     expect(dayUuid(2, 3)).toBe('dd000000-0002-4000-b000-000000000003');
     expect(dayUuid(2, 3)).not.toBe(sessionUuid(2, 3));
+  });
+
+  it('gives focus items, assessments and summaries their own namespaces too', () => {
+    expect(focusItemUuid(2, 3)).toBe('dd000000-0002-4000-c000-000000000003');
+    expect(assessmentUuid(2, 3, 4, 5)).toBe('dd000000-0002-4000-d003-000004000005');
+    expect(summaryUuid(2)).toBe('dd000000-0002-4000-e000-000000000001');
+    expect(
+      new Set([focusItemUuid(2, 3), assessmentUuid(2, 3, 0, 0), summaryUuid(2), dayUuid(2, 3), sessionUuid(2, 3)]).size,
+    ).toBe(5);
+  });
+
+  it('keeps assessment ids distinct per item, per day AND per session-in-day', () => {
+    // The DB is UNIQUE on (focus_item_id, session_id), so two items assessed at
+    // one session are legal rows — and (day 1, session 0) vs (day 0, session 1)
+    // are different sessions. A packing that collided on either would emit one
+    // id twice and abort the refresh on the primary key.
+    expect(
+      new Set([
+        assessmentUuid(1, 1, 0, 1),
+        assessmentUuid(1, 2, 0, 1),
+        assessmentUuid(1, 1, 1, 0),
+      ]).size,
+    ).toBe(3);
+  });
+
+  it('refuses an item number that does not fit its two digits', () => {
+    expect(() => assessmentUuid(1, 100, 0, 0)).toThrow(/malformed uuid/);
   });
 });
 
@@ -193,6 +288,9 @@ describe('buildSeedSql', () => {
   const dayInserts = lines.filter(l => l.startsWith('INSERT INTO track_days'));
   const sessionInserts = lines.filter(l => l.startsWith('INSERT INTO sessions'));
   const driverInserts = lines.filter(l => l.startsWith('INSERT INTO drivers'));
+  const focusInserts = lines.filter(l => l.startsWith('INSERT INTO focus_items'));
+  const assessmentInserts = lines.filter(l => l.startsWith('INSERT INTO focus_item_assessments'));
+  const summaryInserts = statementsOf(sql).filter(st => st.startsWith('INSERT INTO day_summaries'));
   const lineIndex = (needle: string) => {
     const i = lines.findIndex(l => l.includes(needle));
     expect(i).toBeGreaterThan(-1);
@@ -272,12 +370,21 @@ describe('buildSeedSql', () => {
   });
 
   it('gives every single-row INSERT the same number of values as column names', () => {
-    const inserts = lines.filter(l => l.startsWith('INSERT INTO ') && l.includes(' VALUES ('));
+    // Over STATEMENTS, not lines: the day_summaries INSERT carries a
+    // multi-line draft_text, and a line filter would skip the one statement
+    // with the most columns in the file.
+    const inserts = statementsOf(sql).filter(
+      st => st.startsWith('INSERT INTO ') && st.includes(' VALUES ('),
+    );
     expect(inserts.length).toBeGreaterThan(0);
-    for (const line of inserts) {
-      const cols = columnsOf(line);
-      expect({ table: line.slice(12, line.indexOf(' (')), n: valuesOf(line).length })
-        .toEqual({ table: line.slice(12, line.indexOf(' (')), n: cols.length });
+    const tables = new Set(inserts.map(st => st.slice(12, st.indexOf(' ('))));
+    expect(tables).toEqual(
+      new Set(['drivers', 'driver_profiles', 'track_days', 'sessions', 'focus_items', 'focus_item_assessments', 'day_summaries']),
+    );
+    for (const st of inserts) {
+      const cols = columnsOf(st);
+      expect({ table: st.slice(12, st.indexOf(' (')), n: valuesOf(st).length })
+        .toEqual({ table: st.slice(12, st.indexOf(' (')), n: cols.length });
     }
   });
 
@@ -575,6 +682,326 @@ describe('buildSeedSql', () => {
     });
   });
 
+  describe('the coaching loop', () => {
+    /** The ids the sessions block actually wrote, read off the artifact. */
+    const insertedSessionIds = new Set(sessionInserts.map(l => unquote(valuesOf(l)[0])));
+
+    it('emits one focus_items INSERT per scenario item, and one per assessment', () => {
+      expect(focusInserts).toHaveLength(
+        SCENARIOS.reduce((n, s) => n + s.focusItems.length, 0),
+      );
+      expect(assessmentInserts).toHaveLength(
+        SCENARIOS.reduce((n, s) => n + s.focusItems.reduce((m, i) => m + i.assessments.length, 0), 0),
+      );
+      // Both are non-trivially non-empty: a cast that lost its focus trail
+      // would otherwise satisfy the two counts above.
+      expect(focusInserts.length).toBeGreaterThan(3);
+      expect(assessmentInserts.length).toBeGreaterThan(5);
+    });
+
+    it('carries every item s text, status and origin, NULL origin included', () => {
+      for (const s of SCENARIOS) {
+        for (const item of s.focusItems) {
+          const line = focusInserts.find(l => l.includes(`'${focusItemUuid(s.n, item.n)}'`))!;
+          expect(line).toBeDefined();
+          const cols = columnsOf(line);
+          const vals = valuesOf(line);
+          const origin = vals[cols.indexOf('created_after_session_id')];
+          expect({
+            driver: unquote(vals[cols.indexOf('driver_id')]),
+            text: unquote(vals[cols.indexOf('text')]),
+            status: unquote(vals[cols.indexOf('status')]),
+            hasOrigin: origin !== 'NULL',
+          }).toEqual({
+            driver: driverUuid(s.n),
+            text: item.text,
+            status: item.status,
+            hasOrigin: item.origin !== null,
+          });
+          if (origin !== 'NULL') expect(insertedSessionIds.has(unquote(origin))).toBe(true);
+        }
+      }
+    });
+
+    it('seeds a NULL-origin item — "added outside a session" is a real state', () => {
+      const nulls = focusInserts.filter(
+        l => valuesOf(l)[columnsOf(l).indexOf('created_after_session_id')] === 'NULL',
+      );
+      expect(nulls.length).toBeGreaterThan(0);
+    });
+
+    it('anchors every assessment to its item and to a session that was inserted', () => {
+      for (const s of SCENARIOS) {
+        for (const item of s.focusItems) {
+          for (const a of item.assessments) {
+            const id = assessmentUuid(s.n, item.n, a.dayIdx, a.sessionIdx);
+            const line = assessmentInserts.find(l => l.includes(`'${id}'`))!;
+            expect(line).toBeDefined();
+            const cols = columnsOf(line);
+            const vals = valuesOf(line);
+            const note = vals[cols.indexOf('note')];
+            expect({
+              item: unquote(vals[cols.indexOf('focus_item_id')]),
+              judgment: unquote(vals[cols.indexOf('judgment')]),
+              note: note === 'NULL' ? undefined : unquote(note),
+              sessionSeeded: insertedSessionIds.has(unquote(vals[cols.indexOf('session_id')])),
+            }).toEqual({
+              item: focusItemUuid(s.n, item.n),
+              judgment: a.judgment,
+              note: a.note,
+              sessionSeeded: true,
+            });
+          }
+        }
+      }
+    });
+
+    it('never writes two assessments for one (item, session) — the DB s unique cell', () => {
+      const cells = assessmentInserts.map(l => {
+        const cols = columnsOf(l);
+        const vals = valuesOf(l);
+        return `${vals[cols.indexOf('focus_item_id')]}/${vals[cols.indexOf('session_id')]}`;
+      });
+      expect(new Set(cells).size).toBe(cells.length);
+      const ids = assessmentInserts.map(l => valuesOf(l)[0]);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('stamps created_at explicitly and equal to updated_at', () => {
+      // A defaulted created_at is refresh time, which puts a NULL-origin item
+      // out of play at every past session; a defaulted updated_at beside a
+      // backdated created_at marks every seeded judgment "corrected".
+      for (const line of [...focusInserts, ...assessmentInserts]) {
+        const cols = columnsOf(line);
+        const vals = valuesOf(line);
+        const created = vals[cols.indexOf('created_at')];
+        expect(created).not.toBe('now()');
+        expect(unquote(created)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(vals[cols.indexOf('updated_at')]).toBe(created);
+      }
+    });
+
+    it('dates each item by its ORIGIN session, and a NULL-origin one by the driver s first', () => {
+      // created_at is what decides which sessions an item is in play for, so
+      // dating one off the wrong session moves it between panels without
+      // changing anything a reader would look at.
+      const sessionDate = new Map(
+        sessionInserts.map(l => {
+          const cols = columnsOf(l);
+          const vals = valuesOf(l);
+          return [unquote(vals[cols.indexOf('id')]), unquote(vals[cols.indexOf('date')])];
+        }),
+      );
+      for (const s of SCENARIOS) {
+        for (const item of s.focusItems) {
+          const line = focusInserts.find(l => l.includes(`'${focusItemUuid(s.n, item.n)}'`))!;
+          const cols = columnsOf(line);
+          const vals = valuesOf(line);
+          const origin = vals[cols.indexOf('created_after_session_id')];
+          // No origin session to date it from, so it is dated from the driver's
+          // first — early enough to be in play at every session the demo shows.
+          const datedFrom = origin === 'NULL' ? sessionUuid(s.n, 1) : unquote(origin);
+          expect(unquote(vals[cols.indexOf('created_at')])).toBe(sessionDate.get(datedFrom));
+        }
+      }
+    });
+
+    it('emits the whole loop AFTER the sessions it references and with NO ON CONFLICT', () => {
+      const firstFocus = lines.indexOf(focusInserts[0]);
+      expect(firstFocus).toBeGreaterThan(lines.lastIndexOf(sessionInserts[sessionInserts.length - 1]));
+      for (const line of [...focusInserts, ...assessmentInserts]) {
+        expect(line).not.toContain('ON CONFLICT');
+      }
+      // ...and the ordered clear dropped them first, which is what licenses that.
+      expect(lineIndex('DELETE FROM focus_items WHERE driver_id IN')).toBeLessThan(firstFocus);
+    });
+
+    it('gives Jordan and Sam NO focus items — the controls stay controls', () => {
+      for (const name of ['Jordan Lee', 'Sam Whitaker']) {
+        const s = SCENARIOS.find(x => x.name === name)!;
+        expect(s.focusItems).toEqual([]);
+        for (const line of [...focusInserts, ...assessmentInserts]) {
+          expect(line).not.toContain(`'${driverUuid(s.n)}'`);
+          expect(line).not.toContain(`'${focusItemUuid(s.n, 1)}'`);
+        }
+      }
+    });
+  });
+
+  describe('the seeded day summary', () => {
+    const elena = SCENARIOS.find(s => s.name === 'Elena Ross')!;
+    const summary = summaryInserts[0];
+    const cols = summary ? columnsOf(summary) : [];
+    const vals = summary ? valuesOf(summary) : [];
+    const value = (col: string) => vals[cols.indexOf(col)];
+
+    it('emits exactly one, on the driver s LATEST day', () => {
+      expect(summaryInserts).toHaveLength(1);
+      expect(SCENARIOS.filter(s => s.summary)).toHaveLength(1);
+      expect(unquote(value('id'))).toBe(summaryUuid(elena.n));
+      expect(unquote(value('track_day_id'))).toBe(dayUuid(elena.n, elena.days.length));
+    });
+
+    it('is inserted after its day, and after the assessments it cites', () => {
+      const start = sql.indexOf(summary);
+      expect(start).toBeGreaterThan(
+        sql.indexOf(`INSERT INTO track_days (id, driver_id, track_id, date, notes) VALUES ('${dayUuid(elena.n, elena.days.length)}'`),
+      );
+      expect(start).toBeGreaterThan(sql.lastIndexOf('INSERT INTO focus_item_assessments'));
+    });
+
+    it("records model 'seed' — the row never claims a generation that did not run", () => {
+      expect(value('model')).toBe("'seed'");
+    });
+
+    it('is born approved, attributed by the coach EMAIL subquery and stamped now()', () => {
+      expect(value('status')).toBe("'approved'");
+      expect(value('approved_by')).toBe("(SELECT id FROM coaches WHERE email = 'coach@example.com')");
+      // NOT a backdated literal: updated_at defaults to now() in the same
+      // statement, and the day page lights "Edited after approval" the moment
+      // updated_at > approved_at.
+      expect(value('approved_at')).toBe('now()');
+    });
+
+    it('carries a final_text that differs from draft_text by exactly one sentence', () => {
+      const draft = unquote(value('draft_text'));
+      const final = unquote(value('final_text'));
+      expect(draft).toBe(elena.summary!.draftText);
+      expect(final).toBe(elena.summary!.finalText);
+      expect(final).not.toBe(draft);
+      const differing = draft
+        .split('\n\n')
+        .filter((section, i) => section !== final.split('\n\n')[i]);
+      expect(differing).toHaveLength(1);
+      expect(differing[0].startsWith('## Day overview')).toBe(true);
+    });
+
+    it('writes five sections that match the prompt s own headings, in order', () => {
+      const headings = unquote(value('draft_text')).split('\n').filter(l => l.startsWith('## '));
+      expect(headings).toEqual([
+        '## Day overview',
+        '## Coaching progression',
+        '## Important context',
+        '## Strengths demonstrated',
+        '## Carry-forward',
+      ]);
+    });
+
+    it('stores prompt_context as jsonb that parses to the CORE s own output', () => {
+      const raw = value('prompt_context');
+      expect(raw.endsWith('::jsonb')).toBe(true);
+      const parsed = JSON.parse(unquote(raw.slice(0, -'::jsonb'.length)));
+      // The core, run here over the same scenario input — not the generator's
+      // copy of the answer. This is what proves the JSON survived BOTH escaping
+      // layers (JSON string, then SQL string literal) intact.
+      expect(parsed).toEqual(
+        assembleDaySummaryContext(daySummaryInputFor(elena, elena.days.length - 1, now)),
+      );
+      // ...and that it is a real context, not an empty object that deep-equals
+      // an equally empty expectation.
+      expect(parsed.day.driverName).toBe('Elena Ross');
+      expect(parsed.sessions).toHaveLength(4);
+      expect(parsed.focusItems.length).toBeGreaterThan(1);
+    });
+
+    /**
+     * The deep-equal above cannot see a bug INSIDE daySummaryInputFor: it builds
+     * both sides from that one function, so a wrong input is wrong identically
+     * twice and the comparison still passes. These read the emitted context
+     * against the scenario and the sessions block instead.
+     */
+    it('describes the day itself, independently of the input builder', () => {
+      const parsed = JSON.parse(
+        unquote(value('prompt_context').slice(0, -'::jsonb'.length)),
+      );
+      const latest = elena.days[elena.days.length - 1];
+      expect(parsed.day.trackName).toBe(latest.trackName);
+      expect(parsed.day.notes).toBe(latest.notes);
+      expect(parsed.day.sessionCount).toBe(latest.sessions.length);
+      expect(parsed.sessions.map((x: { label: string }) => x.label)).toEqual([
+        'Session 1', 'Session 2', 'Session 3', 'Session 4',
+      ]);
+      expect(parsed.sessions.map((x: { bestLapMs: number }) => x.bestLapMs)).toEqual(
+        latest.sessions.map(x => Math.min(...x.lapTimesMs)),
+      );
+      // Every item the driver carries reaches the prompt, and each one's origin
+      // label is dated by the day the item was actually created on.
+      expect(parsed.focusItems).toHaveLength(elena.focusItems.length);
+      for (const item of elena.focusItems) {
+        const emitted = parsed.focusItems.find((x: { text: string }) => x.text === item.text);
+        expect(emitted).toBeDefined();
+        const originDay = item.origin === null ? null : elena.days[item.origin.dayIdx];
+        expect(emitted.origin).toBe(
+          originDay === null
+            ? null
+            : `from ${originDay.trackName}, ${dayDate(dayStartIso(originDay, now), originDay.trackName)}`,
+        );
+      }
+    });
+
+    it('states plainly that there are no coaching notes, rather than inventing them', () => {
+      // coaching_notes is NOT in Task 6's ordered clear, so seeding notes would
+      // duplicate them on every refresh. The seeded day genuinely has none, and
+      // the prompt has to say so — a faked note here is a claim about a row that
+      // does not exist.
+      const parsed = JSON.parse(
+        unquote(value('prompt_context').slice(0, -'::jsonb'.length)),
+      );
+      expect(parsed.coachingNotes).toEqual([]);
+      expect(sql).not.toContain('INSERT INTO coaching_notes');
+    });
+
+    it('snapshots the cross-day carry-in the demo exists to show', () => {
+      const parsed = JSON.parse(
+        unquote(value('prompt_context').slice(0, -'::jsonb'.length)),
+      );
+      const carried = parsed.focusItems.find((i: { status: string }) => i.status === 'achieved');
+      expect(carried.assessments.map((a: { judgment: string }) => a.judgment)).toEqual([
+        'keep_working', 'improved', 'improved',
+      ]);
+      // The first two were given on OTHER days, and the context says so rather
+      // than borrowing this day's numbering for them.
+      expect(carried.assessments.map((a: { sessionLabel: string }) => a.sessionLabel)).toEqual([
+        'a session on another day (1 of 2)',
+        'a session on another day (2 of 2)',
+        'Session 4',
+      ]);
+    });
+
+    it('records informing ids that every one resolve to a row inserted EARLIER', () => {
+      const start = sql.indexOf(summary);
+      const sessionIds = uuidArrayValues(value('informing_session_ids'));
+      const assessmentIds = uuidArrayValues(value('informing_assessment_ids'));
+      expect(sessionIds.length).toBeGreaterThan(0);
+      expect(assessmentIds.length).toBeGreaterThan(0);
+
+      const insertedSessionIds = new Set(sessionInserts.map(l => unquote(valuesOf(l)[0])));
+      const insertedAssessmentIds = new Set(assessmentInserts.map(l => unquote(valuesOf(l)[0])));
+      for (const id of sessionIds) {
+        expect({ id, inserted: insertedSessionIds.has(id) }).toEqual({ id, inserted: true });
+        expect(sql.indexOf(`'${id}'`)).toBeLessThan(start);
+      }
+      for (const id of assessmentIds) {
+        expect({ id, inserted: insertedAssessmentIds.has(id) }).toEqual({ id, inserted: true });
+        expect(sql.indexOf(`'${id}'`)).toBeLessThan(start);
+      }
+    });
+
+    it('informs from exactly the day s own sessions, in the context s order', () => {
+      const parsed = JSON.parse(
+        unquote(value('prompt_context').slice(0, -'::jsonb'.length)),
+      );
+      expect(uuidArrayValues(value('informing_session_ids'))).toEqual(
+        parsed.sessions.map((s: { id: string }) => s.id),
+      );
+      expect(uuidArrayValues(value('informing_assessment_ids'))).toEqual(
+        parsed.focusItems.flatMap((i: { assessments: Array<{ id: string }> }) =>
+          i.assessments.map(a => a.id),
+        ),
+      );
+    });
+  });
+
   describe('SQL escaping', () => {
     /**
      * Task 7 pours coach prose through this generator — focus-item text,
@@ -609,6 +1036,24 @@ describe('buildSeedSql', () => {
           ],
         },
       ],
+      focusItems: [
+        {
+          n: 1,
+          text: "Don't lift through O'Neil's Bend",
+          status: 'active',
+          origin: null,
+          assessments: [
+            {
+              dayIdx: 0, sessionIdx: 0, judgment: 'keep_working',
+              note: "He's still lifting; it's the car's balance, he says.",
+            },
+          ],
+        },
+      ],
+      summary: {
+        draftText: "## Day overview\nOne session, and the coach's note says it wasn't a timed run.",
+        finalText: "## Day overview\nOne session; the coach's note says it wasn't timed.",
+      },
       expect: { flagKinds: [], baselineState: 'building', ready: false },
     };
 
@@ -668,6 +1113,40 @@ describe('buildSeedSql', () => {
       expect(trickySql).toContain(
         "RAISE EXCEPTION 'Coach % not found — check coaches.email', 'coach.o''malley@example.com';",
       );
+    });
+
+    it('doubles apostrophes in the focus item text and the assessment note', () => {
+      expect(trickySql).toContain("'Don''t lift through O''Neil''s Bend'");
+      expect(trickySql).toContain(
+        "'He''s still lifting; it''s the car''s balance, he says.'",
+      );
+    });
+
+    it('doubles apostrophes in BOTH summary texts', () => {
+      expect(trickySql).toContain(
+        "'## Day overview\nOne session, and the coach''s note says it wasn''t a timed run.'",
+      );
+      expect(trickySql).toContain(
+        "'## Day overview\nOne session; the coach''s note says it wasn''t timed.'",
+      );
+    });
+
+    /**
+     * TWO escaping layers on one value: JSON.stringify, then the SQL literal.
+     * The apostrophes ride inside the JSON — a `"Don't lift"` value whose quote
+     * is not doubled by sqlText closes the literal mid-object and takes the
+     * rest of the statement with it.
+     */
+    it('doubles apostrophes INSIDE the jsonb prompt_context, and it still parses', () => {
+      const stmt = statementsOf(trickySql).find(st => st.startsWith('INSERT INTO day_summaries'))!;
+      const raw = valuesOf(stmt)[columnsOf(stmt).indexOf('prompt_context')];
+      expect(raw).toContain(`Don''t lift through O''Neil''s Bend`);
+      const parsed = JSON.parse(unquote(raw.slice(0, -'::jsonb'.length)));
+      expect(parsed.focusItems[0].text).toBe("Don't lift through O'Neil's Bend");
+      expect(parsed.focusItems[0].assessments[0].note).toBe(
+        "He's still lifting; it's the car's balance, he says.",
+      );
+      expect(parsed.day.trackName).toBe(TRICKY_TRACK);
     });
 
     it('still parses back to the values it was given', () => {

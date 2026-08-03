@@ -144,9 +144,11 @@ describe('day shape', () => {
     }
   });
 
-  it('Sam Whitaker is the control: flat days, no notes, no representativeness flags', () => {
+  it('Sam Whitaker is the control: flat days, no notes, no flags, no focus items', () => {
     const sam = byName('Sam Whitaker');
     expect(sam.days).toHaveLength(3);
+    expect(sam.focusItems).toEqual([]);
+    expect(sam.summary).toBeUndefined();
     for (const day of sam.days) {
       expect(day.notes).toBeUndefined();
       for (const sess of day.sessions) {
@@ -154,6 +156,68 @@ describe('day shape', () => {
         expect(sess.representativenessNote).toBeUndefined();
       }
     }
+  });
+});
+
+describe('the coaching loop the cast carries', () => {
+  const byName = (name: string) => {
+    const s = SCENARIOS.find(x => x.name === name);
+    if (!s) throw new Error(`no scenario ${name}`);
+    return s;
+  };
+
+  it('numbers each driver s items 1..N, and every reference lands on a real session', () => {
+    for (const s of SCENARIOS) {
+      expect(s.focusItems.map(i => i.n)).toEqual(s.focusItems.map((_, i) => i + 1));
+      const refs = s.focusItems.flatMap(item => [
+        ...(item.origin ? [item.origin] : []),
+        ...item.assessments,
+      ]);
+      for (const ref of refs) {
+        expect(s.days[ref.dayIdx]?.sessions[ref.sessionIdx]).toBeDefined();
+      }
+    }
+  });
+
+  it('exercises all four judgments and all the statuses the panel groups on', () => {
+    const items = SCENARIOS.flatMap(s => s.focusItems);
+    expect(new Set(items.flatMap(i => i.assessments.map(a => a.judgment)))).toEqual(
+      new Set(['improved', 'keep_working', 'no_change', 'regressed']),
+    );
+    expect(new Set(items.map(i => i.status))).toEqual(new Set(['active', 'achieved', 'paused']));
+  });
+
+  it('carries at least one NULL-origin item and one apostrophe in coach prose', () => {
+    const items = SCENARIOS.flatMap(s => s.focusItems);
+    expect(items.some(i => i.origin === null)).toBe(true);
+    const prose = items.flatMap(i => [i.text, ...i.assessments.map(a => a.note ?? '')]);
+    expect(prose.some(t => t.includes("'"))).toBe(true);
+  });
+
+  it('gives Elena the cross-day trail that ends achieved, and one item still active', () => {
+    const elena = byName('Elena Ross');
+    const carried = elena.focusItems.find(i => i.status === 'achieved')!;
+    expect(carried.assessments.map(a => a.judgment)).toEqual([
+      'keep_working', 'improved', 'improved',
+    ]);
+    // Assessed on three DIFFERENT days — that is what makes the summary's
+    // "a session on another day" labels reachable at all.
+    expect(new Set(carried.assessments.map(a => a.dayIdx)).size).toBe(3);
+    expect(elena.focusItems.some(i => i.status === 'active')).toBe(true);
+  });
+
+  it('gives Elena — and only Elena — a summary whose final text is a tightened draft', () => {
+    expect(SCENARIOS.filter(s => s.summary).map(s => s.name)).toEqual(['Elena Ross']);
+    const { draftText, finalText } = byName('Elena Ross').summary!;
+    expect(finalText).not.toBe(draftText);
+    expect(finalText.length).toBeLessThan(draftText.length);
+    // The four sections after the overview are untouched — the daylight is one
+    // sentence, not a rewrite.
+    expect(finalText.split('\n\n').slice(1)).toEqual(draftText.split('\n\n').slice(1));
+  });
+
+  it('Jordan Lee stays empty: the no-focus-items rendering check', () => {
+    expect(byName('Jordan Lee').focusItems).toEqual([]);
   });
 
   it('the cast exercises both representativeness flags, and only with a note', () => {

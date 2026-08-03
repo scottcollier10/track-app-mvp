@@ -28,12 +28,67 @@ export interface ScenarioDay {
   notes?: string;        // track_days.notes — coach day scratchpad
 }
 
+/**
+ * A (day, session-within-day) coordinate into a scenario's `days`.
+ *
+ * Coordinates, not flat indices, because that is how the cast reads: "the last
+ * session of the middle day". The generator resolves them through
+ * scenarioSessions — the ONE flattening — and throws on a coordinate the cast
+ * does not have, so a typo here fails the run rather than pointing an
+ * assessment at somebody else's session.
+ */
+export interface ScenarioSessionRef {
+  dayIdx: number;
+  sessionIdx: number;
+}
+
+/** A coach judgment recorded on a focus item at one session. */
+export interface ScenarioAssessment extends ScenarioSessionRef {
+  judgment: 'improved' | 'keep_working' | 'no_change' | 'regressed';
+  note?: string;
+}
+
+/**
+ * One coach-authored focus item and its full assessment trail.
+ *
+ * The text is COACH VOICE and is allowed to be an instruction ("Brake later
+ * into T5"): the coach authors instructions, and the observation-only rule in
+ * docs/plans/2026-08-01-ai-day-summary-design.md binds the AI, not the coach.
+ */
+export interface ScenarioFocusItem {
+  /** 1-based within the driver; drives focusItemUuid. */
+  n: number;
+  text: string;
+  status: 'active' | 'achieved' | 'paused' | 'dropped';
+  /** null = "added outside a session" — focus_items.created_after_session_id NULL. */
+  origin: ScenarioSessionRef | null;
+  assessments: ScenarioAssessment[];
+}
+
+/**
+ * A seeded, coach-approved day summary for the scenario's LATEST day.
+ *
+ * Only the two TEXTS live here. Everything else the row carries —
+ * prompt_context, the informing id arrays — is built by the app's own core at
+ * generate time (see daySummaryInputFor), so the seeded provenance is
+ * real-shaped by construction rather than hand-imitated.
+ */
+export interface ScenarioSummary {
+  draftText: string;
+  /** Identical to draftText except one tightened sentence: the daylight IS the demo. */
+  finalText: string;
+}
+
 export interface Scenario {
   n: number;             // 1-6, drives stable UUIDs later
   name: string;
   email: string;         // must end @trackapp.demo (purge scope)
   experienceLevel: 'beginner' | 'intermediate' | 'advanced';
   days: ScenarioDay[];   // chronological, oldest first
+  /** Required, `[]` for the drivers who deliberately have none. */
+  focusItems: ScenarioFocusItem[];
+  /** Absent = this driver's days carry no seeded summary. */
+  summary?: ScenarioSummary;
   expect: {
     flagKinds: Array<'faded' | 'regressed' | 'off_baseline'>;
     sustained?: boolean;
@@ -78,6 +133,54 @@ export function toStudentHistory(s: Scenario, now: Date): StudentHistory {
   };
 }
 
+/**
+ * Elena's seeded summary, written to the SAME contract the model is held to —
+ * see buildDaySummaryPrompt in src/lib/coaching-prompts.ts, whose five section
+ * headings these are, verbatim.
+ *
+ * OBSERVATION, NEVER PRESCRIPTION. Every claim below is either checkable
+ * against Elena's day-3 laps (best lap 1:27.500 -> 1:26.700 across four
+ * sessions, each quicker than the last), a quotation of a coach-authored focus
+ * item, a coach's own recorded judgment, or the day note. There is not one
+ * sentence telling the driver what to do — a seeded row that failed the review
+ * checklist would be the first thing a reviewer read on the demo day page.
+ *
+ * The two texts differ by ONE sentence, and by construction rather than by
+ * careful copy-pasting: the day-overview line is the only parameter. The
+ * draft/final daylight is the point — it demonstrates that final_text is the
+ * coach's and that the draft is preserved unedited beside it.
+ */
+const elenaSummary = (overview: string) => `## Day overview
+${overview}
+
+## Coaching progression
+"Carry the brake to the apex in the Corkscrew" carried in from the earlier days
+as keep working, was assessed improved on each of the last two, and is now marked
+achieved. "Settle the car before 8A instead of drifting wide on exit" drew a keep
+working in Session 2 and is still active.
+
+## Important context
+Session 2 is flagged partial — a full-course yellow cut it short — so its figures
+describe a shortened run.
+
+## Strengths demonstrated
+Best lap improved at every session of the day, and the coach recorded improvement
+on the Corkscrew item twice.
+
+## Carry-forward
+"Settle the car before 8A instead of drifting wide on exit" is still active. The
+day note records that Elena stopped chasing the entry to 2.`;
+
+const ELENA_SUMMARY: ScenarioSummary = {
+  draftText: elenaSummary(
+    'Four sessions at Laguna Seca, each one quicker than the one before it: the ' +
+    'best lap fell from 1:27.500 in Session 1 to 1:26.700 in Session 4.',
+  ),
+  finalText: elenaSummary(
+    'Four sessions at Laguna Seca, each quicker than the last: 1:27.500 down to 1:26.700.',
+  ),
+};
+
 const THUNDERHILL = 'Thunderhill Raceway';
 const SONOMA = 'Sonoma Raceway';
 const BUTTONWILLOW = 'Buttonwillow Raceway';
@@ -117,6 +220,22 @@ export const SCENARIOS: Scenario[] = [
         ],
       },
     ],
+    // The smallest live trail: one active item, one judgment, given at the very
+    // session that faded.
+    focusItems: [
+      {
+        n: 1,
+        text: 'Look through the Cyclone to the exit curb',
+        status: 'active',
+        origin: { dayIdx: 0, sessionIdx: 0 },
+        assessments: [
+          {
+            dayIdx: 1, sessionIdx: 3, judgment: 'keep_working',
+            note: 'Eyes dropped as the laps piled up.',
+          },
+        ],
+      },
+    ],
     expect: { flagKinds: ['faded'], sustained: false, baselineState: 'ok', ready: false },
   },
   {
@@ -138,6 +257,26 @@ export const SCENARIOS: Scenario[] = [
         sessions: [
           { hourUtc: 17, lapTimesMs: [90800, 90600, 90500, 90900, 90700, 91000, 90600, 90800] },
           { hourUtc: 21, lapTimesMs: [90900, 90700, 90600, 91000, 90800, 91100, 90700, 90900] },
+        ],
+      },
+    ],
+    // The trail agrees with the flag: an item going the wrong way across the
+    // two sessions of the day the analytics calls regressed.
+    focusItems: [
+      {
+        n: 1,
+        text: 'Get back to power earlier out of turn 7',
+        status: 'active',
+        origin: { dayIdx: 0, sessionIdx: 0 },
+        assessments: [
+          {
+            dayIdx: 1, sessionIdx: 0, judgment: 'keep_working',
+            note: 'Still coasting from apex to exit.',
+          },
+          {
+            dayIdx: 1, sessionIdx: 1, judgment: 'regressed',
+            note: 'Later to power than the session before.',
+          },
         ],
       },
     ],
@@ -164,6 +303,32 @@ export const SCENARIOS: Scenario[] = [
           { hourUtc: 17, lapTimesMs: [95150, 95650, 95200, 95600, 95250, 95550, 95300, 95500] },
           { hourUtc: 21, lapTimesMs: [94800, 96400, 95100, 96200, 94900, 96400, 94900, 95100] },
         ],
+      },
+    ],
+    // The two panel edges: a NULL-origin item (added outside a session, so the
+    // panel has no honest "from track, date" to print) and a PAUSED one, which
+    // lands in the collapsed pausedInactive group even though it was assessed.
+    focusItems: [
+      {
+        n: 1,
+        // The apostrophe is deliberate: coach prose carries them, and this is
+        // the string that proves the generator's one quoting path is used.
+        text: "Don't chase the fast lap — run the same line ten times",
+        status: 'active',
+        origin: null,
+        assessments: [
+          {
+            dayIdx: 1, sessionIdx: 1, judgment: 'no_change',
+            note: 'Lap times swung both ways again.',
+          },
+        ],
+      },
+      {
+        n: 2,
+        text: 'Use the full track width on the exit of Sunset',
+        status: 'paused',
+        origin: { dayIdx: 0, sessionIdx: 0 },
+        assessments: [{ dayIdx: 0, sessionIdx: 2, judgment: 'keep_working' }],
       },
     ],
     expect: { flagKinds: ['off_baseline'], baselineState: 'ok', ready: false },
@@ -208,6 +373,43 @@ export const SCENARIOS: Scenario[] = [
         ],
       },
     ],
+    // The end-to-end story, and the only driver with a seeded day summary.
+    // Item 1 is the cross-day carry-in: keep_working on day 1, improved on day
+    // 2, improved again on day 3, resolved achieved — so on the summarized day
+    // its first two judgments render as "a session on another day (n of 2)".
+    // Item 2 is still active, which is what the Carry-forward section restates.
+    focusItems: [
+      {
+        n: 1,
+        text: 'Carry the brake to the apex in the Corkscrew',
+        status: 'achieved',
+        origin: { dayIdx: 0, sessionIdx: 0 },
+        assessments: [
+          {
+            dayIdx: 0, sessionIdx: 3, judgment: 'keep_working',
+            note: 'Still releasing the brake at turn-in.',
+          },
+          { dayIdx: 1, sessionIdx: 1, judgment: 'improved' },
+          {
+            dayIdx: 2, sessionIdx: 3, judgment: 'improved',
+            note: "Held it to the apex every lap — that's the shape we wanted.",
+          },
+        ],
+      },
+      {
+        n: 2,
+        text: 'Settle the car before 8A instead of drifting wide on exit',
+        status: 'active',
+        origin: { dayIdx: 1, sessionIdx: 0 },
+        assessments: [
+          {
+            dayIdx: 2, sessionIdx: 1, judgment: 'keep_working',
+            note: 'Yellow cut the session short; not enough laps to call it.',
+          },
+        ],
+      },
+    ],
+    summary: ELENA_SUMMARY,
     expect: { flagKinds: [], baselineState: 'ok', ready: true },
   },
   {
@@ -225,6 +427,9 @@ export const SCENARIOS: Scenario[] = [
         ],
       },
     ],
+    // No focus items: the empty-panel rendering check rides on the same driver
+    // as the n=1 rendering check.
+    focusItems: [],
     expect: { flagKinds: [], baselineState: 'building', ready: false },
   },
   {
@@ -235,8 +440,8 @@ export const SCENARIOS: Scenario[] = [
     // ready, but comfortably INSIDE the band -> not off_baseline (no reliance
     // on the 0.1s min-delta guard).
     //
-    // Sam carries NO day notes and NO representativeness flags, and Task 7 adds
-    // him no focus items: a control with a focus trail is not a control.
+    // Sam carries NO day notes, NO representativeness flags and NO focus items:
+    // a control with a focus trail is not a control.
     n: 6, name: 'Sam Whitaker', email: 'sam.whitaker@trackapp.demo', experienceLevel: 'advanced',
     days: [
       {
@@ -261,6 +466,7 @@ export const SCENARIOS: Scenario[] = [
         ],
       },
     ],
+    focusItems: [],
     expect: { flagKinds: [], baselineState: 'ok', ready: false },
   },
 ];
