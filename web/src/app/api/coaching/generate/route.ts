@@ -92,10 +92,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Fetch laps
+    // 4. Fetch laps. Two named columns, the two that are consumed: lap_time_ms
+    // feeds the σ gate below, lap_number labels the prompt's lap table. Ordering
+    // by a column does not require selecting it.
     const { data: laps, error: lapsError } = await supabase
       .from('laps')
-      .select('*')
+      .select('lap_number, lap_time_ms')
       .eq('session_id', sessionId)
       .order('lap_number', { ascending: true });
 

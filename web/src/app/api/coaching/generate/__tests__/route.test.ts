@@ -555,6 +555,21 @@ describe('POST /api/coaching/generate', () => {
     ]);
   });
 
+  it('reads the two lap columns it uses, not the row', async () => {
+    // The laps read is the whole reason the driver-profile comment below it can
+    // say this route names its columns everywhere. It used to be `select('*')`,
+    // which made that justification false while it was still load-bearing for
+    // the decision not to reuse getDriverProfile.
+    //
+    // Two columns, because two are consumed: lap_time_ms feeds
+    // validLapTimesMs -> the σ gate, and lap_number labels the prompt's lap
+    // table. Nothing downstream reads another lap field.
+    await POST(makeRequest({ sessionId: 's-2' }));
+
+    const lapSelects = selects.filter((s) => s.table === 'laps');
+    expect(lapSelects).toEqual([{ table: 'laps', columns: 'lap_number, lap_time_ms' }]);
+  });
+
   it('takes its item set from the shared banner function, anchored on the focal session', async () => {
     // item-born-at-s2 was the coach's response TO session 2, not something
     // session 2 tested — and it becomes evidence at the very next session. The
