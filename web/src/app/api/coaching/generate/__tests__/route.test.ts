@@ -11,17 +11,23 @@
  *
  *  1. NO AI TEXT REACHES THE PROMPT. The session rows this route's day context
  *     is assembled from carry `ai_coaching_summary` — this route's own previous
- *     output. The loop-back is closed by the input type's tripwire and by the
- *     adapter projecting field by field; with the real fetch layer in the run,
- *     the assertion below actually exercises that. Mocking the context object
- *     would make it unfalsifiable.
+ *     output. What actually strips it is the context core's explicit output
+ *     projection, backed by the input type's compile-time tripwire, so the
+ *     prompt assertion below cannot fail while that projection stays explicit
+ *     (`@/data/__tests__/day-summaries` says the same of its own). It is kept
+ *     because the rendered prompt is the closest a runtime test gets to the
+ *     thing that matters — the bytes the model is shown. The falsifiable half
+ *     is this route's OWN read: it names the four columns it needs, so the
+ *     column never enters this route's scope to be projected out of.
  *  2. ELIGIBILITY IS THE BANNER'S, ANCHORED ON THE FOCAL SESSION. An item is
  *     never evidence against its own origin session, and it becomes evidence at
  *     the very next one. A route that anchored on the day rather than the
  *     session, or that passed every item id, still renders a plausible prompt.
- *  3. NO WRITE ON A FAILED OR TRUNCATED GENERATION. The write is a destructive
- *     overwrite of `ai_coaching_summary`, so a bad generation that reaches the
- *     update costs the coach the previous good text.
+ *  3. NO WRITE ON A FAILED OR TRUNCATED GENERATION, AND NO 200 ON A FAILED
+ *     WRITE. The write is a destructive overwrite of `ai_coaching_summary`, so
+ *     a bad generation that reaches the update costs the coach the previous
+ *     good text — and a 200 carrying text the column never took tells the coach
+ *     a summary is saved that is not.
  */
 
 import { NextRequest } from 'next/server';
@@ -167,11 +173,20 @@ type QueryResult = { data: unknown; error: unknown };
 
 /** Every payload handed to .update(), in order. */
 let writes: Array<{ table: string; payload: unknown }>;
-/** What awaiting a chain on a given table resolves to. */
+/** The column list every .select() asked for, in order. */
+let selects: Array<{ table: string; columns: string | undefined }>;
+/**
+ * What awaiting a chain resolves to, keyed `table:operation`.
+ *
+ * By operation, not by table: this route READS `sessions` and then WRITES it,
+ * and a map keyed by table alone hands both the same object — so the failed
+ * write is unreachable without breaking the read that has to succeed first to
+ * reach it.
+ */
 let results: Record<string, QueryResult>;
 
 interface QueryBuilder {
-  select: () => QueryBuilder;
+  select: (columns?: string) => QueryBuilder;
   eq: () => QueryBuilder;
   in: () => QueryBuilder;
   order: () => QueryBuilder;
@@ -186,21 +201,26 @@ interface QueryBuilder {
 function makeSupabaseStub(): ReturnType<typeof createServerSupabase> {
   const stub = {
     from(table: string): QueryBuilder {
+      // A chain is one operation; `.update(...).eq(...)` never calls select.
+      let operation = 'select';
       const builder: QueryBuilder = {
-        select: () => builder,
+        select: (columns?: string) => {
+          selects.push({ table, columns });
+          return builder;
+        },
         eq: () => builder,
         in: () => builder,
         order: () => builder,
         single: () => builder,
         update: (payload: unknown) => {
+          operation = 'update';
           writes.push({ table, payload });
           return builder;
         },
         then: (onFulfilled, onRejected) =>
-          Promise.resolve(results[table] ?? { data: null, error: null }).then(
-            onFulfilled,
-            onRejected
-          ),
+          Promise.resolve(
+            results[`${table}:${operation}`] ?? { data: null, error: null }
+          ).then(onFulfilled, onRejected),
       };
       return builder;
     },
@@ -245,8 +265,9 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
 
   writes = [];
+  selects = [];
   results = {
-    sessions: {
+    'sessions:select': {
       data: {
         id: 's-2',
         date: '2026-07-12T18:00:00Z',
@@ -255,12 +276,16 @@ beforeEach(() => {
       },
       error: null,
     },
-    laps: { data: lapRows([...TIGHT_6, 0]), error: null },
-    driver_profiles: {
-      data: { experience_level: 'intermediate', total_sessions: 12 },
+    'sessions:update': { data: null, error: null },
+    'laps:select': { data: lapRows([...TIGHT_6, 0]), error: null },
+    // Not 'intermediate': that was the old hard-coded fallback, and a fixture
+    // equal to the default it replaced passes whether the field is carried
+    // through or invented.
+    'driver_profiles:select': {
+      data: { experience_level: 'novice', total_sessions: 12 },
       error: null,
     },
-    coaching_notes: { data: [], error: null },
+    'coaching_notes:select': { data: [], error: null },
   };
 
   mockGetCurrentCoach.mockResolvedValue(coach);
@@ -282,7 +307,14 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  process.env.ANTHROPIC_API_KEY = originalApiKey;
+  // Deleted, not reassigned: `process.env.X = undefined` stores the STRING
+  // "undefined", which is a configured key as far as anthropicApiKey() is
+  // concerned — an unset environment would leak into later suites as a set one.
+  if (originalApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalApiKey;
+  }
 });
 
 describe('POST /api/coaching/generate', () => {
@@ -300,7 +332,7 @@ describe('POST /api/coaching/generate', () => {
     // Post-P1 a session without a day is corrupt data, not a supported state:
     // there is exactly one prompt for this route and it is day-aware, so there
     // is nothing to fall back to.
-    results.sessions = {
+    results['sessions:select'] = {
       data: {
         id: 's-2',
         date: '2026-07-12T18:00:00Z',
@@ -332,13 +364,24 @@ describe('POST /api/coaching/generate', () => {
     expect(res.status).toBe(500);
     // The named refusal, not the generic catch: without the explicit branch the
     // route dies destructuring null and 500s for a reason nobody can act on.
-    expect(json.error).toContain('Track day not found');
+    expect(json.error).toContain('Track day missing');
+    // And NOT in the 404s' words. This route says "not found" for a session or
+    // laps that genuinely are not there, which a coach can retry past; a caller
+    // (or a coach) reading corruption as that is reading it as recoverable.
+    expect(json.error).not.toContain('not found');
     expect(mockWrapLLMCall).not.toHaveBeenCalled();
     expect(writes).toHaveLength(0);
   });
 
   it('refuses a session that cannot claim consistency, before the model call', async () => {
-    results.laps = { data: lapRows([90000, 90100, 0, null, 90050]), error: null };
+    // SIX rows, FIVE countable. Deliberately a session that CLEARS a raw
+    // `laps.length` gate and fails the countable one — the exact regression
+    // canClaimConsistency exists to prevent (see insights.ts). A fixture that
+    // failed both gates would pass this test either way.
+    results['laps:select'] = {
+      data: lapRows([90000, 90100, 0, 90050, 90020, 90060]),
+      error: null,
+    };
 
     const res = await POST(makeRequest({ sessionId: 's-2' }));
 
@@ -376,7 +419,8 @@ describe('POST /api/coaching/generate', () => {
     // the 0 row is absent and the numbers are as recorded.
     expect(prompt).toContain('Lap 1: 1:30.000');
     expect(prompt).not.toContain('0:00.000');
-    // The driver profile the route reads is passed through, not dropped.
+    // The driver profile the route read, both fields, as recorded.
+    expect(prompt).toContain('Experience level: novice');
     expect(prompt).toContain('Sessions completed: 12');
 
     // The overwrite, and nothing else.
@@ -413,6 +457,19 @@ describe('POST /api/coaching/generate', () => {
     expect(promptSent()).not.toContain('ai_coaching');
   });
 
+  it('never reads ai_coaching_summary in the first place — the sessions read is four named columns', async () => {
+    // The falsifiable half of the property above. `select('*')` on this table
+    // pulls the route's own last generation into its scope, where the only
+    // thing standing between it and the next prompt is that nobody wrote the
+    // line that passes it on. Naming the columns is what makes it absent.
+    await POST(makeRequest({ sessionId: 's-2' }));
+
+    const sessionSelects = selects.filter((s) => s.table === 'sessions');
+    expect(sessionSelects).toEqual([
+      { table: 'sessions', columns: 'id, date, driver_id, track_day_id' },
+    ]);
+  });
+
   it('takes its item set from the shared banner function, anchored on the focal session', async () => {
     // item-born-at-s2 was the coach's response TO session 2, not something
     // session 2 tested — and it becomes evidence at the very next session. The
@@ -435,7 +492,7 @@ describe('POST /api/coaching/generate', () => {
       cost: 0.01,
       latencyMs: 1200,
     });
-    results.sessions = {
+    results['sessions:select'] = {
       data: {
         id: 's-3',
         date: '2026-07-12T21:00:00Z',
@@ -483,6 +540,75 @@ describe('POST /api/coaching/generate', () => {
     const res = await POST(makeRequest({ sessionId: 's-2' }));
 
     expect(res.status).toBe(200);
+    expect(writes).toEqual([
+      { table: 'sessions', payload: { ai_coaching_summary: COACHING_TEXT } },
+    ]);
+  });
+
+  it('tells the model the driver profile is not recorded rather than defaulting it', async () => {
+    // The prompt header promises the model that everything below it is recorded
+    // data or coach-written. A driver with no profile row who arrives as
+    // "intermediate, 0 sessions completed" is a fabricated fact under that
+    // promise — and the model reasons from it, framing an experienced driver's
+    // day as a beginner's.
+    results['driver_profiles:select'] = { data: null, error: null };
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+    const prompt = promptSent();
+
+    expect(res.status).toBe(200);
+    expect(prompt).toContain('Experience level: not recorded');
+    expect(prompt).toContain('Sessions completed: not recorded');
+    expect(prompt).not.toContain('intermediate');
+    expect(prompt).not.toContain('Sessions completed: 0');
+  });
+
+  it('prompts without the profile when its query fails, instead of inventing one', async () => {
+    // A failed read is not knowledge of a beginner. It is also not fatal: the
+    // profile is context, and the day's data — the substance of the prompt —
+    // was already fetched.
+    results['driver_profiles:select'] = {
+      data: null,
+      error: { message: 'driver_profiles query failed' },
+    };
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+
+    expect(res.status).toBe(200);
+    expect(promptSent()).toContain('Experience level: not recorded');
+    expect(promptSent()).not.toContain('intermediate');
+  });
+
+  it('reports a genuinely zero session count as zero, not as unrecorded', async () => {
+    // The other direction: `?? `, not `||`. A driver on their first day HAS a
+    // recorded count and it is 0 — collapsing that into "not recorded" hides a
+    // fact the coach's data does contain.
+    results['driver_profiles:select'] = {
+      data: { experience_level: 'novice', total_sessions: 0 },
+      error: null,
+    };
+
+    await POST(makeRequest({ sessionId: 's-2' }));
+
+    expect(promptSent()).toContain('Sessions completed: 0');
+    expect(promptSent()).not.toContain('Sessions completed: not recorded');
+  });
+
+  it('fails the request when the write fails, rather than reporting a save that did not happen', async () => {
+    // The 200 this used to return told the coach their summary was stored while
+    // the column still held the previous one.
+    results['sessions:update'] = { data: null, error: { message: 'update failed' } };
+
+    const res = await POST(makeRequest({ sessionId: 's-2' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.success).toBe(false);
+    expect(json.error).toContain('Failed to store coaching summary');
+    // The generation itself is not handed back as a consolation prize: a coach
+    // shown text on a failed save has no way to tell it from a saved one.
+    expect(json.coaching).toBeUndefined();
+    // The attempt was real — this is a failed write, not a skipped one.
     expect(writes).toEqual([
       { table: 'sessions', payload: { ai_coaching_summary: COACHING_TEXT } },
     ]);

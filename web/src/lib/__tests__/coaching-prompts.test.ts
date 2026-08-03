@@ -414,8 +414,42 @@ describe('buildSessionCoachingPrompt', () => {
   it('carries the driver profile the coaching route already passed', () => {
     const p = buildSessionCoachingPrompt(args());
     expect(p).toContain('Elena Ross');
-    expect(p).toContain('intermediate');
+    expect(p).toContain('Experience level: intermediate');
     expect(p).toContain('Sessions completed: 12');
+  });
+
+  it('says the profile is not recorded when there is none, rather than defaulting it', () => {
+    // The header two lines above promises the model that everything below is
+    // recorded session data or something the coach wrote. A default —
+    // "intermediate", "0 sessions completed" — is a fabricated fact under that
+    // promise, and one the model reasons from: it frames a 40-session driver's
+    // day as a beginner's.
+    const p = buildSessionCoachingPrompt({ ...args(), driverProfile: null });
+    expect(p).toContain('Experience level: not recorded');
+    expect(p).toContain('Sessions completed: not recorded');
+    expect(p).not.toContain('intermediate');
+    expect(p).not.toContain('Sessions completed: 0');
+  });
+
+  it('marks the null fields of a profile that exists, and only those', () => {
+    // The columns are nullable independently of the row.
+    const p = buildSessionCoachingPrompt({
+      ...args(),
+      driverProfile: { experienceLevel: null, totalSessions: 12 },
+    });
+    expect(p).toContain('Experience level: not recorded');
+    expect(p).toContain('Sessions completed: 12');
+  });
+
+  it('renders a recorded count of zero as zero, not as unrecorded', () => {
+    // `??`, not `||`. A driver on their first day has a recorded count and it
+    // is 0; collapsing that into "not recorded" discards a fact the data holds.
+    const p = buildSessionCoachingPrompt({
+      ...args(),
+      driverProfile: { experienceLevel: 'novice', totalSessions: 0 },
+    });
+    expect(p).toContain('Sessions completed: 0');
+    expect(p).not.toContain('Sessions completed: not recorded');
   });
 
   it('does not contain any ai_coaching text — the input-set property at prompt level', () => {

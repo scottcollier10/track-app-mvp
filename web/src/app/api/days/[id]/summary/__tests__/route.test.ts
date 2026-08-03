@@ -269,7 +269,14 @@ function runTheCallback() {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  process.env.ANTHROPIC_API_KEY = originalApiKey;
+  // Deleted, not reassigned: `process.env.X = undefined` stores the STRING
+  // "undefined", which is a configured key as far as anthropicApiKey() is
+  // concerned — an unset environment would leak into later suites as a set one.
+  if (originalApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalApiKey;
+  }
 });
 
 describe('POST /api/days/[id]/summary', () => {

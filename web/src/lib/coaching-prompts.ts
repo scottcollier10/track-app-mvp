@@ -60,6 +60,24 @@ const NO_ELIGIBLE_ITEMS = 'No focus items are in play for this session.';
 const NO_COUNTABLE_LAPS = 'No countable laps are recorded for this session.';
 
 /**
+ * A driver-profile field the app does not have — no profile row, or the query
+ * for it failed.
+ *
+ * The one marker that is NOT unique on its own, because it renders as the value
+ * half of a labelled line: "Experience level: not recorded" and "Sessions
+ * completed: not recorded" are each unique, and an assertion names the whole
+ * line for exactly that reason.
+ *
+ * It exists because the alternative was a default. The prompt header promises
+ * everything below it is recorded session data or something the coach wrote, so
+ * telling the model an unknown driver is "intermediate" with 0 sessions
+ * completed is a fabricated fact — and it is the kind that reads as a real one:
+ * a driver with 40 sessions rendered as "Sessions completed: 0" invites the
+ * model to frame the whole day as a beginner's.
+ */
+const NOT_RECORDED = 'not recorded';
+
+/**
  * What a coaching note's session is called when the context resolved no name
  * for it. Reachable only if a note was fetched for a session outside the day it
  * is being rendered with — a fetch bug, not a data state — so it names the gap
@@ -309,7 +327,12 @@ export function buildSessionCoachingPrompt(args: {
    * of how this gets snapshotted with it.
    */
   focalLaps: Array<{ lap_number: number; lap_time_ms: number | null }>;
-  driverProfile: { experienceLevel: string; totalSessions: number };
+  /**
+   * The driver's profile row, or null when there is none / the read failed.
+   * Nullable field by field as well, because the columns are: the route passes
+   * what it has and NEVER a default. See NOT_RECORDED.
+   */
+  driverProfile: { experienceLevel: string | null; totalSessions: number | null } | null;
 }): string {
   const { ctx, focalSessionId, eligibleItemIds, focalLaps, driverProfile } = args;
 
@@ -367,8 +390,8 @@ never judge this session with hindsight it did not have.
 
 DRIVER
 Name: ${ctx.day.driverName}
-Experience level: ${driverProfile.experienceLevel}
-Sessions completed: ${driverProfile.totalSessions}
+Experience level: ${driverProfile?.experienceLevel ?? NOT_RECORDED}
+Sessions completed: ${driverProfile?.totalSessions ?? NOT_RECORDED}
 
 ${renderDay(ctx)}
 

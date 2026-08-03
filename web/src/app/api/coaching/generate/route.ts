@@ -151,19 +151,41 @@ export async function POST(request: NextRequest) {
         sessionId,
         trackDayId: session.track_day_id,
       });
+      // "missing", not "not found": the two 404s above are this route's
+      // not-found vocabulary, and a corruption 500 wearing it is a state nobody
+      // can act on told in the words of one they can retry. The wording matches
+      // the log line it will be read next to, and the phrase this route uses
+      // for a benign miss stays exclusively theirs.
       return NextResponse.json(
-        { success: false, error: 'Track day not found for this session — data integrity issue' },
+        { success: false, error: 'Track day missing for this session — data integrity issue' },
         { status: 500 }
       );
     }
     const { ctx, debrief } = inputs;
 
-    // 6. Fetch driver profile
-    const { data: profile } = await supabase
+    // 6. Fetch driver profile. Auxiliary context, not a precondition: a driver
+    // with no profile row is an ordinary state and a failed read is survivable,
+    // so both prompt WITHOUT it rather than 500ing a generation over it.
+    //
+    // What neither may do is DEFAULT. The prompt header promises the model that
+    // everything below it is recorded session data or something the coach
+    // wrote, so "intermediate, 0 sessions completed" for a driver nobody has
+    // profiled is a fabricated fact under a promise that there are none — and
+    // one the model will reason from, framing a 40-session driver's day as a
+    // beginner's. The route hands over what it has, including nothing.
+    const { data: profile, error: profileError } = await supabase
       .from('driver_profiles')
-      .select('*')
+      .select('experience_level, total_sessions')
       .eq('driver_id', session.driver_id)
       .single();
+
+    if (profileError) {
+      console.error('[AI Coaching] Driver profile unavailable', {
+        sessionId,
+        driverId: session.driver_id,
+        error: profileError.message,
+      });
+    }
 
     // 7. Which focus items are evidence for THIS session — through the same
     // function the session page's evidence banner calls, with the focal session
@@ -197,10 +219,12 @@ export async function POST(request: NextRequest) {
       focalSessionId: session.id,
       eligibleItemIds,
       focalLaps: laps,
-      driverProfile: {
-        experienceLevel: profile?.experience_level || 'intermediate',
-        totalSessions: profile?.total_sessions || 0,
-      },
+      driverProfile: profile
+        ? {
+            experienceLevel: profile.experience_level,
+            totalSessions: profile.total_sessions,
+          }
+        : null,
     });
 
     // 9. Call Anthropic API with telemetry
@@ -227,7 +251,15 @@ export async function POST(request: NextRequest) {
       async () => {
         const message = await anthropic.messages.create({
           model: AI_MODEL,
-          max_tokens: 1500,
+          // Raised from 1500 with the day-scoped rewrite: the prompt now
+          // carries every session of the day, the full assessment history of
+          // every eligible item, and the coach notes, so the reply it asks for
+          // grew with it. An overflow is not a degraded answer here — the guard
+          // below throws on it, so the coach gets a 500 and no row — and
+          // retrying a near-deterministic generation overflows again, which
+          // makes headroom the only thing that clears it. Matches the sibling
+          // day summary route, whose prompt is the same size.
+          max_tokens: 2000,
           messages: [
             {
               role: 'user',
@@ -287,12 +319,20 @@ export async function POST(request: NextRequest) {
       .update({ ai_coaching_summary: coachingText })
       .eq('id', sessionId);
 
+    // A failed write is a failed request. This used to log and answer 200 with
+    // the text, which tells the coach their summary is saved when the column
+    // still holds the previous one — they close the page and it is gone, or
+    // worse, they act on text the session page will never show again. The
+    // sibling day-summary route takes the same posture: no partial success.
     if (updateError) {
       console.error('[AI Coaching] Failed to save coaching summary', {
         sessionId,
         error: updateError.message,
       });
-      // Still return the coaching even if DB update failed
+      return NextResponse.json(
+        { success: false, error: 'Failed to store coaching summary' },
+        { status: 500 }
+      );
     }
 
     // Success!
