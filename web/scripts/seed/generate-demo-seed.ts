@@ -54,6 +54,13 @@ export function focusItemUuid(driverN: number, itemN: number): string {
  * UNIQUE on (focus_item_id, session_id), so two items assessed at the SAME
  * session are legal rows that must not share an id. Two digits is the whole
  * budget that slot has, which is why the guard below is not decoration.
+ *
+ * DELIBERATELY NOT RFC 4122: node 4 is the variant field, which the RFC wants in
+ * 8-b, and `c000`/`d0II`/`e000` are none of those. Do not "fix" it — `d0II`
+ * could not be conformant anyway, because that slot is spent on the item number,
+ * and nothing cares: Postgres `uuid` accepts any 32 hex digits, and nothing in
+ * web/src parses a variant out of these ids. Only `a000`/`b000` were ever
+ * variant-shaped, and that was an accident of picking round hex.
  */
 export function assessmentUuid(
   driverN: number,
@@ -166,8 +173,11 @@ export function dayStartIso(day: ScenarioDay, now: Date): string {
  *
  * One derivation, used by the session INSERTs, the focus/assessment INSERTs and
  * the summary's prompt_context alike. A second one would let an assessment
- * anchor to a session id the sessions block never wrote, which no test would
- * catch until the FK rejected it in the prod SQL editor.
+ * anchor to a session id the sessions block never wrote — which the FK would
+ * reject in the prod SQL editor, and which "anchors every assessment to its item
+ * and to a session that was inserted" in generate-demo-seed.test.ts now catches
+ * first, by reading both sides off the emitted artifact rather than off this
+ * function.
  */
 function seededSessions(s: Scenario, now: Date) {
   return scenarioSessions(s).map(({ day, dayIdx, session }, i) => ({
@@ -184,17 +194,22 @@ function seededSessions(s: Scenario, now: Date) {
  * scenarioSessions, so the coordinate and the id it resolves to are read off
  * the SAME walk the sessions were emitted from.
  *
- * Throws on a coordinate the cast does not have. That is not belt-and-braces:
- * an out-of-range index would otherwise emit an assessment against `undefined`,
- * and the DB's UNIQUE (focus_item_id, session_id) — which the plan leans on to
- * catch scenario typos — only catches DUPLICATES, never a reference into
+ * Throws a NAMED error on a coordinate the cast does not have. Nothing gets
+ * emitted either way: every caller immediately reads `.id` or `.iso` off
+ * `flat[i]`, so an out-of-range index already kills the run — on `Cannot read
+ * properties of undefined (reading 'id')`, from a frame that names neither the
+ * driver nor the coordinate. The diagnostic IS the work this guard does: it
+ * says which entry in demo-scenarios.ts to go fix. The DB's UNIQUE
+ * (focus_item_id, session_id) — which the plan leans on to catch scenario typos
+ * — is no help here either; it catches DUPLICATES, never a reference into
  * nowhere.
+ *
+ * `findIndex` needs no `target === undefined` branch ahead of it: no element's
+ * `.session` is `undefined`, so an absent coordinate already answers -1.
  */
 function refIndex(s: Scenario, ref: ScenarioSessionRef): number {
   const target = s.days[ref.dayIdx]?.sessions[ref.sessionIdx];
-  const i = target === undefined
-    ? -1
-    : scenarioSessions(s).findIndex(x => x.session === target);
+  const i = scenarioSessions(s).findIndex(x => x.session === target);
   if (i === -1) {
     throw new Error(
       `${s.name}: focus reference names day ${ref.dayIdx} session ${ref.sessionIdx}, ` +

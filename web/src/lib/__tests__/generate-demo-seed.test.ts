@@ -20,6 +20,8 @@ import {
   type Scenario,
 } from '../../../scripts/seed/demo-scenarios';
 import { assembleDaySummaryContext } from '@/lib/day-summaries';
+import { sessionConsistencySeconds } from '@/lib/analytics-v2';
+import { displayedSigmaSeconds } from '@/lib/track-days';
 import {
   GOLDEN_COACH_EMAIL,
   GOLDEN_NOW,
@@ -826,6 +828,42 @@ describe('buildSeedSql', () => {
         }
       }
     });
+
+    /**
+     * demo-scenarios.test.ts validates the CHECKED-IN cast, so a typo committed
+     * to this repo turns that test red. This is the generate-time backstop for
+     * the cast a repo owner edits and then runs the generator against without
+     * running jest first — and what it has to produce is a message naming the
+     * driver and the coordinate, because the alternative is an anonymous
+     * `Cannot read properties of undefined (reading 'id')` several frames down.
+     */
+    it('THROWS naming the driver and the coordinate on a reference the cast does not have', () => {
+      const badRef: Scenario = {
+        n: 8,
+        name: 'Kai Garcia',
+        email: 'bad.ref@trackapp.demo',
+        experienceLevel: 'beginner',
+        days: [
+          {
+            weeksAgo: 0, day: 'sat', trackName: 'Laguna Seca',
+            sessions: [{ hourUtc: 17, lapTimesMs: [90000, 90500] }],
+          },
+        ],
+        focusItems: [
+          {
+            n: 1,
+            text: 'Anchored to a session the cast never had',
+            status: 'active',
+            origin: null,
+            assessments: [{ dayIdx: 1, sessionIdx: 9, judgment: 'improved' }],
+          },
+        ],
+        expect: { flagKinds: [], baselineState: 'building', ready: false },
+      };
+      expect(() => buildSeedSql([badRef], 'coach@example.com', now)).toThrow(
+        'Kai Garcia: focus reference names day 1 session 9, which the cast does not have.',
+      );
+    });
   });
 
   describe('the seeded day summary', () => {
@@ -924,6 +962,34 @@ describe('buildSeedSql', () => {
       expect(parsed.sessions.map((x: { bestLapMs: number }) => x.bestLapMs)).toEqual(
         latest.sessions.map(x => Math.min(...x.lapTimesMs)),
       );
+
+      // The representativeness pair, from the SCENARIO. The seeded draft_text
+      // makes a factual claim about exactly this field ("Session 2 is flagged
+      // partial"), so the prose and the provenance beside it have to agree —
+      // and that is the one coupling the golden fixture's own header says it
+      // cannot state on its own.
+      expect(parsed.sessions.map((x: { representativeness: string | null }) => x.representativeness))
+        .toEqual(latest.sessions.map(x => x.representativeness ?? null));
+      expect(parsed.sessions.map((x: { representativenessNote: string | null }) => x.representativenessNote))
+        .toEqual(latest.sessions.map(x => x.representativenessNote ?? null));
+      // ...both sides of which are `null` for an unflagged cast, so pin the
+      // claim itself rather than letting a lost flag satisfy the two above.
+      expect(parsed.sessions[1].representativeness).toBe('partial');
+      expect(unquote(value('draft_text'))).toContain('Session 2 is flagged partial');
+
+      // The laps reached the context: countableLapCount is the count σ was
+      // gated on, and consistencySeconds is what that lap array actually says —
+      // asked with the app's own math, not a copy of it, over the scenario's
+      // arrays rather than the input builder's.
+      expect(parsed.sessions.map((x: { countableLapCount: number }) => x.countableLapCount))
+        .toEqual(latest.sessions.map(x => x.lapTimesMs.length));
+      expect(parsed.sessions.map((x: { consistencySeconds: number | null }) => x.consistencySeconds))
+        .toEqual(latest.sessions.map(x => {
+          const sigma = sessionConsistencySeconds(x.lapTimesMs);
+          expect(sigma).not.toBeNull();
+          return sigma === null ? null : displayedSigmaSeconds(sigma);
+        }));
+
       // Every item the driver carries reaches the prompt, and each one's origin
       // label is dated by the day the item was actually created on.
       expect(parsed.focusItems).toHaveLength(elena.focusItems.length);
@@ -935,6 +1001,15 @@ describe('buildSeedSql', () => {
           originDay === null
             ? null
             : `from ${originDay.trackName}, ${dayDate(dayStartIso(originDay, now), originDay.trackName)}`,
+        );
+        // Each judgment is stamped at the session it was GIVEN at — not at the
+        // driver's first, which is the only other timestamp in reach here and
+        // the one a dropped subscript would land on.
+        expect(emitted.assessments.map((a: { createdAt: string }) => a.createdAt)).toEqual(
+          item.assessments.map(a => {
+            const day = elena.days[a.dayIdx];
+            return weekendDate(now, day.weeksAgo, day.day, day.sessions[a.sessionIdx].hourUtc);
+          }),
         );
       }
     });
@@ -968,22 +1043,32 @@ describe('buildSeedSql', () => {
       ]);
     });
 
-    it('records informing ids that every one resolve to a row inserted EARLIER', () => {
-      const start = sql.indexOf(summary);
+    it('records informing ids that all resolve to a row inserted EARLIER', () => {
       const sessionIds = uuidArrayValues(value('informing_session_ids'));
       const assessmentIds = uuidArrayValues(value('informing_assessment_ids'));
       expect(sessionIds.length).toBeGreaterThan(0);
       expect(assessmentIds.length).toBeGreaterThan(0);
 
-      const insertedSessionIds = new Set(sessionInserts.map(l => unquote(valuesOf(l)[0])));
-      const insertedAssessmentIds = new Set(assessmentInserts.map(l => unquote(valuesOf(l)[0])));
+      // The line the summary is emitted on. Compared against the line of each
+      // id's own INSERT, not against the first place the id appears anywhere:
+      // a session id appears far earlier inside the ordered clear's
+      // `AND id NOT IN (...)` keep-list, so an indexOf on the bare id is
+      // satisfied by a DELETE and says nothing about emission order.
+      const summaryLine = lineIndex(`'${summaryUuid(elena.n)}'`);
+      // ONE lookup answers both halves. Resolving the line separately from the
+      // "was it inserted" check is how this passes vacuously: a `find` that
+      // missed yields `undefined`, and `lines.indexOf(undefined)` is -1, which
+      // is earlier than everything.
+      const insertedBefore = (inserts: string[], id: string) => {
+        const insert = inserts.find(l => unquote(valuesOf(l)[0]) === id);
+        expect({ id, inserted: insert !== undefined }).toEqual({ id, inserted: true });
+        return { id, before: lines.indexOf(insert as string) < summaryLine };
+      };
       for (const id of sessionIds) {
-        expect({ id, inserted: insertedSessionIds.has(id) }).toEqual({ id, inserted: true });
-        expect(sql.indexOf(`'${id}'`)).toBeLessThan(start);
+        expect(insertedBefore(sessionInserts, id)).toEqual({ id, before: true });
       }
       for (const id of assessmentIds) {
-        expect({ id, inserted: insertedAssessmentIds.has(id) }).toEqual({ id, inserted: true });
-        expect(sql.indexOf(`'${id}'`)).toBeLessThan(start);
+        expect(insertedBefore(assessmentInserts, id)).toEqual({ id, before: true });
       }
     });
 

@@ -149,27 +149,34 @@ export function toStudentHistory(s: Scenario, now: Date): StudentHistory {
  * careful copy-pasting: the day-overview line is the only parameter. The
  * draft/final daylight is the point — it demonstrates that final_text is the
  * coach's and that the draft is preserved unedited beside it.
+ *
+ * Every section body is ONE unwrapped paragraph, which is why they are built by
+ * concatenation rather than written as a hard-wrapped template literal. The day
+ * page renders the current summary raw in a <textarea> (DaySummarySlot), so a
+ * seeded text wrapped at the author's column shows breaks mid-sentence at every
+ * other width. Real model output is not hard-wrapped either.
  */
-const elenaSummary = (overview: string) => `## Day overview
-${overview}
+const elenaSummary = (overview: string) => [
+  `## Day overview\n${overview}`,
 
-## Coaching progression
-"Carry the brake to the apex in the Corkscrew" carried in from the earlier days
-as keep working, was assessed improved on each of the last two, and is now marked
-achieved. "Settle the car before 8A instead of drifting wide on exit" drew a keep
-working in Session 2 and is still active.
+  '## Coaching progression\n' +
+  '"Carry the brake to the apex in the Corkscrew" carried in from the earlier ' +
+  'days as keep working, was assessed improved on each of the last two, and is ' +
+  'now marked achieved. "Settle the car before 8A instead of drifting wide on ' +
+  'exit" drew a keep working in Session 2 and is still active.',
 
-## Important context
-Session 2 is flagged partial — a full-course yellow cut it short — so its figures
-describe a shortened run.
+  '## Important context\n' +
+  'Session 2 is flagged partial — a full-course yellow cut it short — so its ' +
+  'figures describe a shortened run.',
 
-## Strengths demonstrated
-Best lap improved at every session of the day, and the coach recorded improvement
-on the Corkscrew item twice.
+  '## Strengths demonstrated\n' +
+  'Best lap improved at every session of the day, and the coach recorded ' +
+  'improvement on the Corkscrew item twice.',
 
-## Carry-forward
-"Settle the car before 8A instead of drifting wide on exit" is still active. The
-day note records that Elena stopped chasing the entry to 2.`;
+  '## Carry-forward\n' +
+  '"Settle the car before 8A instead of drifting wide on exit" is still active. ' +
+  'The day note records that Elena stopped chasing the entry to 2.',
+].join('\n\n');
 
 const ELENA_SUMMARY: ScenarioSummary = {
   draftText: elenaSummary(
