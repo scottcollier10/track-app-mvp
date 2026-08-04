@@ -122,9 +122,16 @@ export default function SessionPatterns({ laps, bestLapTime, consistencySeconds 
   // population std-dev computed here over every raw lap and then report
   // analytics-v2's sample std-dev over CLEAN laps — two different statistics
   // over two different lap sets, so the card could appear because one was small
-  // and go on to print the other. An out lap hid it from sessions the page's own
-  // Consistency card was calling tight; a large reported σ let it call ±5.0s
-  // exceptional.
+  // and go on to print the other.
+  //
+  // The two directions were not the same size. An out lap wrecks a spread taken
+  // over every lap, so the card stayed hidden for sessions the page's own
+  // Consistency card was calling tight — unbounded, and the reason for the fix.
+  // The reverse was bounded: a set tight enough to pass a 2% population CV holds
+  // nothing above 1.25x its own median, so cleaning dropped nothing and the
+  // printed σ ran over the measured one only by the population-to-sample
+  // correction — at most ~12%, at the five-lap minimum enforced above. On a 90s
+  // lap that capped the printable σ near 2.0s.
   //
   // Mean over cleanLaps, not over all laps, because that is the set σ was
   // measured on: a coefficient of variation whose numerator and denominator come

@@ -50,11 +50,14 @@ describe('SessionPatterns — the Consistency card', () => {
   });
 
   it('withholds the card when the σ it would print is not tight, however tight the raw laps look', () => {
-    // The failure this exists for, in its worst direction: six laps a tenth
-    // apart clear any spread test computed here, so the card appeared — and then
-    // printed a σ of ±5.0s under the heading "Exceptional Consistency". A card
-    // whose trigger and whose number are different statistics can contradict
-    // itself in one sentence.
+    // A lever, not a scenario. The page derives σ from these same laps and would
+    // pass ~0.04s here, never 5 — no real session produces this prop pair, and
+    // the old gate could not have printed a σ this large either. Decoupling the
+    // two inputs is the point: six laps a tenth apart clear any spread computed
+    // from `laps`, so restoring the old gate puts the card back up and prints
+    // ±5.0s under "Exceptional Consistency". That is what makes this assertion
+    // kill the restore, and it is the only way to show the trigger reads the
+    // reported σ rather than the raw laps.
     render(
       <SessionPatterns laps={lapRows(TIGHT_6)} bestLapTime={90000} consistencySeconds={5} />
     );
