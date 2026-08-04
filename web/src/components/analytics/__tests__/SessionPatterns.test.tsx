@@ -10,14 +10,24 @@
  *
  * Lap fixtures are chosen so nothing is near 1.25x the median unless it is meant
  * to be dropped:
- *   TIGHT_6 -> mean 90051.67ms, no lap anywhere near the cleanLaps limit.
+ *   TIGHT_6    -> mean 90051.67ms, no lap anywhere near the cleanLaps limit.
+ *   MID_BAND_6 -> mean 90233.33ms, likewise; the spread is the only difference.
  */
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import SessionPatterns from '../SessionPatterns';
 
 /** Six laps inside a tenth of a second of each other. */
 const TIGHT_6 = [90000, 90100, 90050, 90080, 90020, 90060];
+
+/**
+ * Six laps spread wide enough to sit mid-band: σ 1.5769s over a 90.2333s clean
+ * mean is a CV of 1.75%, under the shipped 2% and over 1%, 1.5% and 1.7% — the
+ * range a silent tightening would move through. The 92200ms slowest lap is
+ * nowhere near 1.25x the 90300ms median, so all six stay clean.
+ */
+const MID_BAND_6 = [88000, 89000, 90000, 90600, 91600, 92200];
 
 /**
  * The same six behind an out lap. 120000 is above 1.25x the 90060ms median, so
@@ -104,6 +114,28 @@ describe('SessionPatterns — the Consistency card', () => {
     );
 
     expect(screen.queryByText('Exceptional Consistency')).not.toBeInTheDocument();
+  });
+
+  it('still shows the card mid-band, so 2% cannot be quietly tightened', () => {
+    // The test above pins the threshold from over it: 2.05% is not exceptional.
+    // Nothing pinned it from under, so every tightening shipped green — a gate
+    // of 1% or 1.5% passes the whole file. This fixture is the missing side, a
+    // session at 1.75% that the shipped threshold says IS exceptional and each
+    // of the tempting tighter ones says is not.
+    //
+    // σ comes from analytics-v2 rather than being written here, so this stays a
+    // state the page can actually reach: same call, same laps, same number the
+    // session page's own Consistency card would show.
+    render(
+      <SessionPatterns
+        laps={lapRows(MID_BAND_6)}
+        bestLapTime={88000}
+        consistencySeconds={sessionConsistencySeconds(MID_BAND_6)}
+      />
+    );
+
+    expect(screen.getByText('Exceptional Consistency')).toBeInTheDocument();
+    expect(screen.getByText(/±1\.6s/)).toBeInTheDocument();
   });
 
   it('has no card at all when there is no σ to report', () => {
