@@ -3,6 +3,7 @@
 import { Card, CardContent } from '@/components/ui/Card';
 import { Snowflake, Flame, TrendingDown, Info, LucideIcon } from 'lucide-react';
 import { formatLapMs } from '@/lib/time';
+import { SIGMA_DISPLAY_DECIMALS } from '@/lib/track-days';
 
 interface Lap {
   id: string;
@@ -127,7 +128,7 @@ export default function SessionPatterns({ laps, bestLapTime, consistencySeconds 
       title: 'Exceptional Consistency',
       description:
         consistencySeconds !== null
-          ? `Lap times stayed within ±${consistencySeconds.toFixed(1)}s, showing excellent pace control throughout the session`
+          ? `Lap times stayed within ±${consistencySeconds.toFixed(SIGMA_DISPLAY_DECIMALS)}s, showing excellent pace control throughout the session`
           : 'Lap times stayed remarkably tight, showing excellent pace control throughout the session',
       icon: Info,
       color: 'text-green-600 dark:text-green-400',
