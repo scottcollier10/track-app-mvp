@@ -33,6 +33,7 @@ import { canClaimConsistency } from '@/lib/insights';
 import {
   JUDGMENT_LABELS,
   SIGMA_DISPLAY_DECIMALS,
+  assessedAtSession,
   deltaBaselineIndex,
   displayedSigmaDeltaSeconds,
   focusItemsForSession,
@@ -400,17 +401,9 @@ export default function DebriefSheet({
     }
   };
 
-  // "Assessed AT this session", exactly — not "ever assessed". The eligibility
-  // split itself is the lib's; this only assembles its inputs from the embeds.
-  const assessedItemIds = new Set(
-    focusItems
-      .filter((item) => item.focus_item_assessments.some((a) => a.session_id === session.id))
-      .map((item) => item.id)
-  );
-
   const { reviewed, inPlay } = focusItemsForSession({
     items: focusItems,
-    assessedItemIds,
+    assessedItemIds: assessedAtSession(focusItems, session.id),
     session: { id: session.id, date: session.date },
     originSessions: new Map(originSessions.map((origin) => [origin.id, origin])),
     dayDate,

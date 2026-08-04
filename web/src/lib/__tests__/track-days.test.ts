@@ -1,4 +1,5 @@
 import {
+  assessedAtSession,
   assessmentsInSessionOrder,
   bySessionStart,
   localDateForTimezone,
@@ -11,6 +12,8 @@ import {
   focusItemsForSession,
   focusPanelGroups,
   formatConsistencyTrend,
+  isCountableLap,
+  isCountableLapMs,
   representativeSessions,
   sessionDelta,
   uniqueTrackDayLinks,
@@ -75,6 +78,54 @@ describe('localDateForTimezone', () => {
   });
   it('throws on an invalid timestamp rather than defaulting to today', () => {
     expect(() => localDateForTimezone('garbage', 'America/Chicago')).toThrow(RangeError);
+  });
+});
+
+describe('isCountableLap', () => {
+  /**
+   * The predicate validLapTimesMs was already applying inline, now named so
+   * callers that need whole ROWS (the coaching route's lap table) ask the same
+   * question instead of re-typing `!== null && > 0` and drifting from it.
+   */
+  it('counts a positive lap time and nothing else', () => {
+    expect(isCountableLap({ lap_time_ms: 91000 })).toBe(true);
+    expect(isCountableLap({ lap_time_ms: 0 })).toBe(false);
+    expect(isCountableLap({ lap_time_ms: -5000 })).toBe(false);
+    expect(isCountableLap({ lap_time_ms: null })).toBe(false);
+  });
+
+  it('is the predicate validLapTimesMs filters with — the two cannot disagree', () => {
+    const laps = [
+      { lap_time_ms: 91000 },
+      { lap_time_ms: 0 },
+      { lap_time_ms: null },
+      { lap_time_ms: -1 },
+      { lap_time_ms: 92000 },
+    ];
+    expect(validLapTimesMs(laps)).toEqual(
+      laps.filter(isCountableLap).map((lap) => lap.lap_time_ms)
+    );
+  });
+
+  it('is the row-shaped form of isCountableLapMs — the row and the value cannot disagree', () => {
+    for (const ms of [91000, 1, 0, -5000, null]) {
+      expect(isCountableLap({ lap_time_ms: ms })).toBe(isCountableLapMs(ms));
+    }
+  });
+});
+
+describe('isCountableLapMs', () => {
+  /**
+   * The value-level form, for the callers that hold a milliseconds figure
+   * rather than a lap row — a stored `best_lap_ms`, most of them. csv-parser
+   * computes that column as Math.min over UNFILTERED times, so 0 reaches it,
+   * and every screen printing it has to ask the same question the σ gate asked.
+   */
+  it('counts a positive figure and nothing else', () => {
+    expect(isCountableLapMs(91000)).toBe(true);
+    expect(isCountableLapMs(0)).toBe(false);
+    expect(isCountableLapMs(-5000)).toBe(false);
+    expect(isCountableLapMs(null)).toBe(false);
   });
 });
 
@@ -519,6 +570,42 @@ describe('focusItemsForSession', () => {
   });
 });
 
+describe('assessedAtSession', () => {
+  // The one input focusItemsForSession's `assessedItemIds` is correct for. It
+  // was assembled by hand at four call sites before this existed, and the thing
+  // a hand copy gets wrong is the same thing every time: "ever assessed"
+  // instead of "assessed AT this session". That is what these pin.
+  const item = (id: string, ...sessionIds: string[]) => ({
+    id,
+    focus_item_assessments: sessionIds.map((session_id) => ({ session_id })),
+  });
+
+  it('selects only items assessed at the session asked about', () => {
+    const here = item('fi-here', 's2');
+    const elsewhere = item('fi-elsewhere', 's1');
+
+    expect([...assessedAtSession([here, elsewhere], 's2')]).toEqual(['fi-here']);
+  });
+
+  it('does not select an item merely because it was assessed SOMEWHERE', () => {
+    // The "ever assessed" bug, driven directly: this item has two assessments,
+    // neither at s2. A predicate that ignored the session id would return it.
+    const other = item('fi-other', 's1', 's3');
+
+    expect([...assessedAtSession([other], 's2')]).toEqual([]);
+  });
+
+  it('selects an item with several assessments if any one of them is here', () => {
+    const carried = item('fi-carried', 's1', 's2');
+
+    expect([...assessedAtSession([carried], 's2')]).toEqual(['fi-carried']);
+  });
+
+  it('ignores an item with no assessments at all', () => {
+    expect([...assessedAtSession([item('fi-none')], 's2')]).toEqual([]);
+  });
+});
+
 describe('focusPanelGroups', () => {
   const item = (id: string, status: string, created_at = '2026-07-10T12:00:00Z') => ({
     id,
@@ -660,6 +747,26 @@ describe('sessionDelta', () => {
       sessionDelta({ bestLapMs: 95000, lapTimesMs: loose }, { bestLapMs: null, lapTimesMs: tight })
         .bestLapDeltaMs
     ).toBeNull();
+  });
+
+  it('nulls the best-lap delta when either best lap is 0 — not null, but not a lap either', () => {
+    // The guard is HERE, not at the call sites. The session card prints "--"
+    // for a 0 best lap while passing the column raw to this function, which
+    // used to print "-90.000s" beside it: a delta against a lap the same card
+    // refuses to show. One rule, one place.
+    expect(
+      sessionDelta({ bestLapMs: 0, lapTimesMs: loose }, { bestLapMs: 94200, lapTimesMs: tight })
+        .bestLapDeltaMs
+    ).toBeNull();
+    expect(
+      sessionDelta({ bestLapMs: 95000, lapTimesMs: loose }, { bestLapMs: 0, lapTimesMs: tight })
+        .bestLapDeltaMs
+    ).toBeNull();
+    // The consistency delta is a separate gate and is untouched by this.
+    expect(
+      sessionDelta({ bestLapMs: 0, lapTimesMs: loose }, { bestLapMs: 94200, lapTimesMs: tight })
+        .consistencyDeltaSeconds
+    ).not.toBeNull();
   });
 });
 

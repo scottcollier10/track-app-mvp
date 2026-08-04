@@ -16,6 +16,7 @@ export type TrackDay = Database['public']['Tables']['track_days']['Row'];
 export type FocusItem = Database['public']['Tables']['focus_items']['Row'];
 export type FocusItemAssessment =
   Database['public']['Tables']['focus_item_assessments']['Row'];
+export type DaySummary = Database['public']['Tables']['day_summaries']['Row'];
 
 // Extended types with relations
 export interface SessionWithRelations extends Session {
@@ -102,6 +103,9 @@ export type FocusItemStatus = 'active' | 'achieved' | 'paused' | 'dropped';
 
 /** DB CHECK constraint on focus_item_assessments.judgment. */
 export type AssessmentJudgment = 'improved' | 'keep_working' | 'no_change' | 'regressed';
+
+/** DB CHECK constraint on day_summaries.status. */
+export type DaySummaryStatus = 'draft' | 'approved' | 'superseded';
 
 export interface LapWithDelta extends Lap {
   delta_ms?: number;

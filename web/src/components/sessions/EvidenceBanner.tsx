@@ -23,7 +23,12 @@
  *
  * No hooks, no writes — deliberately a server-renderable pure component.
  */
-import { FOCUS_STATUS_LABELS, JUDGMENT_LABELS, focusItemsForSession } from '@/lib/track-days';
+import {
+  FOCUS_STATUS_LABELS,
+  JUDGMENT_LABELS,
+  assessedAtSession,
+  focusItemsForSession,
+} from '@/lib/track-days';
 import type { AssessmentJudgment, FocusItemStatus, FocusItemWithAssessments } from '@/lib/types';
 
 export default function EvidenceBanner({
@@ -43,17 +48,9 @@ export default function EvidenceBanner({
   dayDate: string;
   trackTimezone: string | null;
 }) {
-  // "Assessed AT this session", exactly — the same input assembly as the
-  // debrief sheet. The split itself is the lib's.
-  const assessedItemIds = new Set(
-    focusItems
-      .filter((item) => item.focus_item_assessments.some((a) => a.session_id === session.id))
-      .map((item) => item.id)
-  );
-
   const { reviewed, inPlay } = focusItemsForSession({
     items: focusItems,
-    assessedItemIds,
+    assessedItemIds: assessedAtSession(focusItems, session.id),
     session,
     originSessions: new Map(originSessions.map((origin) => [origin.id, origin])),
     dayDate,

@@ -2,6 +2,7 @@
  * Track-day helpers. Pure functions only — day grouping math lives here,
  * honesty gates reuse canClaimConsistency and sessionConsistencySeconds.
  */
+import { isCountableLapMs } from '@/lib/analytics-constants';
 import { sessionConsistencySeconds } from '@/lib/analytics-v2';
 import { canClaimConsistency } from '@/lib/insights';
 import type {
@@ -87,7 +88,42 @@ export function bySessionStart(
  * different and neither replaces the other.
  */
 export function validLapTimesMs(laps: Array<{ lap_time_ms: number | null }>): number[] {
-  return laps.map((lap) => lap.lap_time_ms).filter((ms): ms is number => ms !== null && ms > 0);
+  return laps.filter(isCountableLap).map((lap) => lap.lap_time_ms);
+}
+
+/**
+ * THE one definition of a countable lap, at the VALUE level — RE-EXPORTED here,
+ * defined in analytics-constants.
+ *
+ * It had to move. analytics-v2 asks the same question and this file imports
+ * sessionConsistencySeconds FROM analytics-v2, so analytics-v2 could not import
+ * the predicate back without closing a cycle — which is precisely why it carried
+ * its own copy. analytics-constants imports nothing, so everyone can reach it.
+ *
+ * Re-exported rather than repointed at the leaf, because "which laps count" is a
+ * track-day question and this is the file a reader looks in for it. One
+ * definition, two doors.
+ */
+export { isCountableLapMs };
+
+/**
+ * THE one definition of a countable lap ROW, extracted from validLapTimesMs so
+ * the two can never answer differently.
+ *
+ * validLapTimesMs returns the TIMES, which is all a σ or a gate needs. A caller
+ * rendering whole ROWS — the coaching route's lap table, which prints
+ * "Lap {lap_number}: {time}" — cannot use them, and re-typing the condition is
+ * exactly how the app ended up with the drift the docblock above describes:
+ * a lap table showing "Lap 3: 0:00.000" beside a σ that never saw lap 3.
+ *
+ * A type PREDICATE, not a boolean: a caller that filters with it and then has
+ * to write `as number` to read the time back has been handed the narrowing on
+ * trust, and the cast survives changes to this condition that it should not.
+ */
+export function isCountableLap<L extends { lap_time_ms: number | null }>(
+  lap: L
+): lap is L & { lap_time_ms: number } {
+  return isCountableLapMs(lap.lap_time_ms);
 }
 
 /**
@@ -132,7 +168,7 @@ export function dayBestLapMs(
 ): number | null {
   const bests = representativeSessions(sessions)
     .map((s) => s.bestLapMs)
-    .filter((b): b is number => b !== null && b > 0);
+    .filter(isCountableLapMs);
   return bests.length ? Math.min(...bests) : null;
 }
 
@@ -326,13 +362,21 @@ export interface SessionForDelta {
 
 /**
  * Change from prev to curr, signed as `curr - prev` (negative = faster lap / tighter σ).
- * bestLapDeltaMs is MILLISECONDS, null if either best lap is null.
+ * bestLapDeltaMs is MILLISECONDS, null unless BOTH best laps are countable.
  * consistencyDeltaSeconds is SECONDS, null unless both sessions clear
  * canClaimConsistency and both σ resolve.
+ *
+ * The countable-lap guard is applied HERE, not by callers. A stored
+ * `best_lap_ms` of 0 is not a lap (see isCountableLapMs), and a caller that
+ * passes the column raw used to get "-90.000s" printed beside a "--" best lap
+ * on the same card — a delta against a lap the same screen refuses to show.
+ * One guard, one answer, wherever the pair is compared.
  */
 export function sessionDelta(prev: SessionForDelta, curr: SessionForDelta): SessionDelta {
   const bestLapDeltaMs =
-    prev.bestLapMs !== null && curr.bestLapMs !== null ? curr.bestLapMs - prev.bestLapMs : null;
+    isCountableLapMs(prev.bestLapMs) && isCountableLapMs(curr.bestLapMs)
+      ? curr.bestLapMs - prev.bestLapMs
+      : null;
 
   let consistencyDeltaSeconds: number | null = null;
   if (canClaimConsistency(prev.lapTimesMs) && canClaimConsistency(curr.lapTimesMs)) {
@@ -389,7 +433,7 @@ export function focusItemsForSession<
   }
 >(args: {
   items: I[];
-  /** Assessments AT this session — not "ever assessed". */
+  /** Assessments AT this session. Build it with assessedAtSession below. */
   assessedItemIds: Set<string>;
   session: { id: string; date: string };
   /** id -> session, for origin ordering. Missing ids fall back to the date rule. */
@@ -416,6 +460,39 @@ export function focusItemsForSession<
     reviewed: byCreation.filter((item) => assessedItemIds.has(item.id)),
     inPlay: byCreation.filter((item) => item.status === 'active' && inPlayComingIn(item)),
   };
+}
+
+/**
+ * focusItemsForSession's `assessedItemIds`, from the embedded assessments —
+ * kept HERE, beside the rule, because it is the only input that rule is correct
+ * for.
+ *
+ * "Assessed AT this session", exactly. Not "ever assessed": every item with any
+ * history would land in `reviewed`, and the session page would report a coach
+ * reviewing items they never opened. The rule cannot catch that — a Set of ids
+ * is a Set of ids, and a wrong one produces a plausible list.
+ *
+ * It lived at each call site instead, identically, three times over (the
+ * coaching route, the evidence banner, the debrief sheet) plus once more in a
+ * test. Four hand-written copies of "the input this function needs" is how the
+ * fifth caller gets it subtly wrong — and the argument for leaving it there,
+ * that a helper spanning the route/component boundary is a design call, is
+ * answered by where it goes: not a shared UI helper, but the six lines that
+ * produce one parameter, sitting against the function that consumes it.
+ *
+ * Deliberately NOT generalised to cover focusPanelGroups' `assessedThisDayItemIds`,
+ * which asks a different question (assessed at ANY of the day's sessions) and
+ * would turn this into a Set-of-ids parameter that reads the same at every call
+ * site whichever question was meant.
+ */
+export function assessedAtSession<
+  I extends { id: string; focus_item_assessments: Array<{ session_id: string }> }
+>(items: I[], sessionId: string): Set<string> {
+  return new Set(
+    items
+      .filter((item) => item.focus_item_assessments.some((a) => a.session_id === sessionId))
+      .map((item) => item.id)
+  );
 }
 
 /**

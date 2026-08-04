@@ -10,9 +10,19 @@
 
 import { useState } from "react";
 import { useCoachView } from "@/context/coach-view";
+import { COACHING_ERROR } from "@/lib/coaching-errors";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Bot, ThumbsUp, Target, Gift, AlertTriangle } from "lucide-react";
+import {
+  Bot,
+  ThumbsUp,
+  Target,
+  Gift,
+  AlertTriangle,
+  FileText,
+  Search,
+  TrendingUp,
+} from "lucide-react";
 
 interface AICoachingCardProps {
   sessionId: string;
@@ -27,7 +37,53 @@ interface CoachingSection {
 }
 
 /**
- * Parse markdown coaching text into structured sections
+ * Heading -> colour + icon, for the sections a generation can contain.
+ *
+ * TWO generations of contract, both live. The first three are the observation
+ * headings the prompt asks for now (coaching-prompts.ts). "Strength" /
+ * "Improvement" / "Goal" are the prescriptive sections the rewrite removed, and
+ * rows written before it still carry them in `sessions.ai_coaching_summary` —
+ * those rows are left as written, so their keys and their colours stay. Dropping
+ * them would not un-write a single stored heading, only stop rendering it.
+ *
+ * The observation headings take `text-primary`, NOT a status colour. Green for
+ * one section and amber for another grades the section: the old headings named
+ * a verdict ("Strengths", "Areas for improvement") and could be coloured like
+ * one, while "Evidence on focus items" is a report of what the data shows and
+ * the card has no business tinting it good or bad.
+ *
+ * Matched by fragment, in order, so a title is never claimed twice. An
+ * unmatched title takes UNSTYLED_SECTION below, which shares neither icon nor
+ * status colour with anything here — "I do not recognise this heading" is its
+ * own state, and an entry that merely restates the fallback is an entry nobody
+ * would notice deleting.
+ */
+const SECTION_STYLES: Array<{ match: string; color: string; icon: typeof ThumbsUp }> = [
+  // The observation contract.
+  { match: "day's arc", color: 'text-primary', icon: TrendingUp },
+  { match: 'Evidence', color: 'text-primary', icon: Target },
+  { match: 'Patterns', color: 'text-primary', icon: Search },
+  // The legacy prescriptive contract, for rows already in the database.
+  { match: 'Strength', color: 'text-status-success', icon: ThumbsUp },
+  { match: 'Improvement', color: 'text-status-warn', icon: AlertTriangle },
+  { match: 'Goal', color: 'text-status-info', icon: Gift },
+];
+
+/**
+ * A heading in neither contract — a renamed section, a hand-edited row. It
+ * renders at full brightness like every other heading; only the icon says the
+ * card had nothing specific to add.
+ */
+const UNSTYLED_SECTION = { color: 'text-primary', icon: FileText } as const;
+
+/**
+ * Parse markdown coaching text into structured sections.
+ *
+ * A heading is never DIMMER than the body under it. It used to be: an unmatched
+ * title fell through to `text-muted` (#9CA3AF) while its own copy renders at
+ * `text-primary/90` (#E5E7EB), so all three observation headings — none of which
+ * contain "Strength", "Improvement" or "Goal" — printed greyed out above
+ * brighter text. `text-primary` is the floor now, recognised title or not.
  */
 function parseCoaching(text: string): CoachingSection[] {
   const sections: CoachingSection[] = [];
@@ -44,21 +100,14 @@ function parseCoaching(text: string): CoachingSection[] {
 
       // Create new section
       const title = line.replace('## ', '').trim();
-      let color = 'text-muted';
-      let icon = Target;
+      const style = SECTION_STYLES.find((candidate) => title.includes(candidate.match));
 
-      if (title.includes('Strength')) {
-        color = 'text-status-success';
-        icon = ThumbsUp;
-      } else if (title.includes('Improvement')) {
-        color = 'text-status-warn';
-        icon = AlertTriangle;
-      } else if (title.includes('Goal')) {
-        color = 'text-status-info';
-        icon = Gift;
-      }
-
-      currentSection = { title, content: [], color, icon };
+      currentSection = {
+        title,
+        content: [],
+        color: style?.color ?? UNSTYLED_SECTION.color,
+        icon: style?.icon ?? UNSTYLED_SECTION.icon,
+      };
     } else if (line.trim() && currentSection) {
       // Add content to current section (skip empty lines)
       currentSection.content.push(line.trim());
@@ -101,10 +150,16 @@ export default function AICoachingCard({
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        // Handle specific error messages
-        if (data.error?.includes('API key')) {
+        // Branch on the route's CODE, never on its prose. These two matched
+        // `data.error.includes(...)` — so a data-integrity 500 reading "Track
+        // day not found for this session" surfaced as the benign "Session or
+        // laps not found", and any future 500 whose wording happens to contain
+        // "API key" or "not found" would do it again. Anything the route does
+        // not code for falls through to its own sentence, which is the honest
+        // answer when the UI has nothing more specific to say.
+        if (data.code === COACHING_ERROR.apiKeyMissing) {
           throw new Error('AI coaching requires API key configuration. Please add ANTHROPIC_API_KEY to .env.local');
-        } else if (data.error?.includes('not found')) {
+        } else if (data.code === COACHING_ERROR.notFound) {
           throw new Error('Session or laps not found');
         } else {
           throw new Error(data.error || 'Failed to generate coaching');
@@ -139,9 +194,16 @@ export default function AICoachingCard({
       {/* State 1: NOT GENERATED */}
       {!coaching && !isGenerating && (
         <div className="space-y-4">
+          {/* What the button actually produces. This used to promise
+              "strengths, areas for improvement, and actionable goals" — the
+              prescriptive sections the observation-only rewrite removed. The
+              model is now forbidden to author a driving instruction, so a
+              button offering the coach "actionable goals" was selling the one
+              thing the contract will not deliver. */}
           <p className="text-muted text-sm">
-            Generate personalized coaching feedback powered by Anthropic Claude.
-            AI analysis includes strengths, areas for improvement, and actionable goals based on session data.
+            Generate coach-facing observations powered by Anthropic Claude:
+            this session against the day&rsquo;s arc, what its data shows on the
+            focus items in play, and patterns worth your attention.
           </p>
           <Button
             onClick={handleGenerate}

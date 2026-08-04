@@ -9,6 +9,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { getTrackDayDebrief } from '@/data/track-days';
+import { getDaySummaries } from '@/data/day-summaries';
+import { getCurrentCoach } from '@/lib/auth/current-coach';
 import {
   CONSISTENCY_TREND_CLAIM,
   dayAggregateAnnotation,
@@ -27,6 +29,7 @@ import { HeroBurst } from '@/components/ui/HeroBurst';
 import { TrackAppHeader } from '@/components/TrackAppHeader';
 import SessionProgressionStrip from '@/components/days/SessionProgressionStrip';
 import FocusPanel from '@/components/days/FocusPanel';
+import DaySummarySlot from '@/components/days/DaySummarySlot';
 import DayNotes from '@/components/days/DayNotes';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +43,25 @@ interface PageProps {
 export default async function TrackDayPage({ params }: PageProps) {
   // The debrief variant: the day plus the driver's focus items, their
   // assessments and origin sessions — everything the sheet writes against.
-  const { data: day, error } = await getTrackDayDebrief(params.id);
+  //
+  // The summaries are every generation for this day — drafts, approved,
+  // superseded alike — and unfiltered on purpose: daySummaryView (inside the
+  // slot) is the ONE thing that decides which row is current. A day that turns
+  // out to be a 404 pays for this query, which is the cheaper half of the
+  // trade: bad day links are rare, every good one would otherwise pay a serial
+  // round trip.
+  //
+  // The coach rides along to name the approver of an approved summary. It is
+  // passed with its id, not as a bare name: the slot uses the name only when
+  // the row's `approved_by` matches, and degrades to a plain "Approved"
+  // otherwise. (This is a second getCurrentCoach() in the render — the root
+  // layout already made one. getCurrentCoach is deliberately not React-cached;
+  // see its docblock.)
+  const [{ data: day, error }, coach, summaries] = await Promise.all([
+    getTrackDayDebrief(params.id),
+    getCurrentCoach(),
+    getDaySummaries(params.id),
+  ]);
 
   // Only a genuine query failure gets an error state.
   if (error) {
@@ -190,8 +211,15 @@ export default async function TrackDayPage({ params }: PageProps) {
             assessmentSessions={day.assessmentSessions}
           />
 
-          {/* Zone 3 — the day notes scratchpad. Debounced autosave with
-              flush-on-leave; the Phase 3 summary slot renders above this. */}
+          {/* Zone 3 — the AI day summary, then the day notes scratchpad. Both
+              autosave on a debounce with flush-on-leave. */}
+          <DaySummarySlot
+            dayId={day.id}
+            summaries={summaries}
+            approverName={coach?.name}
+            coachId={coach?.id}
+          />
+
           <DayNotes dayId={day.id} initialNotes={day.notes} />
         </div>
       </div>

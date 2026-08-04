@@ -294,6 +294,25 @@ describe('CsvImport success panel — context flags', () => {
     expect(screen.getByText('Taylor Brooks — best 1:30.100')).toBeInTheDocument();
     expect(screen.queryByText(/Session \d/)).not.toBeInTheDocument();
   });
+
+  it('prints no best lap for a session whose stored best is 0 — not "0:00.000"', async () => {
+    // csv-parser computes best_lap_ms as Math.min over UNFILTERED times, so a
+    // file of zeros stores a 0 best lap and it reaches this label verbatim. The
+    // label asks isCountableLapMs — the app's one lap predicate — so a bare
+    // `!== null` check would caption the row with a lap nobody drove.
+    stubFetch({
+      'taylor.brooks@trackapp.demo': {
+        sessionId: 'session-1',
+        trackDayId: 'day-a',
+        driverName: 'taylor.brooks',
+      },
+    });
+
+    await runImport([parsedSession({ bestLapMs: 0, laps: [{ lapNumber: 1, lapTimeMs: 0 }] })]);
+
+    expect(screen.getByText('Taylor Brooks')).toBeInTheDocument();
+    expect(screen.queryByText(/best 0:00\.000/)).not.toBeInTheDocument();
+  });
 });
 
 describe('CsvImport success panel — where the confirmation lands', () => {

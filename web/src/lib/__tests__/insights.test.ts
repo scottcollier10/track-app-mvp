@@ -95,6 +95,19 @@ describe('getSessionInsightsFromMs', () => {
       expect(result.paceTrendDetail).toContain('3.00s');
     });
 
+    it('measures the same difference when a 0 lap leads the session', () => {
+      // Same six laps, with an uncountable 0 in front. The detail is averaged
+      // over countable laps only (isCountableLapMs — the app's one lap
+      // predicate), so the figure must not move. A `!= null` filter would keep
+      // the 0, drag the first-three average down to 63.000, and report a
+      // 28-second improvement the driver never made.
+      const result = getSessionInsightsFromMs([
+        0, 95000, 94000, 93000, 92000, 91000, 90000,
+      ]);
+      expect(result.paceTrendLabel).toBe('improving');
+      expect(result.paceTrendDetail).toContain('3.00s');
+    });
+
     it('reports not enough data under 6 laps', () => {
       const result = getSessionInsightsFromMs([90000, 91000, 90500, 91500, 90200]);
       expect(result.paceTrendLabel).toBe('Not enough data');

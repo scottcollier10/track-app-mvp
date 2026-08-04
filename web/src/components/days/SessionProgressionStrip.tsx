@@ -32,6 +32,7 @@ import {
   deltaBaselineIndex,
   displayedSigmaDeltaSeconds,
   displayedSigmaSeconds,
+  isCountableLapMs,
   sessionDelta,
   validLapTimesMs,
 } from '@/lib/track-days';
@@ -169,10 +170,12 @@ export default function SessionProgressionStrip({
                 <p className="text-sm text-muted">Session {i + 1}</p>
 
                 <p className="mt-1 text-xl font-semibold text-primary">
-                  {/* > 0, not !== null: a 0 best lap would print "0:00.000" here
-                      while dayBestLapMs skips it for the KPI directly above and the
-                      session page prints "--" for it. Same row, one rule. */}
-                  {session.best_lap_ms !== null && session.best_lap_ms > 0
+                  {/* isCountableLapMs, not `!== null`: a 0 best lap would print
+                      "0:00.000" here while dayBestLapMs skips it for the KPI
+                      directly above and the session page prints "--" for it.
+                      Same row, one rule — and the same rule sessionDelta applies
+                      to the delta printed beside it. */}
+                  {isCountableLapMs(session.best_lap_ms)
                     ? formatLapMs(session.best_lap_ms)
                     : '--'}
                   <BestLapDelta deltaMs={delta?.bestLapDeltaMs ?? null} />

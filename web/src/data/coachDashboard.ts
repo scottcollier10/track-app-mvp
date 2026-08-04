@@ -8,6 +8,7 @@
  */
 
 import { createServerSupabase } from '@/lib/supabase/server';
+import { isCountableLapMs } from '@/lib/analytics-constants';
 import { evaluateStudent } from '@/lib/analytics-v2';
 import type {
   Flag,
@@ -96,13 +97,13 @@ export function buildStudents(rows: SessionRow[]): CoachDashboardStudent[] {
       new Date(r.date) > new Date(latest.date) ? r : latest
     );
 
-    // Best lap = min non-null session best across all sessions.
+    // Best lap = min countable session best across all sessions.
     const sessionBests = driverRows
       .map((r) => r.bestLapMs)
-      .filter((v): v is number => v !== null && v > 0);
+      .filter(isCountableLapMs);
     const bestLapMs = sessionBests.length > 0 ? Math.min(...sessionBests) : null;
 
-    // Average best lap = rounded mean of non-null session bests.
+    // Average best lap = rounded mean of countable session bests.
     const avgBestLapMs =
       sessionBests.length > 0
         ? Math.round(
@@ -110,11 +111,9 @@ export function buildStudents(rows: SessionRow[]): CoachDashboardStudent[] {
           )
         : null;
 
-    // Total positive laps across all sessions.
+    // Total countable laps across all sessions.
     const totalLaps = driverRows.reduce(
-      (sum, r) =>
-        sum +
-        r.lapTimesMs.filter((t): t is number => t !== null && t > 0).length,
+      (sum, r) => sum + r.lapTimesMs.filter(isCountableLapMs).length,
       0
     );
 

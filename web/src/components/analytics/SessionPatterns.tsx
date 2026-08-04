@@ -3,6 +3,8 @@
 import { Card, CardContent } from '@/components/ui/Card';
 import { Snowflake, Flame, TrendingDown, Info, LucideIcon } from 'lucide-react';
 import { formatLapMs } from '@/lib/time';
+import { cleanLaps } from '@/lib/analytics-v2';
+import { SIGMA_DISPLAY_DECIMALS } from '@/lib/track-days';
 
 interface Lap {
   id: string;
@@ -114,25 +116,57 @@ export default function SessionPatterns({ laps, bestLapTime, consistencySeconds 
     }
   }
 
-  // 4. Consistency Check
-  const mean = overallAvg;
-  const squaredDiffs = lapTimes.map(time => Math.pow(time - mean, 2));
-  const variance = squaredDiffs.reduce((sum, diff) => sum + diff, 0) / lapTimes.length;
-  const stdDev = Math.sqrt(variance);
-  const coefficientOfVariation = (stdDev / mean) * 100;
+  // 4. Consistency Check.
+  //
+  // Both halves of this come off the σ the card PRINTS. It used to trigger on a
+  // population std-dev computed here over every raw lap and then report
+  // analytics-v2's sample std-dev over CLEAN laps — two different statistics
+  // over two different lap sets, so the card could appear because one was small
+  // and go on to print the other.
+  //
+  // The two directions were not the same size. An out lap wrecks a spread taken
+  // over every lap, so the card stayed hidden for sessions the page's own
+  // Consistency card was calling tight — unbounded, and the reason for the fix.
+  // The reverse was bounded: a set tight enough to pass a 2% population CV holds
+  // nothing above 1.25x its own median, so cleaning dropped nothing and the
+  // printed σ ran over the measured one only by the population-to-sample
+  // correction — at most ~12%, at the five-lap minimum enforced above. On a 90s
+  // lap that capped the printable σ near 2.0s.
+  //
+  // Mean over cleanLaps, not over all laps, because that is the set σ was
+  // measured on: a coefficient of variation whose numerator and denominator come
+  // from different samples is not a coefficient of variation. cleanLaps is
+  // imported, not reimplemented — nothing here is a second definition.
+  //
+  // Threshold semantics move with the numerator, deliberately: a spread taken
+  // after out/in laps are dropped is smaller than one taken before, so a fixed
+  // 2% now admits sessions it used to reject. That is the correction, not a side
+  // effect — those sessions ARE the ones the page reports a tight σ for.
+  //
+  // No σ, no card. A null σ means analytics-v2 found fewer than two clean laps,
+  // and there is no version of this card that is honest without a number.
+  const cleanLapTimes = cleanLaps(lapTimes);
+  const cleanMeanSeconds =
+    cleanLapTimes.length > 0
+      ? cleanLapTimes.reduce((sum, time) => sum + time, 0) / cleanLapTimes.length / 1000
+      : 0;
 
-  if (coefficientOfVariation < 2) {
+  if (
+    consistencySeconds !== null &&
+    cleanMeanSeconds > 0 &&
+    (consistencySeconds / cleanMeanSeconds) * 100 < 2
+  ) {
     patterns.push({
       type: 'consistent',
       title: 'Exceptional Consistency',
-      description:
-        consistencySeconds !== null
-          ? `Lap times stayed within ±${consistencySeconds.toFixed(1)}s, showing excellent pace control throughout the session`
-          : 'Lap times stayed remarkably tight, showing excellent pace control throughout the session',
+      description: `Lap times stayed within ±${consistencySeconds.toFixed(SIGMA_DISPLAY_DECIMALS)}s, showing excellent pace control throughout the session`,
       icon: Info,
       color: 'text-green-600 dark:text-green-400',
       bgColor: 'bg-green-50 dark:bg-green-950/20',
-      laps: 'All laps',
+      // "All laps" was true of the spread this used to trigger on and is not
+      // true of the σ it reports — the Consistency card's own helper text calls
+      // that "your clean lap times". Same words for the same set.
+      laps: 'Clean laps',
     });
   }
 

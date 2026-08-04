@@ -1,25 +1,37 @@
-import { weekendDate, SCENARIOS, toStudentHistory } from '../../../scripts/seed/demo-scenarios';
+import {
+  weekendDate,
+  SCENARIOS,
+  scenarioSessions,
+  toStudentHistory,
+} from '../../../scripts/seed/demo-scenarios';
 import { evaluateStudent } from '@/lib/analytics-v2';
 
 describe('weekendDate', () => {
   // Wed 2026-07-22. Most recent Saturday = 2026-07-18.
   const now = new Date('2026-07-22T12:00:00Z');
 
-  it('weeksAgo 0, sat = most recent Saturday at 10:00 UTC', () => {
-    expect(weekendDate(now, 0, 'sat')).toBe('2026-07-18T10:00:00.000Z');
+  it('weeksAgo 0, sat = most recent Saturday at the given UTC hour', () => {
+    expect(weekendDate(now, 0, 'sat', 17)).toBe('2026-07-18T17:00:00.000Z');
   });
 
   it('weeksAgo 0, sun = day after that Saturday', () => {
-    expect(weekendDate(now, 0, 'sun')).toBe('2026-07-19T10:00:00.000Z');
+    expect(weekendDate(now, 0, 'sun', 17)).toBe('2026-07-19T17:00:00.000Z');
   });
 
   it('weeksAgo 2 subtracts 14 days', () => {
-    expect(weekendDate(now, 2, 'sat')).toBe('2026-07-04T10:00:00.000Z');
+    expect(weekendDate(now, 2, 'sat', 21)).toBe('2026-07-04T21:00:00.000Z');
   });
 
   it('when now is Saturday, weeksAgo 0 sat = today', () => {
     const sat = new Date('2026-07-18T15:00:00Z');
-    expect(weekendDate(sat, 0, 'sat')).toBe('2026-07-18T10:00:00.000Z');
+    expect(weekendDate(sat, 0, 'sat', 23)).toBe('2026-07-18T23:00:00.000Z');
+  });
+
+  it('the session hour moves the clock, never the calendar day', () => {
+    const hours = [17, 19, 21, 23];
+    for (const h of hours) {
+      expect(weekendDate(now, 1, 'sun', h).slice(0, 10)).toBe('2026-07-12');
+    }
   });
 });
 
@@ -48,5 +60,179 @@ describe('demo scenarios trip exactly their intended flags', () => {
     expect(SCENARIOS.some(s => s.expect.ready)).toBe(true);
     expect(SCENARIOS.some(s => s.expect.baselineState === 'building' && !s.expect.flagKinds.length)).toBe(true);
     expect(SCENARIOS.some(s => s.expect.baselineState === 'ok' && !s.expect.flagKinds.length && !s.expect.ready)).toBe(true);
+  });
+});
+
+describe('day shape', () => {
+  const now = new Date('2026-07-22T12:00:00Z');
+
+  it('every day has at least one session, in strictly ascending hour order', () => {
+    // dayDate reads sessions[0]; out-of-order hours would date a day off its
+    // second session, and the day page's "Session N" would disagree with the seed.
+    for (const s of SCENARIOS) {
+      expect(s.days.length).toBeGreaterThan(0);
+      for (const day of s.days) {
+        expect(day.sessions.length).toBeGreaterThan(0);
+        const hours = day.sessions.map(x => x.hourUtc);
+        expect(hours).toEqual([...hours].sort((a, b) => a - b));
+        expect(new Set(hours).size).toBe(hours.length);
+      }
+    }
+  });
+
+  it('every session hour is inside the 17-23 UTC same-local-date window', () => {
+    for (const { session } of SCENARIOS.flatMap(scenarioSessions)) {
+      expect(session.hourUtc).toBeGreaterThanOrEqual(17);
+      expect(session.hourUtc).toBeLessThanOrEqual(23);
+    }
+  });
+
+  it('days are chronological, oldest first, and never repeat a (week, weekday, track)', () => {
+    for (const s of SCENARIOS) {
+      const starts = s.days.map(d => weekendDate(now, d.weeksAgo, d.day, d.sessions[0].hourUtc));
+      expect(starts).toEqual([...starts].sort());
+      const keys = s.days.map(d => `${d.weeksAgo}/${d.day}/${d.trackName}`);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it('scenarioSessions flattens days in order and toStudentHistory agrees with it', () => {
+    for (const s of SCENARIOS) {
+      const flat = scenarioSessions(s);
+      const history = toStudentHistory(s, now);
+      expect(history.sessions).toHaveLength(flat.length);
+      history.sessions.forEach((sess, i) => {
+        expect(sess.lapTimesMs).toBe(flat[i].session.lapTimesMs);
+        expect(sess.trackId).toBe(flat[i].day.trackName);
+      });
+      // Flattened order is chronological, which is what evaluateStudent's
+      // "latest session" depends on.
+      const dates = history.sessions.map(x => x.date);
+      expect(dates).toEqual([...dates].sort());
+    }
+  });
+
+  const byName = (name: string) => {
+    const s = SCENARIOS.find(x => x.name === name);
+    if (!s) throw new Error(`no scenario ${name}`);
+    return s;
+  };
+
+  it('Kai Garcia fades in the LAST session of his LATEST day', () => {
+    const kai = byName('Kai Garcia');
+    expect(kai.days).toHaveLength(2);
+    expect(kai.days.map(d => d.sessions.length)).toEqual([4, 4]);
+    const flat = scenarioSessions(kai);
+    const latestDay = kai.days[kai.days.length - 1];
+    expect(flat[flat.length - 1].session).toBe(latestDay.sessions[latestDay.sessions.length - 1]);
+  });
+
+  it('Elena Ross runs a two-day weekend that is two separate day rows', () => {
+    const elena = byName('Elena Ross');
+    expect(elena.days).toHaveLength(3);
+    const weekend = elena.days.filter(d => d.weeksAgo === 0);
+    expect(weekend.map(d => d.day)).toEqual(['sat', 'sun']);
+    expect(weekend[0].trackName).toBe(weekend[1].trackName);
+  });
+
+  it('Jordan Lee is the n=1 check: one day, two short sessions', () => {
+    const jordan = byName('Jordan Lee');
+    expect(jordan.days).toHaveLength(1);
+    expect(jordan.days[0].sessions).toHaveLength(2);
+    for (const sess of jordan.days[0].sessions) {
+      expect(sess.lapTimesMs.length).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it('Sam Whitaker is the control: flat days, no notes, no flags, no focus items', () => {
+    const sam = byName('Sam Whitaker');
+    expect(sam.days).toHaveLength(3);
+    expect(sam.focusItems).toEqual([]);
+    expect(sam.summary).toBeUndefined();
+    for (const day of sam.days) {
+      expect(day.notes).toBeUndefined();
+      for (const sess of day.sessions) {
+        expect(sess.representativeness).toBeUndefined();
+        expect(sess.representativenessNote).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe('the coaching loop the cast carries', () => {
+  const byName = (name: string) => {
+    const s = SCENARIOS.find(x => x.name === name);
+    if (!s) throw new Error(`no scenario ${name}`);
+    return s;
+  };
+
+  it('numbers each driver s items 1..N, and every reference lands on a real session', () => {
+    for (const s of SCENARIOS) {
+      expect(s.focusItems.map(i => i.n)).toEqual(s.focusItems.map((_, i) => i + 1));
+      const refs = s.focusItems.flatMap(item => [
+        ...(item.origin ? [item.origin] : []),
+        ...item.assessments,
+      ]);
+      for (const ref of refs) {
+        expect(s.days[ref.dayIdx]?.sessions[ref.sessionIdx]).toBeDefined();
+      }
+    }
+  });
+
+  it('exercises all four judgments and all the statuses the panel groups on', () => {
+    const items = SCENARIOS.flatMap(s => s.focusItems);
+    expect(new Set(items.flatMap(i => i.assessments.map(a => a.judgment)))).toEqual(
+      new Set(['improved', 'keep_working', 'no_change', 'regressed']),
+    );
+    expect(new Set(items.map(i => i.status))).toEqual(new Set(['active', 'achieved', 'paused']));
+  });
+
+  it('carries at least one NULL-origin item and one apostrophe in coach prose', () => {
+    const items = SCENARIOS.flatMap(s => s.focusItems);
+    expect(items.some(i => i.origin === null)).toBe(true);
+    const prose = items.flatMap(i => [i.text, ...i.assessments.map(a => a.note ?? '')]);
+    expect(prose.some(t => t.includes("'"))).toBe(true);
+  });
+
+  it('gives Elena the cross-day trail that ends achieved, and one item still active', () => {
+    const elena = byName('Elena Ross');
+    const carried = elena.focusItems.find(i => i.status === 'achieved')!;
+    expect(carried.assessments.map(a => a.judgment)).toEqual([
+      'keep_working', 'improved', 'improved',
+    ]);
+    // Assessed on three DIFFERENT days — that is what makes the summary's
+    // "a session on another day" labels reachable at all.
+    expect(new Set(carried.assessments.map(a => a.dayIdx)).size).toBe(3);
+    expect(elena.focusItems.some(i => i.status === 'active')).toBe(true);
+  });
+
+  it('gives Elena — and only Elena — a summary whose final text is a tightened draft', () => {
+    expect(SCENARIOS.filter(s => s.summary).map(s => s.name)).toEqual(['Elena Ross']);
+    const { draftText, finalText } = byName('Elena Ross').summary!;
+    expect(finalText).not.toBe(draftText);
+    expect(finalText.length).toBeLessThan(draftText.length);
+    // The four sections after the overview are untouched — the daylight is one
+    // sentence, not a rewrite.
+    expect(finalText.split('\n\n').slice(1)).toEqual(draftText.split('\n\n').slice(1));
+  });
+
+  it('Jordan Lee stays empty: the no-focus-items rendering check', () => {
+    expect(byName('Jordan Lee').focusItems).toEqual([]);
+  });
+
+  it('the cast exercises both representativeness flags, and only with a note', () => {
+    const flagged = SCENARIOS.flatMap(scenarioSessions)
+      .map(x => x.session)
+      .filter(x => x.representativeness !== undefined);
+    expect(flagged.map(x => x.representativeness).sort()).toEqual([
+      'not_representative',
+      'partial',
+    ]);
+    for (const sess of flagged) expect(sess.representativenessNote).toBeTruthy();
+    // A note without a flag would render nowhere.
+    const noteOnly = SCENARIOS.flatMap(scenarioSessions)
+      .map(x => x.session)
+      .filter(x => x.representativenessNote !== undefined && x.representativeness === undefined);
+    expect(noteOnly).toEqual([]);
   });
 });

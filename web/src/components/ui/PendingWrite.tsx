@@ -50,7 +50,30 @@ export function useControlWrite() {
     if (last.current) void run(last.current.send, last.current.onSaved);
   }, [run]);
 
-  return { status, run, retry };
+  /**
+   * Forget everything about the writes so far: back to idle, and no last write
+   * to retry.
+   *
+   * For the caller that has concluded its failed write can never succeed —
+   * because the row it addressed is gone, not because the network blinked. A
+   * status reset alone would only HIDE the failure while `retry` still held the
+   * dead request, so clearing `last` is the load-bearing half; hiding the
+   * indicator without it is how a control offers a retry that cannot work.
+   *
+   * It bumps `seq` for the same reason `run` reads it: a write still on the
+   * wire when reset is called is part of what is being forgotten, so its
+   * outcome must not repaint the status — nor fire its onSaved — after the
+   * caller said the slate is clean. Without that, an in-flight write resolving
+   * post-reset lands on 'failed' with `last` already null: a Retry that does
+   * nothing at all, which is the exact failure this exists to prevent.
+   */
+  const reset = useCallback(() => {
+    last.current = null;
+    seq.current += 1;
+    setStatus('idle');
+  }, []);
+
+  return { status, run, retry, reset };
 }
 
 /**

@@ -103,6 +103,69 @@ export type Database = {
           },
         ]
       }
+      day_summaries: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          draft_text: string
+          final_text: string
+          id: string
+          informing_assessment_ids: string[]
+          informing_session_ids: string[]
+          model: string
+          prompt_context: Json
+          status: string
+          track_day_id: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          draft_text: string
+          final_text: string
+          id?: string
+          informing_assessment_ids: string[]
+          informing_session_ids: string[]
+          model: string
+          prompt_context: Json
+          status?: string
+          track_day_id: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          draft_text?: string
+          final_text?: string
+          id?: string
+          informing_assessment_ids?: string[]
+          informing_session_ids?: string[]
+          model?: string
+          prompt_context?: Json
+          status?: string
+          track_day_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_summaries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_summaries_track_day_id_fkey"
+            columns: ["track_day_id"]
+            isOneToOne: false
+            referencedRelation: "track_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_profiles: {
         Row: {
           created_at: string | null
