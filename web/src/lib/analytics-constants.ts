@@ -24,12 +24,26 @@ export const SPARKLINE_WINDOW = 8;          // last N session-bests shown in row
  * THE one definition of a countable lap, at the VALUE level: is this
  * milliseconds figure a lap at all?
  *
- * Everything that asked `!== null && > 0` delegates here — the row predicate
- * (isCountableLap in track-days), dayBestLapMs, sessionDelta's best-lap guard,
- * the flag engine's prior-track-bests, the coach dashboard's best/avg/lap
- * counts, the import screen's flag list, the insight layer's pace-trend gate,
- * the driver-progress peak window — so "is this a lap" has exactly one answer
- * whichever shape the caller holds it in.
+ * The sites that delegate: the row predicate (isCountableLap in track-days),
+ * dayBestLapMs, sessionDelta's best-lap guard, the prior-track-bests filter in
+ * evaluateStudent, the coach dashboard's best/avg/lap counts, the import
+ * screen's flag list, the insight layer's pace-trend gate, the peak window in
+ * data/driverProgress — so "is this a lap" has one answer whichever shape those
+ * callers hold it in.
+ *
+ * Read that as a list of delegators, not as a census of the predicate. These
+ * still ask it inline; all predate the collapse and all are left alone on
+ * purpose:
+ *   - isRegressedVsTrackPB (analytics-v2) re-asks `> 0` on the prior-bests list
+ *     evaluateStudent already filtered, and on its sessionBestMs argument —
+ *     which is why the entry above names the caller and not this function.
+ *   - gapToIdealSeconds (analytics-v2), on its fastest-lap argument.
+ *   - the driver-progress API route's personal-best scan, which asks the WEAKER
+ *     `!== null`, so a stored 0 survives into Math.min and prints as a phantom
+ *     PB before `> 0` is re-asked further down. That is a live bug and wants its
+ *     own change, not a rename.
+ *   - ProgressTimeline's PB highlight, on a computed summary's bestLap rather
+ *     than on a lap row.
  *
  * A stored `sessions.best_lap_ms` is one of those shapes: csv-parser computes it
  * as Math.min over UNFILTERED times, so a session whose only rows are zeros
