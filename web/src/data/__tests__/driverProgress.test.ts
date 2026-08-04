@@ -7,7 +7,7 @@
  * all?" before it computes peakWindowAvg, and for a long time it asked inline
  * (`.filter((t) => t > 0)`) instead of through isCountableLapMs. With no test
  * here the collapse onto the shared predicate could not be shown to preserve
- * behaviour, so it was left as a fifth copy. These tests pin the boundary the
+ * behaviour, so it was left as a duplicate. These tests pin the boundary the
  * predicate draws, so the delegation is verifiable rather than trusted.
  *
  * Note what does NOT pin it: sessionConsistencySeconds runs cleanLaps

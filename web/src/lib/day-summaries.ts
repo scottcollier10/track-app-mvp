@@ -230,7 +230,7 @@ export function assembleDaySummaryContext(input: DaySummaryInput): DaySummaryCon
 
     // 0 is not a best lap — the day KPI skips it and the session card prints
     // "--" for it, so the prompt must never be handed "0:00.000". Asked with
-    // the app's one lap predicate rather than a fourth copy of `!== null && > 0`.
+    // the app's one lap predicate rather than an inline `!== null && > 0`.
     const bestLapMs = isCountableLapMs(session.best_lap_ms) ? session.best_lap_ms : null;
 
     // Nearest EARLIER counted session, or null — a delta measured against a
