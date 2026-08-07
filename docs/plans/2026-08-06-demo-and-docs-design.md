@@ -26,8 +26,8 @@ Canon format, written against seeded drivers **by name and by day** — never "n
 
 ### Pre-demo checklist (in the script)
 
-- Seed refresh: `npx tsx scripts/seed/generate-demo-seed.ts --coach-email=...`, apply emitted `demo-seed.sql` via Supabase SQL editor (or psql — connection string from the Supabase dashboard; the old worktree `.env` is gone)
-- Verify Elena's approved Aug 2 summary renders
+- Seed refresh: `npx tsx scripts/seed/generate-demo-seed.ts --coach-email=...`, then `psql "$DATABASE_URL" -f demo-seed.sql` (`DATABASE_URL` lives in `web/.env.local`; SQL editor is the fallback)
+- Verify Elena's approved summary renders on her most recent day (seed dates are relative — resolved against the clock at generation, so never reference absolute dates)
 - Verify all six drivers present
 - Browser tabs staged
 
@@ -38,7 +38,7 @@ Exact days, lap counts, and summary text come from `web/scripts/seed/demo-scenar
 1. **The problem (60s).** Coach dashboard, six drivers. After a track day you have transponder CSVs and memories; coaching happens across days, but evidence lives in scattered sessions. Land the thesis: drivers develop across days, days progress through sessions, sessions contain the evidence.
 2. **Seeing a day (2 min).** **Marcus**, the regression. One track day: sessions, laps, the day view showing him going backward. The day view answers "what happened?" faster than timing sheets.
 3. **The coaching loop (2.5 min).** **Elena**, the showpiece. Focus-item arc across three days: assigned, carried, evidenced. Coach-directed development, not lap-time trivia. **Ava** (spread) gets one supporting beat if pacing allows.
-4. **AI with a leash (2.5 min).** Elena's approved Aug 2 summary and its provenance. Then a **live Generate on Marcus's day** — real AI in the room. Narration hits the hard rule. Residue swept by post-demo refresh.
+4. **AI with a leash (2.5 min).** Elena's approved summary (her most recent day) and its provenance. Then a **live Generate on Marcus's day** — real AI in the room. Narration hits the hard rule. Residue swept by post-demo refresh.
 5. **Honesty at the edges + the ask (2 min).** **Jordan** at n=1, rendered gracefully, representativeness flagged — the app doesn't fake confidence. **Sam** gets one sentence as the quiet control. Close on the pilot ask: free, org-level, bring your CSVs.
 
 **Kai** (fading) is held in reserve: natural Act 2 alternate and the seam where the pilot-walkthrough version expands.
