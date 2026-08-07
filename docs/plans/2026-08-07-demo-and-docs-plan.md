@@ -32,6 +32,7 @@ The design this plan implements: `docs/plans/2026-08-06-demo-and-docs-design.md`
 - **Design ≠ shipped.** Design docs carry Deferred / Out of scope / Phase 4 sections — video clips on focus items, `focus_item_media`, multi-driver "today at the track." None of it is built. Do not narrate unbuilt features. (A flat session list at `/sessions` *is* built, despite appearing in a deferred discussion — check the app, always.)
 - **`demo-seed.golden.sql` is a jest fixture. Never apply it to any database.** The runnable artifact is `web/scripts/seed/demo-seed.sql`.
 - **Rehearsals write to production.** `web/.env.local` points at hosted Supabase. Live Generate/Approve beats stay on the six seeded demo drivers only — the seed refresh sweep reaches demo drivers and nobody else. Never Generate or Approve on a personal test driver or a real import while rehearsing.
+- **`$DATABASE_URL` is not in your shell.** It lives in `web/.env.local`, which nothing auto-sources into bash. Before any `psql` command in this plan, extract it: `DATABASE_URL=$(grep '^DATABASE_URL' web/.env.local | cut -d= -f2-)` (run from the worktree root, adjust the path if you're already in `web/`). Without this, every psql call fails.
 - **Never kill a process on port 3000 you did not start.** If 3000 is occupied, run `PORT=3001 npm run dev` instead.
 - **The AI constraint has two halves, and they are not the same half.** Both features are observation-only — the model may summarize coach-directed work and may never author a driving instruction, readiness call, or safety recommendation. But only the **day summary** carries the approval gate and a provenance row. Session-level AI coaching (`/api/coaching/generate`, `AICoachingCard`) is deliberately ephemeral: one overwritten column, no approval, no provenance — permitted *because* its output contract forbids instructions (documented at `web/src/app/api/coaching/generate/route.ts:1-24`). Write both artifacts precisely: "never authors instruction" covers both features; "nothing publishes without coach approval" is a claim about day summaries. Blurring these makes the guide wrong.
 - **No product version number anywhere.** Both artifacts carry a doc date only. The session→day reorganization is told as product thesis, never as a changelog.
@@ -56,7 +57,7 @@ cd /Users/scottcollier/dev/track-app-mvp/.worktrees/demo-docs
 git status --short && git log --oneline -1
 ```
 
-Expected: on `main`, HEAD is `e6f9277 docs: add demo script + user guide design`.
+Expected: on `main`, at or ahead of `17bc887 docs: correct stale facts in demo+docs design`, with both `docs/plans/2026-08-06-demo-and-docs-design.md` and this plan present.
 
 **Step 2: Confirm env**
 
@@ -235,19 +236,23 @@ git commit -m "docs(demo): add demo script skeleton and pre-demo checklist"
 
 ### Task 10: Dress rehearsal (the done bar)
 
+The rehearsal has two runners with different jobs. The executor verifies the script against reality; only Scott can produce a real spoken runtime. Do not claim "done" on the executor pass alone.
+
 **Step 1: Refresh the seed** (Task 2 steps 1–2, gated apply).
 
-**Step 2: Run the whole script start to finish, out loud, timed.** Every act against the live app. Every named driver, day, and number must match what renders. The live Generate on Marcus must work.
+**Step 2: Executor verification pass — run the whole script start to finish against the live app.** Every click path executed, every named driver, day, and number checked against what renders. The live Generate on Marcus must work. Estimate runtime per act: narration word count at ~140 wpm plus observed click/load time; flag any act whose estimate blows its time budget.
 
-**Step 3: Record every drift** in `/tmp/trackapp-walk-notes.md` — anything that didn't match, any act that ran long, any click path that was awkward.
+**Step 3: Record every drift** in `/tmp/trackapp-walk-notes.md` — anything that didn't match, any act estimated long, any click path that was awkward.
 
-**Step 4: Fix the script** to match reality. If total runtime exceeds ~11 minutes, cut — the Ava beat is the designated first cut.
+**Step 4: Fix the script** to match reality. If estimated total runtime exceeds ~11 minutes, cut — the Ava beat is the designated first cut.
 
 **Step 5: Refresh the seed again** and confirm Elena's approved summary is restored (it is re-inserted deterministically with `model = 'seed'`) and the Marcus draft is gone.
 
 **Step 6: Commit** — `docs(demo): correct script against dress rehearsal`
 
-**Step 7: Report to Scott.** Runtime, what drifted, anything that needs his call. Demo script is done.
+**Step 7: Hand to Scott for the timed spoken run.** Scott runs the script out loud against the live app, timed. His drift notes (real runtime, lines that don't speak well, awkward transitions) feed one more fix round: apply, commit — `docs(demo): correct script against Scott's timed run`. The demo script is done only after Scott's run comes in at ~10 minutes clean.
+
+**Step 8: Report to Scott.** Estimated vs. actual runtime, what drifted in each pass, anything that needs his call.
 
 ---
 
@@ -359,7 +364,7 @@ This is the operational heart of the guide. Give it the most care.
 
 ## Definition of done
 
-- `docs/demo/DEMO_SCRIPT.md` exists, has survived one clean end-to-end timed dress rehearsal against the live app, and contains no absolute dates.
+- `docs/demo/DEMO_SCRIPT.md` exists, has survived the executor verification pass AND Scott's timed spoken run against the live app, and contains no absolute dates.
 - `docs/USER_GUIDE.md` exists, and every section was written by walking the feature — including the CSV round trip.
 - Neither artifact names a product version, promises an unbuilt feature, or blurs the AI constraint.
 - Production is left with a fresh seed and no rehearsal residue.
