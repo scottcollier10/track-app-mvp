@@ -12,7 +12,7 @@ export interface CsvRow {
   driver_name: string;
   lap_number: string;
   lap_time_ms: string;
-  timestamp: string;
+  timestamp?: string; // Optional: session start time; noon local when absent
   source?: string; // Optional: RaceChrono, AiM, TrackAddict, generic
 }
 
@@ -120,8 +120,10 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
               return;
             }
 
-            // Group by session (date + track + driver)
-            const sessionKey = `${row.session_date}|${row.track_name}|${row.driver_name}`;
+            // Group by session (date + track + driver + start time). The start
+            // time is part of a session's identity: without it, every session a
+            // driver runs at one track on one day collapses into a single row.
+            const sessionKey = `${row.session_date}|${row.track_name}|${row.driver_name}|${row.timestamp ?? ''}`;
             if (!sessionMap.has(sessionKey)) {
               sessionMap.set(sessionKey, []);
             }
@@ -161,9 +163,21 @@ export function parseSessionCsv(file: File): Promise<ParseResult> {
             // Generate email with .demo domain
             const driverEmail = `${driverName.toLowerCase().replace(/\s+/g, '.')}@trackapp.demo`;
 
-            // Convert session_date to proper ISO format with timezone handling
-            // Add T12:00:00 to force noon local time, preventing timezone date rollback
-            const sessionDate = new Date(date + 'T12:00:00').toISOString();
+            // Session start: the timestamp column when the export carries a
+            // usable one, otherwise noon local on session_date. Noon avoids the
+            // timezone rollback that parsing a bare "YYYY-MM-DD" would cause.
+            //
+            // The fallback is a placeholder, not a start time: every session
+            // imported for that date lands on the same instant, so they cannot
+            // be ordered against each other and "Session N" then rests entirely
+            // on bySessionStart's id tiebreak. A file with real timestamps is
+            // the only way the day reads in its true running order.
+            const rawTimestamp = rows[0].timestamp?.trim();
+            const startedAt = rawTimestamp ? new Date(rawTimestamp) : null;
+            const sessionDate =
+              startedAt && !Number.isNaN(startedAt.getTime())
+                ? startedAt.toISOString()
+                : new Date(date + 'T12:00:00').toISOString();
 
             sessions.push({
               driverEmail,
